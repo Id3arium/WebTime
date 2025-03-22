@@ -1,0 +1,29 @@
+{
+    "manifest_version": 2,
+    "name": "Web Time",
+    "version": "1.0",
+    "description": "Track and take control of the time you spend on the web",
+    
+    "permissions": [
+      "storage",
+      "tabs",
+      "*://*.youtube.com/*"
+    ],
+    
+    "background": {
+      "scripts": ["background.js"]
+    },
+    
+    "content_scripts": [
+      {
+        "matches": ["*://*.youtube.com/*"],
+        "js": ["content.js"],
+        "css": ["timer.css"]
+      }
+    ],
+    
+    "icons": {
+      "48": "icon48.png",
+      "96": "icon96.png"
+    }
+  }
