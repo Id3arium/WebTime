@@ -1,46 +1,87 @@
 // Initialize variables
-let isTargetSiteActive = false;  // Is a tracked site currently being viewed?
-let startTime = 0;               // When did the current browsing session start?
-let totalTimeToday = 0;          // Total time spent on tracked sites today
-let todayDate = new Date().toDateString(); // Today's date for daily reset
-let targetSite = 'youtube.com'; // List of sites to track (expandable in the future)
+let isTargetSiteActive = false; // Is a tracked site currently being viewed?
+let sessionStartTime = 0; // When did the current browsing session start?
+let todaysTotalTime = 0; // Total time spent on tracked sites today
+let currentDate = new Date().toDateString(); // Today's date for daily reset
+let targetSite = "youtube.com"; // List of sites to track (expandable in the future)
+
+function resetDaylyCounter() {
+    todaysTotalTime = 0;
+    browser.storage.local.set({
+        date: currentDate,
+        totalTime: 0,
+    });
+    console.log("Reset daily counter for new day");
+}
+
+async function setTimeData() {
+    const data = await browser.storage.local.get(["date", "totalTime"]);
+    if (data.date === currentDate) {
+        todaysTotalTime = data.totalTime || 0;
+        console.log("Loaded saved time:", todaysTotalTime, "seconds");
+    } else {
+        resetDaylyCounter();
+    }
+}
 
 function isTargetSite(url) {
-  if (!url || typeof url !== 'srting') {
-    return false
-  }
-
-  return url.includes(targetSite)
-}
-async function handleTabActivated(activeInfo) {
-  // activeInfo contains tabId of the newly activated tab
-  const tab = await browser.tabs.get(activeInfo.tabId);
-
-  // Now we can access tab.url to check if it's our target site
-  if (isTargetSite(tab.url)) {
-    // Switching TO a target site
-    if (!isTargetSiteActive) {
-      // Start timing
-      sessionStartTime = Date.now();
-      isTargetSiteActive = true;
-      console.log("Started timing a new session");
+    if (!url || typeof url !== "string")
+    {
+        console.log("isTargetSite earlyFalse");
+        return false;
     }
-  } else {
-    // Switching FROM a target site (if we were on one)
-    if (isTargetSiteActive) {
-      // Stop timing and update total
-      updateTotalTime();
-      isTargetSiteActive = false;
-      console.log("Stopped timing as user left target site");
-    }
-  }
+    return url.includes(targetSite);
 }
+
 async function handleTimedTabActivated(activeInfo) {
-  const currTab = await browser.tabs.get(activeInfo, tabId);
-  if (isTargetSite(currTab.url)) {
-    if (!isTargetSiteActive)
-      sessionStartTime = Date.now()
-
-  }
+    console.log("handleTimedTabActivated");
+    const currTab = await browser.tabs.get(activeInfo.tabId);
+    attemptToTimeTab(currTab.url);
 }
 
+function updateTotalTime() {
+    const secondsSpent = Math.floor((Date.now() - sessionStartTime) / 1000);
+    todaysTotalTime += secondsSpent;
+
+    browser.storage.local.set({
+        date: currentDate,
+        totalTime: todaysTotalTime,
+    });
+
+    console.log(
+        `Added ${secondsSpent} seconds to today's total. New total: ${todaysTotalTime} seconds`
+    );
+}
+
+function handleTabUpdated(tabId, changeInfo, tab) {
+    if (changeInfo.status == "complete") {
+        attemptToTimeTab(tab.url);
+    }
+}
+
+function attemptToTimeTab(tabUrl) {
+    if (isTargetSite(tabUrl)) {
+        if (!isTargetSiteActive) {
+            sessionStartTime = Date.now();
+            isTargetSiteActive = true;
+            console.log("started timing session");
+        }
+    } else {
+        if (isTargetSiteActive) {
+            updateTotalTime();
+            isTargetSiteActive = false;
+            console.log("stopped timing session");
+        }
+    }
+}
+
+function init() {
+    console.log("Initialiized the WebTime extension");
+    setTimeData();
+
+    browser.tabs.onActivated.addListener(handleTimedTabActivated);
+    browser.tabs.onUpdated.addListener(handleTabUpdated);
+}
+
+// Start the extension
+init();
