@@ -11,7 +11,7 @@
   z-index: 9999; /* Make sure it appears on top of other elements */
   border: 1px solid grey;
   line-height: 1; /* Adjust this value as needed */
-
+  user-select: none;
   /* backdrop-filter: blur(0px); */
   /* -webkit-backdrop-filter: blur(0px); For Safari */
 }
