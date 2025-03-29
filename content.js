@@ -118,7 +118,6 @@ async function initTimer() {
 // Listen for messages from the background script
 browser.runtime.onMessage.addListener((message) => {
     console.log("Received message. properties:", Object.keys(message));
-    
     switch (message.action) {
         case "timerStart":
             createTimerElement(); // Ensure element exists
