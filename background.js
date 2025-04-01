@@ -1,138 +1,160 @@
-// Initialize variables
-let isTrackedSiteActive = false; // Is a tracked site currently being viewed?
-let sessionStartTime = 0; // When did the current browsing session start?
-let todaysTotalTime = 0; // Total time spent on tracked sites today
-let currentDate = new Date().toDateString(); // Today's date for daily reset
-let trackedSite = "youtube.com"; // List of sites to track (expandable in the future)
-
-function resetTodaysTracking() {
-    todaysTotalTime = 0;
-    browser.storage.local.set({
-        date: currentDate,
-        totalTime: 0,
-    });
-    console.log("Reset daily counter for new day");
-}
-
-function saveTimeData() {
-    browser.storage.local.set({
-        date: currentDate,
-        totalTime: todaysTotalTime,
-    });
-}
+let todaysTotalTime = 0;
+let activeTabId = null;
+const trackedTabIds = new Set(); 
+let timerInterval = null;
+const trackedSitePattern = "*://*.youtube.com/*"; 
 
 async function loadTimeData() {
-    const data = await browser.storage.local.get(["date", "totalTime"]);
-    if (data.date === currentDate) {
-        todaysTotalTime = data.totalTime || 0;
-        console.log("Loaded saved time:", todaysTotalTime, "seconds");
-    } else {
-        resetTodaysTracking();
+    try {
+        let storedData = await browser.storage.local.get("trackedTime");
+        let loadedTime = storedData.trackedTime
+        todaysTotalTime = loadedTime ?? 0;
+
+        if (loadedTime !== undefined) {
+             console.log("Loaded saved time:", todaysTotalTime);
+        } else {
+             console.log("No saved time found. Starting fresh with:", todaysTotalTime);
+        }
+    } catch (error) {
+        console.error("Error loading time from storage:", error);
     }
 }
 
-function isTrackedSite(url) {
-    if (!url || typeof url !== "string") {
-        console.log("isTrackedSite earlyFalse");
+function isTrackedTabUrl(url) {
+    if (typeof url !== 'string' || !(url.startsWith('http'))) return false;
+    
+    const trackedDomains = ['youtube.com'];
+    try {
+        const parsedUrl = new URL(url);
+        return trackedDomains.some(domain => 
+            parsedUrl.hostname === domain || parsedUrl.hostname.endsWith('.' + domain)
+        );
+    } catch (error) {
+        console.error("Error parsing URL:", error);
         return false;
     }
-    console.log("isTrackedSite:", url.includes(trackedSite));
-    return url.includes(trackedSite);
 }
 
-async function handleTrackedTabActivated(activeInfo) {
-    console.log("handleTrackedTabActivated");
-    const currTab = await browser.tabs.get(activeInfo.tabId);
-    updateTimingState(currTab.url, currTab.id);
+async function saveTimeData() {
+    console.log(`Attempting to save time: ${todaysTotalTime}`);
+    try {
+        await browser.storage.local.set({ 
+            trackedTime: todaysTotalTime,
+        });
+        console.log("Time successfully saved.");
+    } catch (error) {
+        console.error("Error saving time to storage:", error);
+    }
+}
+
+function startTimer() {
+    if (timerInterval) return;
+
+    timerInterval = setInterval(() =>{ 
+        todaysTotalTime++;
+        updateTimerDisplay(todaysTotalTime);
+    }, 1000)
+    console.log("Timer started.");
+}
+
+function stopTimer() {
+    if (!timerInterval) return;
+
+    clearInterval(timerInterval);
+    timerInterval = null;
+    saveTimeData();
+    console.log("Timer stopped.");
+}
+
+function updateTimerDisplay(updatedTime) {
+    const message = { type: "TIME_UPDATE", time: updatedTime };
+    trackedTabIds.forEach(tabId => {
+        browser.tabs.sendMessage(tabId, message).catch(error => { 
+            console.warn(`Failed to send TIME_UPDATE to tab ${tabId}. Maybe it closed? Error:`, error);
+        });
+    });
+}
+
+async function updateTimingState(tabId) {
+    try {
+        const activeTab = await browser.tabs.get(tabId);
+        if (!activeTab || !activeTab.url) {
+            console.log(`Tab ${tabId} was closed or has no URL`);
+            stopTimer();
+            return;
+        }
+        const isTrackedUrl = isTrackedTabUrl(activeTab.url);
+        const isAudible = activeTab.audible;
+        console.log(`Tab ${tabId}: tracked=${isTrackedUrl}, audible=${isAudible}`);
+        
+        if (isTrackedUrl && isAudible) {
+            startTimer();
+        } else {
+            stopTimer();
+        }
+    } catch (error) {
+        console.error(`Error in updateTimingState for tab ${tabId}:`, error);
+        stopTimer(); // Safety measure: stop timer if we can't determine state
+    }
+}
+
+function handleTabActivated(activeInfo) {
+    console.log(`handleTabActivated called for tab ${activeInfo.tabId}`);
+    activeTabId = activeInfo.tabId; 
+    updateTimingState(activeTabId);
 }
 
 function handleTabUpdated(tabId, changeInfo, tab) {
-    if (changeInfo.status == "complete") {
-        updateTimingState(tab.url, tab.id);
+    console.log(`handleTabUpdated() called for tab ${tabId}`, changeInfo);
+    if (changeInfo.url !== undefined) {
+        const isTrackedSite = isTrackedTabUrl(changeInfo.url);
+        if (isTrackedSite) {
+            trackedTabIds.add(tabId);
+            console.log(`Added tab ${tabId} to tracked tabs`);
+        } else {
+            trackedTabIds.delete(tabId);
+            console.log(`Removed tab ${tabId} from tracked tabs`);
+        }
+    }
+    const hasRelevantChanges = changeInfo.url !== undefined || changeInfo.audible !== undefined;
+    if (tabId === activeTabId && hasRelevantChanges) {
+        updateTimingState(tabId);
     }
 }
 
-function updateTimingState(tabUrl, tabId) {
-    if (!isTrackedSiteActive) {
-        startTimingSession(tabId);
-        return;
-    } 
-    if (!isTargetSite(tabUrl)) {
-        stopTimingSession(tabId);
-        return;
-    } 
-    const currentTotal = todaysTotalTime + Math.floor((Date.now() - sessionStartTime) / 1000);
-    browser.tabs.sendMessage(tabId, {
-        action: "timerStart",
-        totalTime: currentTotal
-    }).catch(err => console.log("Send message to additional YouTube tab error:", err));
-}
-
-function startTimingSession(tabId) {
-    sessionStartTime = Date.now();
-    isTrackedSiteActive = true;
-    console.log("startTimingSession()");
-    
-    // Notify the content script
-    if (tabId) {
-        browser.tabs.sendMessage(tabId, {
-            action: "timerStart",
-            totalTime: todaysTotalTime
-        }).catch(err => console.log("Send message error (likely content script not loaded yet):", err));
+function handleTabRemoved(tabId, removeInfo) {
+    console.log(`handleTabRemoved() called for tab ${tabId}`);
+    if (tabId === activeTabId) {
+        stopTimer();
+        activeTabId = null;
     }
+    trackedTabIds.delete(tabId); 
 }
 
-function stopTimingSession(tabId)
-{
-    const timingSession = Math.floor((Date.now() - sessionStartTime) / 1000);
-    todaysTotalTime += timingSession;
-    console.log(`Added ${timingSession} seconds. Todays total: ${todaysTotalTime}s`);
-    saveTimeData();
-
-    isTrackedSiteActive = false;
-    console.log("stopTimingSession()");
-    
-    // Notify the content script
-    if (tabId) {
-        browser.tabs.sendMessage(tabId, {
-            action: "timerStop"
-        }).catch(err => console.log("Send message error:", err));
-    }
-}
-
-function syncTimeWithDisplay(tabId) {
-    if (isTrackedSiteActive && tabId) {
-        const currentTotal = todaysTotalTime + Math.floor((Date.now() - sessionStartTime) / 1000);
-            
-        browser.tabs.sendMessage(tabId, {
-            action: "syncTime",
-            currentTotal: currentTotal
-        }).catch(err => console.log("Update error (normal if tab closed):", err));
+function handleMessage(message, sender, sendResponse) {
+    console.log(`handleMessage()`, message, sender);
+    if (message.type === "CONTENT_SCRIPT_READY" && sender.tab) {
+        trackedTabIds.add(sender.tab.id);
+        updateTimerDisplay(todaysTotalTime);
     }
 }
 
 async function init() {
-    console.log("Initialized the WebTime extension");
+    browser.tabs.onActivated.addListener(handleTabActivated);
+    browser.tabs.onUpdated.addListener(handleTabUpdated);
+    browser.tabs.onRemoved.addListener(handleTabRemoved);
+    browser.runtime.onMessage.addListener(handleMessage);
+
     await loadTimeData();
 
-    browser.tabs.onActivated.addListener(handleTrackedTabActivated);
-    browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-        if (changeInfo.status == "complete") {
-            updateTimingState(tab.url, tabId);
-        }
-    });
-    
-    // Set up periodic time updates to content script (every 5 seconds)
-    setInterval(() => {
-        if (isTrackedSiteActive) {
-            browser.tabs.query({active: true, currentWindow: true}).then(tabs => {
-                if (tabs[0]) {
-                    syncTimeWithDisplay(tabs[0].id);
-                }
-            });
-        }
-    }, 5000);
-}
+    let trackedTabs = await browser.tabs.query({ url: trackedSitePattern })
+    trackedTabs.forEach(tab => trackedTabIds.add(tab.id));
 
-// Start the extension
+    let activeTabs = await browser.tabs.query({ active: true, currentWindow: true });
+    if (activeTabs.length > 0) {
+        activeTabId = activeTabs[0].id;
+        updateTimingState(activeTabId);
+    }
+    console.log("Initialization complete.");
+}
 init();

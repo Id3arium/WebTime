@@ -1,4 +1,4 @@
-#web-time-timer {
+.web-time-timer {
   position: fixed;
   top: 0px;
   right: 0px;
@@ -16,6 +16,3 @@
   /* -webkit-backdrop-filter: blur(0px); For Safari */
 }
 
-#web-time-timer-text {
-  font-weight: normal;
-}
