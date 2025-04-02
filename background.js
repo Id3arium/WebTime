@@ -3,6 +3,7 @@ let activeTabId = null;
 const trackedTabIds = new Set(); 
 let timerInterval = null;
 const trackedSitePattern = "*://*.youtube.com/*"; 
+const SAVE_INTERVAL_SECONDS = 60;
 
 async function loadTimeData() {
     try {
@@ -49,12 +50,15 @@ async function saveTimeData() {
 
 function startTimer() {
     if (timerInterval) return;
-
-    timerInterval = setInterval(() =>{ 
+    
+    timerInterval = setInterval(() => {
         todaysTotalTime++;
         updateTimerDisplay(todaysTotalTime);
-    }, 1000)
-    console.log("Timer started.");
+
+        if (todaysTotalTime % SAVE_INTERVAL_SECONDS === 0) {
+            saveTimeData(); 
+        }
+    }, 1000); 
 }
 
 function stopTimer() {
