@@ -5,21 +5,8 @@ let timerInterval = null;
 const trackedSitePattern = "*://*.youtube.com/*"; 
 const SAVE_INTERVAL_SECONDS = 60;
 
-async function loadTimeData() {
-    try {
-        let storedData = await browser.storage.local.get("trackedTime");
-        let loadedTime = storedData.trackedTime
-        todaysTotalTime = loadedTime ?? 0;
-
-        if (loadedTime !== undefined) {
-             console.log("Loaded saved time:", todaysTotalTime);
-        } else {
-             console.log("No saved time found. Starting fresh with:", todaysTotalTime);
-        }
-    } catch (error) {
-        console.error("Error loading time from storage:", error);
-    }
-}
+let currentDateStr = new Date().toISOString().split('T')[0]; // Format: "YYYY-MM-DD"
+let timeHistory = {};
 
 function isTrackedTabUrl(url) {
     if (typeof url !== 'string' || !(url.startsWith('http'))) return false;
@@ -35,17 +22,68 @@ function isTrackedTabUrl(url) {
         return false;
     }
 }
+function initDefaultTimeData() {
+    todaysTotalTime = 0;
+    timeHistory = {};
+    console.log("Initialized with default values");
+}
 
 async function saveTimeData() {
-    console.log(`Attempting to save time: ${todaysTotalTime}`);
+    console.log(`saveTimeData() ${currentDateStr}: ${todaysTotalTime} seconds`);
     try {
+        timeHistory[currentDateStr] = todaysTotalTime;
+        
+        const storageData = {
+            lastDate: currentDateStr,
+            timeHistory: timeHistory,
+            version: 1
+        };
+        
         await browser.storage.local.set({ 
-            trackedTime: todaysTotalTime,
+            trackedTime: storageData
         });
-        console.log("Time successfully saved.");
+        console.log("Time data successfully saved with history.");
     } catch (error) {
-        console.error("Error saving time to storage:", error);
+        console.error("Error saving time data to storage:", error);
     }
+}
+
+async function loadTimeData() {
+    try {
+        const storedData = await browser.storage.local.get("trackedTime");
+        const trackedTime = storedData.trackedTime;
+        
+        if (!trackedTime || !trackedTime.lastDate || !trackedTime.timeHistory) {
+            initDefaultTimeData();
+            return;
+        }
+        
+        timeHistory = trackedTime.timeHistory;
+        
+        if (currentDateStr !== trackedTime.lastDate) {
+            console.log(`New day detected (Last: ${trackedTime.lastDate}, Now: ${currentDateStr})`);
+            todaysTotalTime = 0;
+        } else {
+            todaysTotalTime = timeHistory[currentDateStr] || 0;
+        }
+        
+        console.log(`Loaded data for ${currentDateStr}, time: ${todaysTotalTime}`);
+    } catch (error) {
+        console.error("Error loading time data:", error);
+        initDefaultTimeData();
+    }
+}
+
+function incrementTimer() {
+    const newDateStr = new Date().toISOString().split('T')[0];
+    if (newDateStr !== currentDateStr) { // new day, reset timer
+        saveTimeData(); 
+        todaysTotalTime = 0;
+        currentDateStr = newDateStr;
+    }
+
+    todaysTotalTime++;
+    updateTimerDisplay(todaysTotalTime);
 }
 
 function startTimer() {
@@ -67,7 +105,6 @@ function stopTimer() {
     clearInterval(timerInterval);
     timerInterval = null;
     saveTimeData();
-    console.log("Timer stopped.");
 }
 
 function updateTimerDisplay(updatedTime) {
@@ -88,10 +125,9 @@ async function updateTimingState(tabId) {
             return;
         }
         const isTrackedUrl = isTrackedTabUrl(activeTab.url);
-        const isAudible = activeTab.audible;
-        console.log(`Tab ${tabId}: tracked=${isTrackedUrl}, audible=${isAudible}`);
+        console.log(`Tab ${tabId}: tracked=${isTrackedUrl}, audible=${activeTab.audible}`);
         
-        if (isTrackedUrl && isAudible) {
+        if (isTrackedUrl && activeTab.audible) {
             startTimer();
         } else {
             stopTimer();
@@ -109,7 +145,7 @@ function handleTabActivated(activeInfo) {
 }
 
 function handleTabUpdated(tabId, changeInfo, tab) {
-    console.log(`handleTabUpdated() called for tab ${tabId}`, changeInfo);
+    // console.log(`handleTabUpdated() called for tab ${tabId}`);
     if (changeInfo.url !== undefined) {
         const isTrackedSite = isTrackedTabUrl(changeInfo.url);
         if (isTrackedSite) {
@@ -127,7 +163,7 @@ function handleTabUpdated(tabId, changeInfo, tab) {
 }
 
 function handleTabRemoved(tabId, removeInfo) {
-    console.log(`handleTabRemoved() called for tab ${tabId}`);
+    // console.log(`handleTabRemoved() called for tab ${tabId}`);
     if (tabId === activeTabId) {
         stopTimer();
         activeTabId = null;
@@ -135,7 +171,7 @@ function handleTabRemoved(tabId, removeInfo) {
     trackedTabIds.delete(tabId); 
 }
 
-function handleMessage(message, sender, sendResponse) {
+function handleMessageRecieved(message, sender, sendResponse) {
     console.log(`handleMessage()`, message, sender);
     if (message.type === "CONTENT_SCRIPT_READY" && sender.tab) {
         trackedTabIds.add(sender.tab.id);
@@ -147,7 +183,7 @@ async function init() {
     browser.tabs.onActivated.addListener(handleTabActivated);
     browser.tabs.onUpdated.addListener(handleTabUpdated);
     browser.tabs.onRemoved.addListener(handleTabRemoved);
-    browser.runtime.onMessage.addListener(handleMessage);
+    browser.runtime.onMessage.addListener(handleMessageRecieved);
 
     await loadTimeData();
 

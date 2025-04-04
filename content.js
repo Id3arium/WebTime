@@ -30,8 +30,6 @@ function formatTime(timeInSeconds) {
 
 function handleIncomingMessage(message, sender, sendResponse) {
     if (message.type === "TIME_UPDATE") {
-      console.log("handleIncomingMessage()", message.time);
-  
       if (timerText) {
         timerText.textContent = formatTime(message.time);
       } else {
