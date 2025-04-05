@@ -74,29 +74,27 @@ async function loadTimeData() {
     }
 }
 
-function incrementTimer() {
+function incrementTimer(){
+    todaysTotalTime++;
+    updateTimerDisplay(todaysTotalTime);
+
     const newDateStr = new Date().toISOString().split('T')[0];
     if (newDateStr !== currentDateStr) { // new day, reset timer
         saveTimeData(); 
         todaysTotalTime = 0;
         currentDateStr = newDateStr;
     }
-
-    todaysTotalTime++;
-    updateTimerDisplay(todaysTotalTime);
+    
+    if (todaysTotalTime % SAVE_INTERVAL_SECONDS === 0) { // auto save periodically
+        saveTimeData(); 
+    }
 }
 
 function startTimer() {
     if (timerInterval) return;
     
-    timerInterval = setInterval(() => {
-        todaysTotalTime++;
-        updateTimerDisplay(todaysTotalTime);
-
-        if (todaysTotalTime % SAVE_INTERVAL_SECONDS === 0) {
-            saveTimeData(); 
-        }
-    }, 1000); 
+    timerInterval = setInterval(incrementTimer, 1000);
+    console.log("Timer started.");
 }
 
 function stopTimer() {
@@ -177,6 +175,28 @@ function handleMessageRecieved(message, sender, sendResponse) {
         trackedTabIds.add(sender.tab.id);
         updateTimerDisplay(todaysTotalTime);
     }
+}
+
+function importData(file) {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const data = JSON.parse(event.target.result);
+      browser.storage.local.set(data);
+    };
+    reader.readAsText(file);
+}
+
+function exportData() {
+    browser.storage.local.get("trackedTime").then(data => {
+        const blob = new Blob([JSON.stringify(data)], {type: "application/json"});
+        const url = URL.createObjectURL(blob);
+        
+        browser.downloads.download({
+            url: url,
+            filename: "webtime-data.json",
+            saveAs: true
+        });
+    });
 }
 
 async function init() {
