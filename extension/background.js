@@ -5,8 +5,16 @@ let timerInterval = null;
 const trackedSitePattern = "*://*.youtube.com/*"; 
 const SAVE_INTERVAL_SECONDS = 60;
 
-let currentDateStr = new Date().toISOString().split('T')[0]; // Format: "YYYY-MM-DD"
+let currentDateStr = getLocalDateStr() // Format: "YYYY-MM-DD"
 let timeHistory = {};
+
+function getLocalDateStr() { 
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
 
 function isTrackedTabUrl(url) {
     if (typeof url !== 'string' || !(url.startsWith('http'))) return false;
@@ -22,6 +30,7 @@ function isTrackedTabUrl(url) {
         return false;
     }
 }
+
 function initDefaultTimeData() {
     todaysTotalTime = 0;
     timeHistory = {};
@@ -76,15 +85,16 @@ async function loadTimeData() {
 
 function incrementTimer(){
     todaysTotalTime++;
+    const newDateStr = getLocalDateStr()
+    console.log("incrementTimer():", todaysTotalTime, newDateStr, currentDateStr);
+    if (newDateStr !== currentDateStr) {
+        saveTimeData(); 
+        currentDateStr = newDateStr;
+        todaysTotalTime = 0;
+        console.log("New day, timer reset.");
+    }
     updateTimerDisplay(todaysTotalTime);
 
-    const newDateStr = new Date().toISOString().split('T')[0];
-    if (newDateStr !== currentDateStr) { // new day, reset timer
-        saveTimeData(); 
-        todaysTotalTime = 0;
-        currentDateStr = newDateStr;
-    }
-    
     if (todaysTotalTime % SAVE_INTERVAL_SECONDS === 0) { // auto save periodically
         saveTimeData(); 
     }
@@ -143,7 +153,6 @@ function handleTabActivated(activeInfo) {
 }
 
 function handleTabUpdated(tabId, changeInfo, tab) {
-    // console.log(`handleTabUpdated() called for tab ${tabId}`);
     if (changeInfo.url !== undefined) {
         const isTrackedSite = isTrackedTabUrl(changeInfo.url);
         if (isTrackedSite) {
