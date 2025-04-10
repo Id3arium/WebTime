@@ -86,12 +86,11 @@ async function loadTimeData() {
 function incrementTimer(){
     todaysTotalTime++;
     const newDateStr = getLocalDateStr()
-    console.log("incrementTimer():", todaysTotalTime, newDateStr, currentDateStr);
     if (newDateStr !== currentDateStr) {
         saveTimeData(); 
         currentDateStr = newDateStr;
         todaysTotalTime = 0;
-        console.log("New day, timer reset.");
+        console.log("New day, reset timer.");
     }
     updateTimerDisplay(todaysTotalTime);
 
