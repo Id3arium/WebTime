@@ -3,19 +3,24 @@
   "name": "Web Time",
   "version": "0.2.1",
   "description": "Track and take control of the time you spend on the web",
-
-  "browser_specific_settings": {
-    "gecko": {
-      "id": "webtime@yourdomain.com"
-    }
-  },
   
   "permissions": [
-    "storage",
     "tabs",
-    "downloads",
-    "*://*.youtube.com/*"
+    "*://*.youtube.com/*",
+    "storage"
   ],
+
+  "browser_action": {
+    "default_icon": {
+      "128": "icon128.png"
+    },
+    "default_title": "Web Time",
+    "default_popup": "popup/popup.html"
+  },
+
+  "icons": {
+    "128": "icon128.png"
+  },
   
   "background": {
     "scripts": ["background.js"]
@@ -28,8 +33,10 @@
       "css": ["timer.css"]
     }
   ],
-  
-  "icons": {
-    "128": "icon128.png"
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "webtime@somedomain.com"
+    }
   }
 }
