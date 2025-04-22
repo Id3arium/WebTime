@@ -1,4 +1,4 @@
-//{"lastDate":"2025-04-20","timeHistory":{"2025-04-10":16886,"2025-04-11":9240,"2025-04-13":5795,"2025-04-14":4796,"2025-04-15":12082,"2025-04-16":17424,"2025-04-17":4197,"2025-04-18":14616,"2025-04-19":19969,"2025-04-20":10923},"version":1}
+//{"lastDate":"2025-04-21","timeHistory":{"2025-04-10":16886,"2025-04-11":9240,"2025-04-13":5795,"2025-04-14":4796,"2025-04-15":12082,"2025-04-16":17424,"2025-04-17":4197,"2025-04-18":14616,"2025-04-19":19969,"2025-04-20":11008,"2025-04-21":15467},"version":1}
 
 // This will run when the popup HTML has fully loaded
 document.addEventListener('DOMContentLoaded', function() {
@@ -38,20 +38,22 @@ function createTimeChart(timeHistory) {
   const canvasElement = document.getElementById('time-chart');
   const canvasContext = canvasElement.getContext('2d');
   
-  // Convert the time history object into arrays of dates and hours
+  // Convert the time history object into chart data
   const chartData = processTimeDataForChart(timeHistory);
   
-  // Create the chart
+  // Create the chart with custom tooltip
   const timeChart = new Chart(canvasContext, {
     type: 'bar',
     data: {
       labels: chartData.dates,
       datasets: [{
-        label: 'Hours Spent',
+        label: 'Time Spent',
         data: chartData.hours,
         backgroundColor: 'rgba(54, 162, 235, 0.5)',
         borderColor: 'rgba(54, 162, 235, 1)',
-        borderWidth: 1
+        borderWidth: 1,
+        // Store the original seconds for tooltip use
+        seconds: chartData.seconds  
       }]
     },
     options: {
@@ -65,28 +67,39 @@ function createTimeChart(timeHistory) {
         }
       },
       responsive: true,
-      maintainAspectRatio: false
+      maintainAspectRatio: false,
+      plugins: {
+        tooltip: {
+          callbacks: {
+            // Customize the tooltip display
+            label: function(context) {
+              const seconds = context.dataset.seconds[context.dataIndex];
+              return formatTime(seconds);
+            }
+          }
+        }
+      }
     }
   });
 }
 
 function processTimeDataForChart(timeHistory) {
-  // Get dates from the time history object and sort them chronologically
-  const dates = Object.keys(timeHistory).sort();
+  const sortedDates = Object.keys(timeHistory).sort();
   
-  // Convert seconds to hours for each date
-  const hours = dates.map(date => {
+  // Convert seconds to hours for chart display
+  const hours = sortedDates.map(date => {
     const seconds = timeHistory[date] || 0;
     const hours = seconds / 3600; // Convert seconds to hours
     return Math.round(hours * 10) / 10; // Round to 1 decimal place
   });
   
-  // Format dates to be more readable (e.g., "Apr 20" instead of "2025-04-20")
-  const formattedDates = dates.map(formatDateForDisplay);
+  const seconds = sortedDates.map(date => timeHistory[date] || 0);
+  const formattedDates = sortedDates.map(formatDateForDisplay);
   
   return {
     dates: formattedDates,
-    hours: hours
+    hours: hours,
+    seconds: seconds  // Added to preserve original data
   };
 }
 
@@ -94,4 +107,14 @@ function formatDateForDisplay(dateString) {
   const date = new Date(dateString);
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   return `${months[date.getMonth()]} ${date.getDate()}`;
+}
+
+function formatTime(seconds) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  
+  const formattedHours = hours.toString().padStart(2, '0');
+  const formattedMinutes = minutes.toString().padStart(2, '0');
+  
+  return `${formattedHours}:${formattedMinutes}`;
 }
