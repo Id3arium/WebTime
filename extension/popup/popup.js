@@ -6,6 +6,8 @@ const CONFIG = {
   chartHeight: 400       // Chart height in pixels
 };
 
+const gridColor = getComputedStyle(document.documentElement).getPropertyValue('--dark-bg').trim();
+
 // This will run when the popup HTML has fully loaded
 document.addEventListener('DOMContentLoaded', function() {
   browser.storage.local.get("trackedTime").then(function(storedData) {
@@ -20,7 +22,7 @@ document.addEventListener('DOMContentLoaded', function() {
   
   const canvasElement = document.getElementById('time-chart');
   const canvasContext = canvasElement.getContext('2d');
-  const timeChart = new Chart(canvasContext, chartConfig);
+  const _timeChart = new Chart(canvasContext, chartConfig);
   
   document.getElementById('chart-container').style.height = `${CONFIG.chartHeight}px`;
     
@@ -46,11 +48,11 @@ function buildChartConfig(processedData) {
       type: 'bar',
       label: 'Daily Usage',
       data: processedData.dailyData.map(day => day.hours),
-      backgroundColor: 'rgba(54, 162, 235, 0.5)',
-      borderColor: 'rgba(54, 162, 235, 1)',
+      backgroundColor: 'rgba(25, 130, 235, 0.75)',
+      borderColor: 'rgb(25, 130, 255)',
       borderWidth: 1,
-      // Store formatted times for tooltips
-      formattedTimes: processedData.dailyData.map(day => day.formattedTime)
+      formattedTimes: processedData.dailyData.map(day => day.formattedTime),
+      order: 2
     }
   ];
   
@@ -60,12 +62,13 @@ function buildChartConfig(processedData) {
       label: `${CONFIG.movingAverageDays}-Day Average`,
       data: processedData.movingAverageData.map(day => day.averageHours),
       formattedTimes: processedData.movingAverageData.map(day => day.formattedTime),
-      backgroundColor: 'rgba(25, 80, 135, 0.35)',
-      borderColor: 'rgba(25, 80, 135, .75)',
+      backgroundColor: 'rgba(65, 100, 255, 0.2)',
+      borderColor: 'rgb(65, 100, 255, 0.9)', 
       borderWidth: 2,
       fill: false,
       tension: 0.2,
-      pointRadius: 3
+      pointRadius: 3,
+      order: 1
     });
   }
   
@@ -80,6 +83,9 @@ function buildChartConfig(processedData) {
       maintainAspectRatio: false,
       scales: {
         y: {
+          grid: {
+            color: gridColor
+          },
           beginAtZero: true,
           title: {
             display: true,
@@ -95,10 +101,8 @@ function buildChartConfig(processedData) {
               const avgDataset = context.chart.data.datasets[1];  
               
               const dataIndex = context.dataIndex;
-              
               const lines = [];
               
-              // Add daily usage line
               const dailyLabel = dailyDataset.label || 'Daily Usage';
               const dailyTime = dailyDataset.formattedTimes[dataIndex];
               lines.push(`${dailyLabel}: ${dailyTime}`);
@@ -121,7 +125,6 @@ function buildChartConfig(processedData) {
 function processDataForAnalytics(timeHistory) {
   const sortedDates = Object.keys(timeHistory).sort();
   
-  // Convert raw data to structured daily data
   const dailyData = sortedDates.map(date => ({
     date: date,
     seconds: timeHistory[date] || 0,
@@ -129,10 +132,7 @@ function processDataForAnalytics(timeHistory) {
     formattedTime: formatTime(timeHistory[date] || 0)
   }));
   
-  const visibleDataset = CONFIG.daysToDisplay > 0 
-    ? dailyData.slice(-CONFIG.daysToDisplay)
-    : dailyData;
-  
+  const visibleDataset = CONFIG.daysToDisplay > 0 ? dailyData.slice(-CONFIG.daysToDisplay) : dailyData;
   let movingAverageData = calculateMovingAverage(visibleDataset, CONFIG.movingAverageDays);
 
   return {
@@ -155,9 +155,9 @@ function calculateMovingAverage(dailyData, windowSize) {
     
     return {
       date: dayData.date,
-      averageSeconds: Math.round(averageSeconds),  // Round to whole seconds
+      averageSeconds: roundedAverageSeconds,
       averageHours: Math.round(averageHours * 10) / 10,  // Round to 1 decimal for display
-      formattedTime: formattedTime  // Add formatted time
+      formattedTime: formattedTime  
     };
   });
 }
