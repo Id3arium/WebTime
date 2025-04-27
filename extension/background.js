@@ -5,7 +5,7 @@ let timerInterval = null;
 const trackedSitePattern = "*://*.youtube.com/*"; 
 const SAVE_INTERVAL_SECONDS = 60;
 let tabActivity = {};
-const INACTIVITY_TIMEOUT = 5000; // in ms
+const INACTIVITY_TIMEOUT = 3000; // in ms
 
 let currentDateStr = getLocalDateStr() // Format: "YYYY-MM-DD"
 let timeHistory = {};
@@ -236,7 +236,7 @@ async function init() {
         if (activeTabId) {
             updateTimingState(activeTabId);
         }
-    }, 2500);
+    }, 2000);
     console.log("Initialization complete.");
 }
 init();

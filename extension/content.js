@@ -2,6 +2,7 @@
 // It also provides functions to update the timer text and manage the timer state.
 
 let timerText = null; 
+let lastActivityTime = Date.now();
 
 function createTimerElement() {
     const timer = document.createElement("div");
@@ -38,16 +39,12 @@ function handleIncomingMessage(message, sender, sendResponse) {
   }
 }
 
-let lastActivityTime = Date.now();
-const INACTIVITY_TIMEOUT = 7000; //in ms
-
 function updateActivityState() {
     lastActivityTime = Date.now();
     browser.runtime.sendMessage({ type: "USER_ACTIVE" });
 }
 
 // Set up event listeners for user activity
-document.addEventListener('mousemove', updateActivityState);
 document.addEventListener('scroll', updateActivityState);
 document.addEventListener('keydown', updateActivityState);
 
