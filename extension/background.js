@@ -4,6 +4,8 @@ const trackedTabIds = new Set();
 let timerInterval = null;
 const trackedSitePattern = "*://*.youtube.com/*"; 
 const SAVE_INTERVAL_SECONDS = 60;
+let tabActivity = {};
+const INACTIVITY_TIMEOUT = 5000; // in ms
 
 let currentDateStr = getLocalDateStr() // Format: "YYYY-MM-DD"
 let timeHistory = {};
@@ -132,9 +134,12 @@ async function updateTimingState(tabId) {
             return;
         }
         const isTrackedUrl = isTrackedTabUrl(activeTab.url);
-        console.log(`Tab ${tabId}: tracked=${isTrackedUrl}, audible=${activeTab.audible}`);
+        const lastActivity = tabActivity[tabId] || 0;
+        const isUserActive = (Date.now() - lastActivity) < INACTIVITY_TIMEOUT;
         
-        if (isTrackedUrl && activeTab.audible) {
+        // console.log(`Tab ${tabId}: tracked=${isTrackedUrl}, audible=${activeTab.audible}, active=${isUserActive}`);
+
+        if (isTrackedUrl && (activeTab.audible || isUserActive)) {
             startTimer();
         } else {
             stopTimer();
@@ -169,7 +174,6 @@ function handleTabUpdated(tabId, changeInfo, tab) {
 }
 
 function handleTabRemoved(tabId, removeInfo) {
-    // console.log(`handleTabRemoved() called for tab ${tabId}`);
     if (tabId === activeTabId) {
         stopTimer();
         activeTabId = null;
@@ -182,6 +186,9 @@ function handleMessageRecieved(message, sender, sendResponse) {
     if (message.type === "CONTENT_SCRIPT_READY" && sender.tab) {
         trackedTabIds.add(sender.tab.id);
         updateTimerDisplay(todaysTotalTime);
+    }
+    if (message.type === "USER_ACTIVE" && sender.tab) {
+        tabActivity[sender.tab.id] = Date.now();
     }
 }
 
@@ -223,6 +230,13 @@ async function init() {
         activeTabId = activeTabs[0].id;
         updateTimingState(activeTabId);
     }
+
+    // Set up periodic check for inactivity
+    setInterval(() => {
+        if (activeTabId) {
+            updateTimingState(activeTabId);
+        }
+    }, 2500);
     console.log("Initialization complete.");
 }
 init();

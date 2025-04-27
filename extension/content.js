@@ -29,14 +29,27 @@ function formatTime(timeInSeconds) {
 }
 
 function handleIncomingMessage(message, sender, sendResponse) {
-    if (message.type === "TIME_UPDATE") {
-      if (timerText) {
-        timerText.textContent = formatTime(message.time);
-      } else {
-        console.error("Timer text element not found when trying to update time!");
-      }
+  if (message.type === "TIME_UPDATE") {
+    if (timerText) {
+      timerText.textContent = formatTime(message.time);
+    } else {
+      console.error("Timer text element not found when trying to update time!");
     }
   }
+}
+
+let lastActivityTime = Date.now();
+const INACTIVITY_TIMEOUT = 7000; //in ms
+
+function updateActivityState() {
+    lastActivityTime = Date.now();
+    browser.runtime.sendMessage({ type: "USER_ACTIVE" });
+}
+
+// Set up event listeners for user activity
+document.addEventListener('mousemove', updateActivityState);
+document.addEventListener('scroll', updateActivityState);
+document.addEventListener('keydown', updateActivityState);
 
 function init() {
     console.log("initTimer()");
