@@ -5,7 +5,7 @@ let timerInterval = null;
 const trackedSitePattern = "*://*.youtube.com/*"; 
 const SAVE_INTERVAL_SECONDS = 60;
 let tabActivity = {};
-const INACTIVITY_TIMEOUT = 3000; // in ms
+const INACTIVITY_TIMEOUT = 2000; // in ms
 
 let currentDateStr = getLocalDateStr() // Format: "YYYY-MM-DD"
 let timeHistory = {};

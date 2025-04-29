@@ -1,5 +1,6 @@
 :root {
-  --dark-bg: ##1c1b22;
+  /* --dark-bg: #1f252e; */
+  --dark-bg: #222222;
   --header-text-color: #eeeeff;
 }
 
@@ -14,7 +15,6 @@ body {
   backdrop-filter: blur(8px);              /* Blur effect */
   -webkit-backdrop-filter: blur(8px);      /* For Safari */
 }
-
 
 h1 {
   color: var(--header-text-color);

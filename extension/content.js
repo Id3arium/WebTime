@@ -47,6 +47,7 @@ function updateActivityState() {
 // Set up event listeners for user activity
 document.addEventListener('scroll', updateActivityState);
 document.addEventListener('keydown', updateActivityState);
+document.addEventListener('mousemove', updateActivityState);
 
 function init() {
     console.log("initTimer()");
