@@ -129,12 +129,24 @@ function buildChartConfig(processedData) {
 function processDataForAnalytics(timeHistory) {
   const sortedDates = Object.keys(timeHistory).sort();
   
-  const dailyData = sortedDates.map(date => ({
-    date: date,
-    seconds: timeHistory[date] || 0,
-    hours: (timeHistory[date] || 0) / 3600,
-    formattedTime: formatTime(timeHistory[date] || 0)
-  }));
+  const dailyData = sortedDates.map(date => {
+    const dayData = timeHistory[date];
+    
+    // Handle new format: {"youtube.com": 12145} vs old format: 12145
+    let seconds = 0;
+    if (typeof dayData === 'number') {
+      seconds = dayData;
+    } else if (typeof dayData === 'object' && dayData) {
+      seconds = dayData["youtube.com"] || 0;
+    }
+    
+    return {
+      date: date,
+      seconds: seconds,
+      hours: seconds / 3600,
+      formattedTime: formatTime(seconds)
+    };
+  });
   
   const visibleDataset = CONFIG.daysToDisplay > 0 ? dailyData.slice(-CONFIG.daysToDisplay) : dailyData;
   let movingAverageData = calculateMovingAverage(visibleDataset, CONFIG.movingAverageDays);
@@ -167,7 +179,10 @@ function calculateMovingAverage(dailyData, windowSize) {
 }
 
 function formatDateForDisplay(dateString) {
-  const date = new Date(dateString);
+  const [year, month, day] = dateString.split('-').map(num => parseInt(num, 10));
+  
+  // Create date using local timezone (months are 0-indexed in JS)
+  const date = new Date(year, month - 1, day); 
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   return `${months[date.getMonth()]} ${date.getDate()}`;
 }
