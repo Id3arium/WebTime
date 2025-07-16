@@ -6,7 +6,7 @@
   
   "permissions": [
     "tabs",
-    "*://*.youtube.com/*",
+    "<all_urls>",
     "storage"
   ],
 
@@ -28,7 +28,7 @@
   
   "content_scripts": [
     {
-      "matches": ["*://*.youtube.com/*"],
+      "matches": ["<all_urls>"],
       "js": ["content.js"],
       "css": ["timer.css"]
     }
