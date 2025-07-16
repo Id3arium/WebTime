@@ -1,36 +1,64 @@
 let todaysTotalTime = 0;
 let activeTabId = null;
-const trackedTabIds = new Set(); 
+const trackedTabIds = new Set();
 let timerInterval = null;
-const trackedSitePattern = "*://*.youtube.com/*"; 
+const trackedSitePattern = "*://*.youtube.com/*";
 const SAVE_INTERVAL_SECONDS = 60;
 let tabActivity = {};
-const INACTIVITY_TIMEOUT = 2000; // in ms
+const INACTIVITY_TIMEOUT = 2500; // in ms
 
-let currentDateStr = getLocalDateStr() // Format: "YYYY-MM-DD"
+let currentDateStr = getLocalDateStr(); // Format: "YYYY-MM-DD"
 let timeHistory = {};
 
-function getLocalDateStr() { 
+function getLocalDateStr() {
     const now = new Date();
     const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
-    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, "0"); // Months are 0-indexed
+    const day = String(now.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
 }
 
 function isTrackedTabUrl(url) {
-    if (typeof url !== 'string' || !(url.startsWith('http'))) return false;
-    
-    const trackedDomains = ['youtube.com'];
+    if (typeof url !== "string" || !url.startsWith("http")) return false;
+
+    const trackedDomains = ["youtube.com"];
     try {
         const parsedUrl = new URL(url);
-        return trackedDomains.some(domain => 
-            parsedUrl.hostname === domain || parsedUrl.hostname.endsWith('.' + domain)
+        return trackedDomains.some(
+            (domain) =>
+                parsedUrl.hostname === domain ||
+                parsedUrl.hostname.endsWith("." + domain)
         );
     } catch (error) {
         console.error("Error parsing URL:", error);
         return false;
     }
+}
+
+function migrateDataIfNeeded(oldTimeHistory) {
+    // Check if data is in old format (values are numbers instead of objects)
+    const dates = Object.keys(oldTimeHistory);
+    if (dates.length === 0) return oldTimeHistory;
+
+    const firstDate = dates[0];
+    if (typeof oldTimeHistory[firstDate] === "number") {
+        console.log("Migrating old YouTube-only data to new multi-site format");
+
+        // Convert: "2025-04-26": 12145 -> "2025-04-26": {"youtube.com": 12145}
+        const migratedHistory = {};
+        for (const [date, seconds] of Object.entries(oldTimeHistory)) {
+            migratedHistory[date] = {
+                "youtube.com": seconds,
+            };
+        }
+
+        console.log(`Migrated ${dates.length} days of data from old format`);
+        return migratedHistory;
+    }
+
+    // Data is already in new format
+    console.log("Data already in new multi-site format");
+    return oldTimeHistory;
 }
 
 function initDefaultTimeData() {
@@ -42,16 +70,20 @@ function initDefaultTimeData() {
 async function saveTimeData() {
     console.log(`saveTimeData() ${currentDateStr}: ${todaysTotalTime} seconds`);
     try {
-        timeHistory[currentDateStr] = todaysTotalTime;
-        
+        if (!timeHistory[currentDateStr]) {
+            timeHistory[currentDateStr] = {};
+        }
+
+        timeHistory[currentDateStr]["youtube.com"] = todaysTotalTime;
+
         const storageData = {
             lastDate: currentDateStr,
             timeHistory: timeHistory,
-            version: 1
+            version: 1,
         };
-        
-        await browser.storage.local.set({ 
-            trackedTime: storageData
+
+        await browser.storage.local.set({
+            trackedTime: storageData,
         });
         console.log("Time data successfully saved with history.");
     } catch (error) {
@@ -63,47 +95,53 @@ async function loadTimeData() {
     try {
         const storedData = await browser.storage.local.get("trackedTime");
         const trackedTime = storedData.trackedTime;
-        
+
         if (!trackedTime || !trackedTime.lastDate || !trackedTime.timeHistory) {
             initDefaultTimeData();
             return;
         }
-        
-        timeHistory = trackedTime.timeHistory;
-        
+
+        timeHistory = migrateDataIfNeeded(trackedTime.timeHistory);
+
         if (currentDateStr !== trackedTime.lastDate) {
-            console.log(`New day detected (Last: ${trackedTime.lastDate}, Now: ${currentDateStr})`);
+            console.log(
+                `New day detected (Last: ${trackedTime.lastDate}, Now: ${currentDateStr})`
+            );
             todaysTotalTime = 0;
         } else {
-            todaysTotalTime = timeHistory[currentDateStr] || 0;
+            // Get YouTube time specifically (for now, until we expand to all sites)
+            const todayData = timeHistory[currentDateStr] || {};
+            todaysTotalTime = todayData["youtube.com"] || 0;
         }
-        
-        console.log(`Loaded data for ${currentDateStr}, time: ${todaysTotalTime}`);
+
+        console.log(
+            `Loaded data for ${currentDateStr}, time: ${todaysTotalTime}`
+        );
     } catch (error) {
         console.error("Error loading time data:", error);
         initDefaultTimeData();
     }
 }
 
-function incrementTimer(){
+function incrementTimer() {
     todaysTotalTime++;
-    const newDateStr = getLocalDateStr()
+    const newDateStr = getLocalDateStr();
     if (newDateStr !== currentDateStr) {
-        saveTimeData(); 
+        saveTimeData();
         currentDateStr = newDateStr;
         todaysTotalTime = 0;
         console.log("New day, reset timer.");
     }
     updateTimerDisplay(todaysTotalTime);
 
-    if (todaysTotalTime % SAVE_INTERVAL_SECONDS === 0) { // auto save periodically
-        saveTimeData(); 
+    if (todaysTotalTime % SAVE_INTERVAL_SECONDS === 0) {
+        saveTimeData();
     }
 }
 
 function startTimer() {
     if (timerInterval) return;
-    
+
     timerInterval = setInterval(incrementTimer, 1000);
     console.log("Timer started.");
 }
@@ -118,9 +156,12 @@ function stopTimer() {
 
 function updateTimerDisplay(updatedTime) {
     const message = { type: "TIME_UPDATE", time: updatedTime };
-    trackedTabIds.forEach(tabId => {
-        browser.tabs.sendMessage(tabId, message).catch(error => { 
-            console.warn(`Failed to send TIME_UPDATE to tab ${tabId}. Maybe it closed? Error:`, error);
+    trackedTabIds.forEach((tabId) => {
+        browser.tabs.sendMessage(tabId, message).catch((error) => {
+            console.warn(
+                `Failed to send TIME_UPDATE to tab ${tabId}. Maybe it closed? Error:`,
+                error
+            );
         });
     });
 }
@@ -135,8 +176,8 @@ async function updateTimingState(tabId) {
         }
         const isTrackedUrl = isTrackedTabUrl(activeTab.url);
         const lastActivity = tabActivity[tabId] || 0;
-        const isUserActive = (Date.now() - lastActivity) < INACTIVITY_TIMEOUT;
-        
+        const isUserActive = Date.now() - lastActivity < INACTIVITY_TIMEOUT;
+
         // console.log(`Tab ${tabId}: tracked=${isTrackedUrl}, audible=${activeTab.audible}, active=${isUserActive}`);
 
         if (isTrackedUrl && (activeTab.audible || isUserActive)) {
@@ -152,7 +193,7 @@ async function updateTimingState(tabId) {
 
 function handleTabActivated(activeInfo) {
     console.log(`handleTabActivated called for tab ${activeInfo.tabId}`);
-    activeTabId = activeInfo.tabId; 
+    activeTabId = activeInfo.tabId;
     updateTimingState(activeTabId);
 }
 
@@ -167,7 +208,8 @@ function handleTabUpdated(tabId, changeInfo, tab) {
             console.log(`Removed tab ${tabId} from tracked tabs`);
         }
     }
-    const hasRelevantChanges = changeInfo.url !== undefined || changeInfo.audible !== undefined;
+    const hasRelevantChanges =
+        changeInfo.url !== undefined || changeInfo.audible !== undefined;
     if (tabId === activeTabId && hasRelevantChanges) {
         updateTimingState(tabId);
     }
@@ -178,7 +220,7 @@ function handleTabRemoved(tabId, removeInfo) {
         stopTimer();
         activeTabId = null;
     }
-    trackedTabIds.delete(tabId); 
+    trackedTabIds.delete(tabId);
 }
 
 function handleMessageRecieved(message, sender, sendResponse) {
@@ -195,21 +237,23 @@ function handleMessageRecieved(message, sender, sendResponse) {
 function importData(file) {
     const reader = new FileReader();
     reader.onload = (event) => {
-      const data = JSON.parse(event.target.result);
-      browser.storage.local.set(data);
+        const data = JSON.parse(event.target.result);
+        browser.storage.local.set(data);
     };
     reader.readAsText(file);
 }
 
 function exportData() {
-    browser.storage.local.get("trackedTime").then(data => {
-        const blob = new Blob([JSON.stringify(data)], {type: "application/json"});
+    browser.storage.local.get("trackedTime").then((data) => {
+        const blob = new Blob([JSON.stringify(data)], {
+            type: "application/json",
+        });
         const url = URL.createObjectURL(blob);
-        
+
         browser.downloads.download({
             url: url,
             filename: "webtime-data.json",
-            saveAs: true
+            saveAs: true,
         });
     });
 }
@@ -222,10 +266,13 @@ async function init() {
 
     await loadTimeData();
 
-    let trackedTabs = await browser.tabs.query({ url: trackedSitePattern })
-    trackedTabs.forEach(tab => trackedTabIds.add(tab.id));
+    let trackedTabs = await browser.tabs.query({ url: trackedSitePattern });
+    trackedTabs.forEach((tab) => trackedTabIds.add(tab.id));
 
-    let activeTabs = await browser.tabs.query({ active: true, currentWindow: true });
+    let activeTabs = await browser.tabs.query({
+        active: true,
+        currentWindow: true,
+    });
     if (activeTabs.length > 0) {
         activeTabId = activeTabs[0].id;
         updateTimingState(activeTabId);
@@ -236,7 +283,7 @@ async function init() {
         if (activeTabId) {
             updateTimingState(activeTabId);
         }
-    }, 2000);
+    }, 2500);
     console.log("Initialization complete.");
 }
 init();
