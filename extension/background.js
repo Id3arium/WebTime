@@ -5,18 +5,21 @@ let timerInterval = null;
 const SAVE_INTERVAL_SECONDS = 60;
 let tabActivity = {};
 let trackedTabDomain = null;
-const INACTIVITY_TIMEOUT = 1500; // in ms
-const ACTIVTY_CHECK_INTERVAL = 3500; // in ms
+const INACTIVITY_TRHESHOLD_MS = 7500;
+const ACTIVTY_CHECK_INTERVAL_MS = 1500;
 
-let currentDateStr = getLocalDateStr(); // Format: "YYYY-MM-DD"
+let currentDateStr = getLocalDateStr(); 
 let timeHistory = {};
 
-function getLocalDateStr() {
+function getLocalDateStr() { 
     const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0"); // Months are 0-indexed
-    const day = String(now.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
+    const monthNum = now.getMonth() + 1; 
+
+    const yyyy = now.getFullYear();
+    const mm = String(monthNum).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+
+    return `${yyyy}-${mm}-${dd}`;
 }
 
 function extractDomain(url) {
@@ -217,7 +220,7 @@ function handleTimerState(activeTab, tabId) {
     }
 
     const lastActivity = tabActivity[tabId] || 0;
-    const isUserActive = (Date.now() - lastActivity) < INACTIVITY_TIMEOUT;
+    const isUserActive = (Date.now() - lastActivity) < INACTIVITY_TRHESHOLD_MS;
     
     if (activeTab.audible || isUserActive) {
         startTimer();
@@ -314,12 +317,11 @@ async function init() {
         updateTimingState(activeTabId);
     }
 
-    // Set up periodic check for inactivity
     setInterval(() => {
         if (activeTabId) {
             updateTimingState(activeTabId);
         }
-    }, ACTIVTY_CHECK_INTERVAL);
+    }, ACTIVTY_CHECK_INTERVAL_MS);
     console.log("Initialization complete.");
 }
 init();
