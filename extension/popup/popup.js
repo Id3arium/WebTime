@@ -71,53 +71,32 @@ async function initializePopup() {
   
 function setupNavigationListeners() {
   document.getElementById('back-btn').addEventListener('click', showGeneralView);
-  document.getElementById('forward-btn').addEventListener('click', () => showDetailView(currentDomain));
+  document.getElementById('forward-btn').addEventListener('click', showDetailView);
 }
 
 function showGeneralView() {
   currentView = ViewState.GENERAL;
-  renderGeneralView();
+  const pagesContainer = document.querySelector('.pages-container');
+  pagesContainer.className = 'pages-container show-general';
 }
 
-function showDetailView(domain = currentDomain) {
+function showDetailView() {
   currentView = ViewState.DETAIL;
-  currentDomain = domain;
-  renderDomainDetailView(domain);
-}
-
-function updateNavigationButtons() {
-  const backBtn = document.getElementById('back-btn');
-  const forwardBtn = document.getElementById('forward-btn');
-  
-  if (currentView === ViewState.GENERAL) {
-    backBtn.style.display = 'none';
-    forwardBtn.style.display = currentDomain ? 'inline-block' : 'none';
-  } else {
-    backBtn.style.display = 'inline-block';
-    forwardBtn.style.display = 'none';
-  }
+  const pagesContainer = document.querySelector('.pages-container');
+  pagesContainer.className = 'pages-container show-detail';
 }
 
 // View rendering functions
 function renderGeneralView() {
-  updateNavigationButtons();
+  // Update general page content
+  const generalContent = document.querySelector('#general-page .page-content');
+  generalContent.innerHTML = '<p class="message">General view coming soon! This will show pie chart and top domains.</p>';
   
-  // Update header
-  document.querySelector('.header-text').textContent = 'All Sites';
-  document.querySelector('.time-summary').textContent = 'Overview';
-  
-  // Slide to general view
-  const viewContainer = document.querySelector('.view-container');
-  viewContainer.className = 'view-container show-general';
-  
-  // Update general view content
-  const generalView = document.getElementById('general-view');
-  generalView.innerHTML = '<p class="message">General view coming soon! This will show pie chart and top domains.</p>';
+  // Show general view
+  showGeneralView();
 }
 
 function renderDomainDetailView(domain) {
-  updateNavigationButtons();
-  
   if (!domain) {
     displayErrorMessage("Cannot detect current domain. Make sure you're on a web page.");
     return;
@@ -126,20 +105,15 @@ function renderDomainDetailView(domain) {
   const currentDate = getLocalDateStr();
   const todaysTime = calculateTodaysTotals(allTimeHistory, currentDate, domain);
   
-  // Update header elements
-  document.querySelector('.header-text').textContent = domain;
-  document.querySelector('.time-summary').textContent = `${formatTime(todaysTime.domain)} / ${formatTime(todaysTime.total)}`;
+  // Update detail page header
+  const detailHeaderText = document.querySelector('#detail-page .header-text');
+  const detailSummary = document.querySelector('#detail-page .time-summary');
+  detailHeaderText.textContent = domain;
+  detailSummary.textContent = `${formatTime(todaysTime.domain)} / ${formatTime(todaysTime.total)}`;
   
-  // Slide to detail view
-  const viewContainer = document.querySelector('.view-container');
-  viewContainer.className = 'view-container show-detail';
-  
-  // Update detail view content
-  const detailView = document.getElementById('detail-view');
-  detailView.innerHTML = '<canvas id="time-chart"></canvas>';
-  
-  // Set container height
-  document.getElementById('chart-container').style.height = `${CONFIG.chartHeight}px`;
+  // Update detail page content with chart
+  const detailContent = document.querySelector('#detail-page .page-content');
+  detailContent.innerHTML = '<canvas id="time-chart"></canvas>';
   
   // Build and display chart
   const processedData = processDataForAnalytics(allTimeHistory, domain);
@@ -148,16 +122,19 @@ function renderDomainDetailView(domain) {
   const canvasElement = document.getElementById('time-chart');
   const canvasContext = canvasElement.getContext('2d');
   const _timeChart = new Chart(canvasContext, chartConfig);
+  
+  // Show detail view
+  showDetailView();
 }
 
 function displayNoDataMessage(siteName) {
-    const detailView = document.getElementById('detail-view');
-    detailView.innerHTML = `<p class="message">No tracking data available yet for ${siteName}. Start browsing to collect data.</p>`;
+    const detailContent = document.querySelector('#detail-page .page-content');
+    detailContent.innerHTML = `<p class="message">No tracking data available yet for ${siteName}. Start browsing to collect data.</p>`;
 }
   
 function displayErrorMessage(message) {
-    const detailView = document.getElementById('detail-view');
-    detailView.innerHTML = '<p class="message error">' + message + '</p>';
+    const detailContent = document.querySelector('#detail-page .page-content');
+    detailContent.innerHTML = '<p class="message error">' + message + '</p>';
 }
 
 function calculateTodaysTotals(timeHistory, currentDate, currentDomain) {

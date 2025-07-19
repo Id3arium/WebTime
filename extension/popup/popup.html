@@ -7,23 +7,31 @@
 </head>
 <body>
   <div class="content">
-    <div class="header">
-      <div class="nav-bar">
-        <button id="back-btn" class="nav-btn" style="display: none;">←</button>
-        <div class="header-content">
-          <div class="header-text">WebTime</div>
-          <div class="time-summary">0:00 / 0:00</div>
+    <div class="pages-container show-detail">
+      <!-- General View Half-Page -->
+      <div class="half-page" id="general-page">
+        <div class="page-header">
+          <div class="header-content">
+            <div class="header-text">All Sites</div>
+            <div class="time-summary">Overview</div>
+          </div>
+          <button id="forward-btn" class="nav-btn">→</button>
         </div>
-        <button id="forward-btn" class="nav-btn" style="display: none;">→</button>
-      </div>
-    </div>
-
-    <div id="chart-container">
-      <div class="view-container show-detail">
-        <div class="view-panel" id="general-view">
+        <div class="page-content">
           <!-- General view content will go here -->
         </div>
-        <div class="view-panel" id="detail-view">
+      </div>
+      
+      <!-- Detail View Half-Page -->
+      <div class="half-page" id="detail-page">
+        <div class="page-header">
+          <button id="back-btn" class="nav-btn">←</button>
+          <div class="header-content">
+            <div class="header-text">WebTime</div>
+            <div class="time-summary">0:00 / 0:00</div>
+          </div>
+        </div>
+        <div class="page-content">
           <canvas id="time-chart"></canvas>
         </div>
       </div>
