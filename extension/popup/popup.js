@@ -1,45 +1,182 @@
-//{"lastDate":"2025-04-26","timeHistory":{"2025-04-10":16886,"2025-04-11":9240,"2025-04-13":5795,"2025-04-14":4796,"2025-04-15":12082,"2025-04-16":17424,"2025-04-17":4197,"2025-04-18":14616,"2025-04-19":19969,"2025-04-20":11008,"2025-04-21":15467,"2025-04-22":15631,"2025-04-23":18200,"2025-04-24":5225,"2025-04-25":9963,"2025-04-26":12145},"version":1}
-
 const CONFIG = {
   movingAverageDays: 7,  // 7-day moving average
   daysToDisplay: 30,     // Number of days to display
   chartHeight: 400       // Chart height in pixels
 };
 
+const ViewState = {
+  GENERAL: 'general',
+  DETAIL: 'detail'
+};
+
 const gridColor = getComputedStyle(document.documentElement).getPropertyValue('--dark-bg').trim();
 
-// This will run when the popup HTML has fully loaded
-document.addEventListener('DOMContentLoaded', function() {
-  browser.storage.local.get("trackedTime").then(function(storedData) {
-  if (!storedData.trackedTime || !storedData.trackedTime.timeHistory) {
-    displayNoDataMessage();
+// Global state
+let currentView = ViewState.DETAIL; // Default to detail view (existing behavior)
+let currentDomain = null;
+let allTimeHistory = null;
+
+document.addEventListener('DOMContentLoaded', initializePopup);
+
+function extractDomain(url) {
+  try {
+    const parsedUrl = new URL(url);
+    let hostname = parsedUrl.hostname;
+    
+    if (hostname.startsWith('www.')) {
+      hostname = hostname.substring(4);
+    }
+    
+    return hostname;
+  } catch (error) {
+    console.error("Error parsing URL:", error);
+    return null;
+  }
+}
+
+function getLocalDateStr() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+}
+
+async function initializePopup() {
+  try {
+    setupNavigationListeners();
+    
+    const activeTabs = await browser.tabs.query({active: true, currentWindow: true});
+    currentDomain = activeTabs.length > 0 ? extractDomain(activeTabs[0].url) : null;
+    
+    const storedData = await browser.storage.local.get("trackedTime");
+    allTimeHistory = storedData.trackedTime?.timeHistory || {};
+    
+    if (Object.keys(allTimeHistory).length === 0) {
+      displayNoDataMessage(currentDomain || "any site");
+      return;
+    }
+    
+    if (currentView === ViewState.GENERAL) {
+      renderGeneralView();
+    } else {
+      renderDomainDetailView(currentDomain);
+    }
+      
+  } catch (error) {
+    console.error("Error initializing popup:", error);
+    displayErrorMessage("Could not load your time data.");
+  }
+}
+  
+function setupNavigationListeners() {
+  document.getElementById('back-btn').addEventListener('click', showGeneralView);
+  document.getElementById('forward-btn').addEventListener('click', () => showDetailView(currentDomain));
+}
+
+function showGeneralView() {
+  currentView = ViewState.GENERAL;
+  renderGeneralView();
+}
+
+function showDetailView(domain = currentDomain) {
+  currentView = ViewState.DETAIL;
+  currentDomain = domain;
+  renderDomainDetailView(domain);
+}
+
+function updateNavigationButtons() {
+  const backBtn = document.getElementById('back-btn');
+  const forwardBtn = document.getElementById('forward-btn');
+  
+  if (currentView === ViewState.GENERAL) {
+    backBtn.style.display = 'none';
+    forwardBtn.style.display = currentDomain ? 'inline-block' : 'none';
+  } else {
+    backBtn.style.display = 'inline-block';
+    forwardBtn.style.display = 'none';
+  }
+}
+
+// View rendering functions
+function renderGeneralView() {
+  updateNavigationButtons();
+  
+  // Update header
+  document.querySelector('.header-text').textContent = 'All Sites';
+  document.querySelector('.time-summary').textContent = 'Overview';
+  
+  // Slide to general view
+  const viewContainer = document.querySelector('.view-container');
+  viewContainer.className = 'view-container show-general';
+  
+  // Update general view content
+  const generalView = document.getElementById('general-view');
+  generalView.innerHTML = '<p class="message">General view coming soon! This will show pie chart and top domains.</p>';
+}
+
+function renderDomainDetailView(domain) {
+  updateNavigationButtons();
+  
+  if (!domain) {
+    displayErrorMessage("Cannot detect current domain. Make sure you're on a web page.");
     return;
   }
   
-  const timeHistory = storedData.trackedTime.timeHistory;
-  const processedData = processDataForAnalytics(timeHistory);
+  const currentDate = getLocalDateStr();
+  const todaysTime = calculateTodaysTotals(allTimeHistory, currentDate, domain);
+  
+  // Update header elements
+  document.querySelector('.header-text').textContent = domain;
+  document.querySelector('.time-summary').textContent = `${formatTime(todaysTime.domain)} / ${formatTime(todaysTime.total)}`;
+  
+  // Slide to detail view
+  const viewContainer = document.querySelector('.view-container');
+  viewContainer.className = 'view-container show-detail';
+  
+  // Update detail view content
+  const detailView = document.getElementById('detail-view');
+  detailView.innerHTML = '<canvas id="time-chart"></canvas>';
+  
+  // Set container height
+  document.getElementById('chart-container').style.height = `${CONFIG.chartHeight}px`;
+  
+  // Build and display chart
+  const processedData = processDataForAnalytics(allTimeHistory, domain);
   const chartConfig = buildChartConfig(processedData);
   
   const canvasElement = document.getElementById('time-chart');
   const canvasContext = canvasElement.getContext('2d');
   const _timeChart = new Chart(canvasContext, chartConfig);
-  
-  document.getElementById('chart-container').style.height = `${CONFIG.chartHeight}px`;
-    
-  }).catch(function(error) {
-    console.error("Error retrieving time data:", error);
-    displayErrorMessage("Could not load your time data.");
-  });
-});
-  
-function displayNoDataMessage() {
-    const chartContainer = document.getElementById('chart-container');
-    chartContainer.innerHTML = '<p class="message">No tracking data available yet. Start using YouTube to collect data.</p>';
+}
+
+function displayNoDataMessage(siteName) {
+    const detailView = document.getElementById('detail-view');
+    detailView.innerHTML = `<p class="message">No tracking data available yet for ${siteName}. Start browsing to collect data.</p>`;
 }
   
 function displayErrorMessage(message) {
-    const chartContainer = document.getElementById('chart-container');
-    chartContainer.innerHTML = '<p class="message error">' + message + '</p>';
+    const detailView = document.getElementById('detail-view');
+    detailView.innerHTML = '<p class="message error">' + message + '</p>';
+}
+
+function calculateTodaysTotals(timeHistory, currentDate, currentDomain) {
+  const todaysData = timeHistory[currentDate] || {};
+  
+  const todaysTotalTime = Object.values(todaysData).reduce((sum, time) => sum + time, 0);
+  
+  const todaysDomainTime = todaysData[currentDomain] || 0;
+
+  console.log("Current date:", currentDate);
+  console.log("Today's data:", todaysData);
+  console.log("Current domain:", currentDomain);
+  console.log("Domain time:", todaysDomainTime);
+  console.log("Total time:", todaysTotalTime);
+  
+  return {
+    domain: todaysDomainTime,
+    total: todaysTotalTime
+  };
 }
   
 function buildChartConfig(processedData) {
@@ -126,7 +263,7 @@ function buildChartConfig(processedData) {
   };
 }
 
-function processDataForAnalytics(timeHistory) {
+function processDataForAnalytics(timeHistory, targetDomain) {
   const sortedDates = Object.keys(timeHistory).sort();
   
   const dailyData = sortedDates.map(date => {
@@ -135,9 +272,11 @@ function processDataForAnalytics(timeHistory) {
     // Handle new format: {"youtube.com": 12145} vs old format: 12145
     let seconds = 0;
     if (typeof dayData === 'number') {
+      // Old format (shouldn't happen after migration, but just in case)
       seconds = dayData;
     } else if (typeof dayData === 'object' && dayData) {
-      seconds = dayData["youtube.com"] || 0;
+      // New format - get time for target domain
+      seconds = dayData[targetDomain] || 0;
     }
     
     return {
@@ -194,7 +333,6 @@ function formatTime(totalTime) {
   
   const formattedHours = hours.toString().padStart(2, '0');
   const formattedMinutes = minutes.toString().padStart(2, '0');
-  const formattedSeconds = seconds.toString().padStart(2, '0');
-  
-  return `${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
+
+  return `${formattedHours}:${formattedMinutes}`;
 }

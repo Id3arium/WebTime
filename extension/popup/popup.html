@@ -6,10 +6,27 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <div class="container">
-    <h1>Web Time</h1>
+  <div class="content">
+    <div class="header">
+      <div class="nav-bar">
+        <button id="back-btn" class="nav-btn" style="display: none;">←</button>
+        <div class="header-content">
+          <div class="header-text">WebTime</div>
+          <div class="time-summary">0:00 / 0:00</div>
+        </div>
+        <button id="forward-btn" class="nav-btn" style="display: none;">→</button>
+      </div>
+    </div>
+
     <div id="chart-container">
-      <canvas id="time-chart"></canvas>
+      <div class="view-container show-detail">
+        <div class="view-panel" id="general-view">
+          <!-- General view content will go here -->
+        </div>
+        <div class="view-panel" id="detail-view">
+          <canvas id="time-chart"></canvas>
+        </div>
+      </div>
     </div>
   </div>
   
