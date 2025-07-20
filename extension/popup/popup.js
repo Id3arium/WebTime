@@ -158,17 +158,28 @@ function calculateTodaysTotals(timeHistory, currentDate, currentDomain) {
   
 function buildChartConfig(processedData) {
   const datasets = [
+    // Bottom segment - Current domain usage
     {
       type: 'bar',
-      label: 'Daily Usage',
-      data: processedData.dailyData.map(day => day.hours),
-      // backgroundColor: 'rgba(25, 130, 235, 0.75)',
-      // backgroundColor: 'rgba(50, 81, 248, 0.5)',
-      backgroundColor: 'rgba(69, 113, 231, 0.5)',
+      label: 'Current Domain',
+      data: processedData.dailyData.map(day => day.domainHours),
+      backgroundColor: 'rgba(69, 113, 231, 0.7)',
       borderColor: 'rgba(69, 113, 231)',
       borderWidth: 1,
-      formattedTimes: processedData.dailyData.map(day => day.formattedTime),
-      order: 2
+      formattedTimes: processedData.dailyData.map(day => day.domainFormattedTime)
+    },
+    // Top segment - Other sites (Total - Domain)
+    {
+      type: 'bar',
+      label: 'Other Sites',
+      data: processedData.dailyData.map(day => day.totalHours - day.domainHours),
+      backgroundColor: 'rgba(125, 125, 125, 0.4)',
+      borderColor: 'rgba(125, 125, 125, 0.6)',
+      borderWidth: 1,
+      formattedTimes: processedData.dailyData.map(day => {
+        const otherSeconds = day.totalSeconds - day.domainSeconds;
+        return formatTime(otherSeconds);
+      })
     }
   ];
   
@@ -178,15 +189,13 @@ function buildChartConfig(processedData) {
       label: `${CONFIG.movingAverageDays}-Day Average`,
       data: processedData.movingAverageData.map(day => day.averageHours),
       formattedTimes: processedData.movingAverageData.map(day => day.formattedTime),
-      // backgroundColor: 'rgba(65, 100, 255, 0.2)',
-      // backgroundColor: 'rgb(50, 81, 248, 0.2)',
       backgroundColor: 'rgb(88, 90, 224, 0.2)',
       borderColor: 'rgb(88, 90, 224)', 
       borderWidth: 2,
       fill: false,
       tension: 0.2,
       pointRadius: 3,
-      order: 1
+      order: 1 // Top layer
     });
   }
   
@@ -200,6 +209,9 @@ function buildChartConfig(processedData) {
       responsive: true,
       maintainAspectRatio: false,
       scales: {
+        x: {
+          stacked: true
+        },
         y: {
           grid: {
             color: gridColor
@@ -208,27 +220,40 @@ function buildChartConfig(processedData) {
           title: {
             display: true,
             text: 'Hours'
-          }
+          },
+          stacked: true
+        }
+      },
+      interaction: {
+        intersect: false,
+        mode: 'index'
+      },
+      elements: {
+        bar: {
+          barPercentage: 1.0,
+          categoryPercentage: 1.0
         }
       },
       plugins: {
         tooltip: {
           callbacks: {
             label: function(context) {
-              const dailyDataset = context.chart.data.datasets[0]; 
-              const avgDataset = context.chart.data.datasets[1];  
-              
+              const datasetIndex = context.datasetIndex;
               const dataIndex = context.dataIndex;
               const lines = [];
               
-              const dailyLabel = dailyDataset.label || 'Daily Usage';
-              const dailyTime = dailyDataset.formattedTimes[dataIndex];
-              lines.push(`${dailyLabel}: ${dailyTime}`);
+              // Get the dataset being hovered
+              const dataset = context.chart.data.datasets[datasetIndex];
+              const label = dataset.label;
+              const time = dataset.formattedTimes[dataIndex];
               
-              if (avgDataset) {
-                const avgLabel = avgDataset.label || '7-Day Average';
-                const avgTime = processedData.movingAverageData[dataIndex].formattedTime;
-                lines.push(`${avgLabel}: ${avgTime}`);
+              lines.push(`${label}: ${time}`);
+              
+              // If hovering over domain usage, also show total usage
+              if (datasetIndex === 1) { // Domain usage dataset
+                const totalDataset = context.chart.data.datasets[0];
+                const totalTime = totalDataset.formattedTimes[dataIndex];
+                lines.push(`${totalDataset.label}: ${totalTime}`);
               }
               
               return lines;
@@ -246,21 +271,27 @@ function processDataForAnalytics(timeHistory, targetDomain) {
   const dailyData = sortedDates.map(date => {
     const dayData = timeHistory[date];
     
-    // Handle new format: {"youtube.com": 12145} vs old format: 12145
-    let seconds = 0;
+    let domainSeconds = 0;
+    let totalSeconds = 0;
+    
     if (typeof dayData === 'number') {
       // Old format (shouldn't happen after migration, but just in case)
-      seconds = dayData;
+      domainSeconds = dayData;
+      totalSeconds = dayData;
     } else if (typeof dayData === 'object' && dayData) {
-      // New format - get time for target domain
-      seconds = dayData[targetDomain] || 0;
+      // New format - calculate both domain and total
+      domainSeconds = dayData[targetDomain] || 0;
+      totalSeconds = Object.values(dayData).reduce((sum, time) => sum + time, 0);
     }
     
     return {
       date: date,
-      seconds: seconds,
-      hours: seconds / 3600,
-      formattedTime: formatTime(seconds)
+      domainSeconds: domainSeconds,
+      totalSeconds: totalSeconds,
+      domainHours: domainSeconds / 3600,
+      totalHours: totalSeconds / 3600,
+      domainFormattedTime: formatTime(domainSeconds),
+      totalFormattedTime: formatTime(totalSeconds)
     };
   });
   
@@ -278,16 +309,16 @@ function calculateMovingAverage(dailyData, windowSize) {
     const startIndex = Math.max(0, index - windowSize + 1);
     const maSlidingWindow = dailyData.slice(startIndex, index + 1);
     
-    const totalSeconds = maSlidingWindow.reduce((sum, day) => sum + day.seconds, 0);
-    const averageSeconds = maSlidingWindow.length > 0 ? totalSeconds / maSlidingWindow.length : 0;
+    const totalDomainSeconds = maSlidingWindow.reduce((sum, day) => sum + day.domainSeconds, 0);
+    const averageDomainSeconds = maSlidingWindow.length > 0 ? totalDomainSeconds / maSlidingWindow.length : 0;
     
-    const roundedAverageSeconds = Math.round(averageSeconds);
-    const formattedTime = formatTime(roundedAverageSeconds);
-    const averageHours = averageSeconds / 3600;
+    const roundedAverageDomainSeconds = Math.round(averageDomainSeconds);
+    const formattedTime = formatTime(roundedAverageDomainSeconds);
+    const averageHours = averageDomainSeconds / 3600;
     
     return {
       date: dayData.date,
-      averageSeconds: roundedAverageSeconds,
+      averageSeconds: roundedAverageDomainSeconds,
       averageHours: Math.round(averageHours * 10) / 10,  // Round to 1 decimal for display
       formattedTime: formattedTime  
     };
