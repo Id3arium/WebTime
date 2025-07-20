@@ -78,6 +78,8 @@ function showGeneralView() {
   currentView = ViewState.GENERAL;
   const pagesContainer = document.querySelector('.pages-container');
   pagesContainer.className = 'pages-container show-general';
+  // Actually render the content
+  renderGeneralView();
 }
 
 function showDetailView() {
@@ -88,12 +90,45 @@ function showDetailView() {
 
 // View rendering functions
 function renderGeneralView() {
+  console.log('renderGeneralView called');
+  console.log('allTimeHistory:', allTimeHistory);
+  
   // Update general page content
   const generalContent = document.querySelector('#general-page .page-content');
-  generalContent.innerHTML = '<p class="message">General view coming soon! This will show pie chart and top domains.</p>';
+  console.log('generalContent found:', !!generalContent);
   
-  // Show general view
-  showGeneralView();
+  // Build stacked area chart
+  const stackedData = processDataForStackedArea(allTimeHistory);
+  console.log('stackedData:', stackedData);
+  
+  if (stackedData.domains.length === 0) {
+    generalContent.innerHTML = '<p class="message">No domain data available for stacked chart.</p>';
+    return;
+  }
+  
+  const stackedConfig = buildStackedAreaConfig(stackedData);
+  console.log('stackedConfig:', stackedConfig);
+  
+  generalContent.innerHTML = '<canvas id="stacked-chart"></canvas>';
+  
+  const canvasElement = document.getElementById('stacked-chart');
+  console.log('canvasElement found:', !!canvasElement);
+  
+  if (!canvasElement) {
+    console.error('Canvas element not found!');
+    return;
+  }
+  
+  const canvasContext = canvasElement.getContext('2d');
+  console.log('About to create Chart...');
+  
+  try {
+    const _stackedChart = new Chart(canvasContext, stackedConfig);
+    console.log('Chart created successfully');
+  } catch (error) {
+    console.error('Error creating chart:', error);
+    generalContent.innerHTML = '<p class="message error">Error creating chart: ' + error.message + '</p>';
+  }
 }
 
 function renderDomainDetailView(domain) {
@@ -153,6 +188,190 @@ function calculateTodaysTotals(timeHistory, currentDate, currentDomain) {
   return {
     domain: todaysDomainTime,
     total: todaysTotalTime
+  };
+}
+
+function processDataForStackedArea(timeHistory) {
+  const sortedDates = Object.keys(timeHistory).sort();
+  const visibleDates = CONFIG.daysToDisplay > 0 ? sortedDates.slice(-CONFIG.daysToDisplay) : sortedDates;
+  
+  // Get all unique domains across all days
+  const allDomains = new Set();
+  visibleDates.forEach(date => {
+    const dayData = timeHistory[date];
+    if (typeof dayData === 'object' && dayData) {
+      Object.keys(dayData).forEach(domain => allDomains.add(domain));
+    }
+  });
+  
+  // Convert to array and sort by total usage (biggest domains first)
+  const domainsArray = Array.from(allDomains);
+  const domainTotals = {};
+  
+  domainsArray.forEach(domain => {
+    domainTotals[domain] = visibleDates.reduce((total, date) => {
+      const dayData = timeHistory[date];
+      if (typeof dayData === 'object' && dayData) {
+        return total + (dayData[domain] || 0);
+      }
+      return total;
+    }, 0);
+  });
+  
+  // Sort domains by total usage (descending) and take top 7
+  const sortedDomains = domainsArray.sort((a, b) => domainTotals[b] - domainTotals[a]);
+  const topDomains = sortedDomains.slice(0, 7);
+  const otherDomains = sortedDomains.slice(7);
+  
+  console.log('Top domains:', topDomains);
+  console.log('Other domains:', otherDomains);
+  
+  // Process daily data for each domain
+  const dailyData = visibleDates.map(date => {
+    const dayData = timeHistory[date];
+    const result = { date };
+    
+    if (typeof dayData === 'object' && dayData) {
+      // Add top domains
+      topDomains.forEach(domain => {
+        const seconds = dayData[domain] || 0;
+        result[domain] = seconds / 3600; // Convert to hours
+      });
+      
+      // Calculate "Others" total
+      const othersSeconds = otherDomains.reduce((total, domain) => {
+        return total + (dayData[domain] || 0);
+      }, 0);
+      
+      if (othersSeconds > 0) {
+        result['Others'] = othersSeconds / 3600;
+      }
+    } else {
+      // Handle old format - no domain breakdown available
+      topDomains.forEach(domain => {
+        result[domain] = 0;
+      });
+      if (otherDomains.length > 0) {
+        result['Others'] = 0;
+      }
+    }
+    
+    return result;
+  });
+  
+  // Final domains list: top domains + "Others" if needed
+  const finalDomains = [...topDomains];
+  if (otherDomains.length > 0) {
+    finalDomains.push('Others');
+  }
+  
+  return {
+    dates: visibleDates,
+    domains: finalDomains,
+    dailyData: dailyData
+  };
+}
+
+function buildStackedAreaConfig(stackedData) {
+  // Generate colors for each domain
+  const colors = [
+    'rgba(69, 113, 231, 0.7)',   // Blue
+    'rgba(255, 99, 132, 0.7)',   // Red
+    'rgba(255, 205, 86, 0.7)',   // Yellow
+    'rgba(75, 192, 192, 0.7)',   // Teal
+    'rgba(153, 102, 255, 0.7)',  // Purple
+    'rgba(255, 159, 64, 0.7)',   // Orange
+    'rgba(199, 199, 199, 0.7)',  // Grey
+    'rgba(150, 150, 150, 0.5)',  // Darker grey for "Others"
+  ];
+  
+  // Create datasets for each domain
+  const datasets = stackedData.domains.map((domain, index) => {
+    // Use darker grey for "Others" category
+    const colorIndex = domain === 'Others' ? 7 : index;
+    
+    return {
+      label: domain,
+      data: stackedData.dailyData.map(day => day[domain] || 0),
+      backgroundColor: colors[colorIndex % colors.length],
+      borderColor: colors[colorIndex % colors.length].replace('0.7', '1').replace('0.5', '0.8'),
+      borderWidth: 1,
+      fill: true
+    };
+  });
+  
+  return {
+    type: 'line',
+    data: {
+      labels: stackedData.dates.map(date => formatDateForDisplay(date)),
+      datasets: datasets
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          stacked: true
+        },
+        y: {
+          grid: {
+            color: gridColor
+          },
+          beginAtZero: true,
+          stacked: true,
+          title: {
+            display: true,
+            text: 'Hours'
+          }
+        }
+      },
+      elements: {
+        line: {
+          tension: 0.2
+        },
+        point: {
+          radius: 0
+        }
+      },
+      plugins: {
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          animation: {
+            duration: 200  // Fast but smooth animation
+          },
+          backgroundColor: 'rgba(0, 0, 0, 0.6)',  // More transparent background
+          callbacks: {
+            title: function(context) {
+              return formatDateForDisplay(stackedData.dates[context[0].dataIndex]);
+            },
+            label: function(context) {
+              const domain = context.dataset.label;
+              const hours = context.parsed.y;
+              const minutes = Math.round((hours % 1) * 60);
+              const hoursInt = Math.floor(hours);
+              
+              // Shorten long domain names
+              const shortDomain = domain.length > 15 ? domain.substring(0, 12) + '...' : domain;
+              
+              if (hoursInt === 0 && minutes === 0) {
+                return null; // Don't show domains with 0 time
+              }
+              
+              return `${shortDomain}: ${hoursInt}h ${minutes}m`;
+            },
+            filter: function(tooltipItem) {
+              return tooltipItem.parsed.y > 0; // Only show non-zero values
+            }
+          },
+          displayColors: true,
+          cornerRadius: 6,
+          bodySpacing: 2,
+          titleSpacing: 6,
+          caretPadding: 8
+        }
+      }
+    }
   };
 }
   
@@ -236,6 +455,9 @@ function buildChartConfig(processedData) {
       },
       plugins: {
         tooltip: {
+          animation: {
+            duration: 200 // Fast but smooth animation
+          },
           callbacks: {
             label: function(context) {
               const datasetIndex = context.datasetIndex;

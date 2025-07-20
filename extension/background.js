@@ -5,7 +5,7 @@ let timerInterval = null;
 const SAVE_INTERVAL_SECONDS = 60;
 let tabActivity = {};
 let trackedTabDomain = null;
-const INACTIVITY_TRHESHOLD_MS = 7500;
+const INACTIVITY_TRHESHOLD_MS = 6000;
 const ACTIVTY_CHECK_INTERVAL_MS = 1500;
 
 let currentDateStr = getLocalDateStr(); 
