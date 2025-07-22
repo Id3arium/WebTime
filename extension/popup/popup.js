@@ -1,7 +1,6 @@
 const CONFIG = {
   movingAverageDays: 7,  // 7-day moving average
   daysToDisplay: 30,     // Number of days to display
-  chartHeight: 500       // Chart height in pixels
 };
 
 const COLORS = {
@@ -130,10 +129,19 @@ function renderGeneralView() {
     return;
   }
   
+  // Always set up the HTML structure
+  generalContent.innerHTML = `
+    <canvas id="total-time-chart"></canvas>
+    <div id="daily-breakdown" class="daily-breakdown">
+      <div class="breakdown-title">Hover over a day to see breakdown</div>
+      <div class="breakdown-bars"></div>
+    </div>
+  `;
+  
+  console.log('HTML structure created');
+  
   const chartConfig = buildTotalTimeChartConfig(totalTimeData);
   console.log('chartConfig:', chartConfig);
-  
-  generalContent.innerHTML = '<canvas id="total-time-chart"></canvas>';
   
   const canvasElement = document.getElementById('total-time-chart');
   console.log('canvasElement found:', !!canvasElement);
@@ -147,8 +155,17 @@ function renderGeneralView() {
   console.log('About to create Chart...');
   
   try {
-    const _totalTimeChart = new Chart(canvasContext, chartConfig);
+    const chart = new Chart(canvasContext, chartConfig);
+    
+    // Store reference to data for hover functionality
+    chart.totalTimeData = totalTimeData;
+    
     console.log('Chart created successfully');
+    
+    // Verify breakdown elements exist
+    const breakdownElement = document.getElementById('daily-breakdown');
+    console.log('Breakdown element found:', !!breakdownElement);
+    
   } catch (error) {
     console.error('Error creating chart:', error);
     generalContent.innerHTML = '<p class="message error">Error creating chart: ' + error.message + '</p>';
@@ -418,6 +435,14 @@ function buildTotalTimeChartConfig(totalTimeData) {
             }
           }
         }
+      },
+      onHover: function(event, elements, chart) {
+        console.log('Chart hover detected, elements:', elements.length);
+        if (elements.length > 0) {
+          const dataIndex = elements[0].index;
+          console.log('Hovering over day index:', dataIndex);
+          updateDailyBreakdown(chart.totalTimeData, dataIndex);
+        }
       }
     }
   };
@@ -593,6 +618,66 @@ function formatDateForDisplay(dateString) {
   const date = new Date(year, month - 1, day); 
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   return `${months[date.getMonth()]} ${date.getDate()}`;
+}
+
+function updateDailyBreakdown(totalTimeData, dataIndex) {
+  const dayData = totalTimeData.dailyData[dataIndex];
+  const breakdownTitle = document.querySelector('.breakdown-title');
+  const breakdownBars = document.querySelector('.breakdown-bars');
+  
+  if (!breakdownTitle || !breakdownBars) return;
+  
+  // Update title
+  const formattedDate = formatDateForDisplay(dayData.date);
+  breakdownTitle.textContent = `${formattedDate} - Total: ${dayData.formattedTime}`;
+  
+  // Calculate domain breakdown for this day
+  const domainData = [];
+  totalTimeData.domains.forEach((domain, index) => {
+    const hours = dayData[domain] || 0;
+    const seconds = Math.round(hours * 3600);
+    if (seconds > 0) {
+      const color = domain === 'Others' ? COLORS.others : COLORS.domains[index % COLORS.domains.length];
+      domainData.push({
+        domain,
+        seconds,
+        hours,
+        color,
+        percentage: Math.round((seconds / dayData.totalSeconds) * 100)
+      });
+    }
+  });
+  
+  // Sort by seconds (descending)
+  domainData.sort((a, b) => b.seconds - a.seconds);
+  
+  // Generate HTML for breakdown bars
+  const maxSeconds = domainData.length > 0 ? domainData[0].seconds : 1;
+  console.log('Max seconds for bars:', maxSeconds, 'Domain data:', domainData);
+  
+  breakdownBars.innerHTML = domainData.map(item => {
+    // Make bars proportional to longest domain time (maxSeconds = 100%)
+    const widthPercent = Math.max((item.seconds / maxSeconds) * 100, 2);
+    const formattedTime = formatTime(item.seconds);
+    
+    console.log(`${item.domain}: ${item.seconds}s / ${maxSeconds}s = ${widthPercent}%`);
+    
+    return `
+      <div class="breakdown-bar">
+        <div class="breakdown-color" style="background: ${item.color};"></div>
+        <div class="breakdown-label" title="${item.domain}">${item.domain}</div>
+        <div class="breakdown-fill">
+          <div class="breakdown-fill-inner" style="background: ${item.color}; width: ${widthPercent}%;"></div>
+        </div>
+        <div class="breakdown-time">${formattedTime} (${item.percentage}%)</div>
+      </div>
+    `;
+  }).join('');
+  
+  // If no data, show message
+  if (domainData.length === 0) {
+    breakdownBars.innerHTML = '<div style="color: #888; font-style: italic;">No data for this day</div>';
+  }
 }
 
 function formatTime(totalTime) {
