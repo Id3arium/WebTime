@@ -627,9 +627,8 @@ function updateDailyBreakdown(totalTimeData, dataIndex) {
   
   if (!breakdownTitle || !breakdownBars) return;
   
-  // Update title
-  const formattedDate = formatDateForDisplay(dayData.date);
-  breakdownTitle.textContent = `${formattedDate} - Total: ${dayData.formattedTime}`;
+  // Hide the title since it's redundant with tooltip
+  breakdownTitle.style.display = 'none';
   
   // Calculate domain breakdown for this day
   const domainData = [];
