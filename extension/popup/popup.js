@@ -1,7 +1,31 @@
 const CONFIG = {
   movingAverageDays: 7,  // 7-day moving average
   daysToDisplay: 30,     // Number of days to display
-  chartHeight: 400       // Chart height in pixels
+  chartHeight: 500       // Chart height in pixels
+};
+
+const COLORS = {
+  // Domain colors for charts
+  domains: [
+    'rgba(69, 113, 231, 0.7)',   // Blue
+    'rgba(255, 99, 132, 0.7)',   // Red
+    'rgba(255, 205, 86, 0.7)',   // Yellow
+    'rgba(75, 192, 192, 0.7)',   // Teal
+    'rgba(153, 102, 255, 0.7)',  // Purple
+    'rgba(255, 159, 64, 0.7)',   // Orange
+    'rgba(199, 199, 199, 0.7)',  // Grey
+  ],
+  others: 'rgba(150, 150, 150, 0.5)',  // Darker grey for "Others"
+  
+movingAverage: {
+    background: 'rgba(50, 100, 255, .7',
+    border: 'rgba(75, 150, 255, .7)',
+    width: 2
+  },
+  currentDomain: {
+    background: 'rgba(69, 113, 231, .7)',
+    border: 'rgba(69, 113, 231)'
+  }
 };
 
 const ViewState = {
@@ -97,21 +121,21 @@ function renderGeneralView() {
   const generalContent = document.querySelector('#general-page .page-content');
   console.log('generalContent found:', !!generalContent);
   
-  // Build stacked area chart
-  const stackedData = processDataForStackedArea(allTimeHistory);
-  console.log('stackedData:', stackedData);
+  // Build total daily time chart
+  const totalTimeData = processDataForTotalTime(allTimeHistory);
+  console.log('totalTimeData:', totalTimeData);
   
-  if (stackedData.domains.length === 0) {
-    generalContent.innerHTML = '<p class="message">No domain data available for stacked chart.</p>';
+  if (totalTimeData.dailyData.length === 0) {
+    generalContent.innerHTML = '<p class="message">No time data available.</p>';
     return;
   }
   
-  const stackedConfig = buildStackedAreaConfig(stackedData);
-  console.log('stackedConfig:', stackedConfig);
+  const chartConfig = buildTotalTimeChartConfig(totalTimeData);
+  console.log('chartConfig:', chartConfig);
   
-  generalContent.innerHTML = '<canvas id="stacked-chart"></canvas>';
+  generalContent.innerHTML = '<canvas id="total-time-chart"></canvas>';
   
-  const canvasElement = document.getElementById('stacked-chart');
+  const canvasElement = document.getElementById('total-time-chart');
   console.log('canvasElement found:', !!canvasElement);
   
   if (!canvasElement) {
@@ -123,7 +147,7 @@ function renderGeneralView() {
   console.log('About to create Chart...');
   
   try {
-    const _stackedChart = new Chart(canvasContext, stackedConfig);
+    const _totalTimeChart = new Chart(canvasContext, chartConfig);
     console.log('Chart created successfully');
   } catch (error) {
     console.error('Error creating chart:', error);
@@ -191,13 +215,12 @@ function calculateTodaysTotals(timeHistory, currentDate, currentDomain) {
   };
 }
 
-function processDataForStackedArea(timeHistory) {
+function processDataForTotalTime(timeHistory) {
   const sortedDates = Object.keys(timeHistory).sort();
-  const visibleDates = CONFIG.daysToDisplay > 0 ? sortedDates.slice(-CONFIG.daysToDisplay) : sortedDates;
   
   // Get all unique domains across all days
   const allDomains = new Set();
-  visibleDates.forEach(date => {
+  sortedDates.forEach(date => {
     const dayData = timeHistory[date];
     if (typeof dayData === 'object' && dayData) {
       Object.keys(dayData).forEach(domain => allDomains.add(domain));
@@ -209,7 +232,7 @@ function processDataForStackedArea(timeHistory) {
   const domainTotals = {};
   
   domainsArray.forEach(domain => {
-    domainTotals[domain] = visibleDates.reduce((total, date) => {
+    domainTotals[domain] = sortedDates.reduce((total, date) => {
       const dayData = timeHistory[date];
       if (typeof dayData === 'object' && dayData) {
         return total + (dayData[domain] || 0);
@@ -223,15 +246,26 @@ function processDataForStackedArea(timeHistory) {
   const topDomains = sortedDomains.slice(0, 7);
   const otherDomains = sortedDomains.slice(7);
   
-  console.log('Top domains:', topDomains);
-  console.log('Other domains:', otherDomains);
-  
-  // Process daily data for each domain
-  const dailyData = visibleDates.map(date => {
+  // Process daily data for ALL dates
+  const allDailyData = sortedDates.map(date => {
     const dayData = timeHistory[date];
+    let totalSeconds = 0;
     const result = { date };
     
-    if (typeof dayData === 'object' && dayData) {
+    if (typeof dayData === 'number') {
+      // Old format (shouldn't happen after migration, but just in case)
+      totalSeconds = dayData;
+      // Can't break down by domain in old format
+      topDomains.forEach(domain => {
+        result[domain] = 0;
+      });
+      if (otherDomains.length > 0) {
+        result['Others'] = dayData / 3600;
+      }
+    } else if (typeof dayData === 'object' && dayData) {
+      // New format - calculate both total and domain breakdown
+      totalSeconds = Object.values(dayData).reduce((sum, time) => sum + time, 0);
+      
       // Add top domains
       topDomains.forEach(domain => {
         const seconds = dayData[domain] || 0;
@@ -246,18 +280,18 @@ function processDataForStackedArea(timeHistory) {
       if (othersSeconds > 0) {
         result['Others'] = othersSeconds / 3600;
       }
-    } else {
-      // Handle old format - no domain breakdown available
-      topDomains.forEach(domain => {
-        result[domain] = 0;
-      });
-      if (otherDomains.length > 0) {
-        result['Others'] = 0;
-      }
     }
+    
+    result.totalSeconds = totalSeconds;
+    result.totalHours = totalSeconds / 3600;
+    result.formattedTime = formatTime(totalSeconds);
     
     return result;
   });
+  
+  // For display: show last 30 days by default, but keep all data available
+  const visibleData = CONFIG.daysToDisplay > 0 ? 
+    allDailyData.slice(-CONFIG.daysToDisplay) : allDailyData;
   
   // Final domains list: top domains + "Others" if needed
   const finalDomains = [...topDomains];
@@ -265,45 +299,57 @@ function processDataForStackedArea(timeHistory) {
     finalDomains.push('Others');
   }
   
+  // Calculate moving average for visible data
+  const movingAverageData = calculateMovingAverageTotal(visibleData, CONFIG.movingAverageDays);
+  
   return {
-    dates: visibleDates,
+    dailyData: visibleData,
+    allData: allDailyData, // Keep reference to all data for future panning
     domains: finalDomains,
-    dailyData: dailyData
+    movingAverageData: movingAverageData
   };
 }
 
-function buildStackedAreaConfig(stackedData) {
-  // Generate colors for each domain
-  const colors = [
-    'rgba(69, 113, 231, 0.7)',   // Blue
-    'rgba(255, 99, 132, 0.7)',   // Red
-    'rgba(255, 205, 86, 0.7)',   // Yellow
-    'rgba(75, 192, 192, 0.7)',   // Teal
-    'rgba(153, 102, 255, 0.7)',  // Purple
-    'rgba(255, 159, 64, 0.7)',   // Orange
-    'rgba(199, 199, 199, 0.7)',  // Grey
-    'rgba(150, 150, 150, 0.5)',  // Darker grey for "Others"
-  ];
+function buildTotalTimeChartConfig(totalTimeData) {
+  const datasets = [];
   
-  // Create datasets for each domain
-  const datasets = stackedData.domains.map((domain, index) => {
-    // Use darker grey for "Others" category
-    const colorIndex = domain === 'Others' ? 7 : index;
+  // Add moving average FIRST if available - this ensures it's on top
+  if (totalTimeData.movingAverageData) {
+    datasets.push({
+      type: 'line',
+      label: `${CONFIG.movingAverageDays}-Day Average`,
+      data: totalTimeData.movingAverageData.map(day => day.averageHours),
+      formattedTimes: totalTimeData.movingAverageData.map(day => day.formattedTime),
+      backgroundColor: COLORS.movingAverage.background,
+      borderColor: COLORS.movingAverage.border,
+      borderWidth: COLORS.movingAverage.width,
+      fill: false,
+      tension: 0.2,
+      pointRadius: 3,
+      order: -1 // Very low order to ensure it's on top
+    });
+  }
+  
+  // Then add stacked bar datasets for each domain
+  totalTimeData.domains.forEach((domain, index) => {
+    // Use special color for "Others" category
+    const color = domain === 'Others' ? COLORS.others : COLORS.domains[index % COLORS.domains.length];
     
-    return {
+    datasets.push({
+      type: 'bar',
       label: domain,
-      data: stackedData.dailyData.map(day => day[domain] || 0),
-      backgroundColor: colors[colorIndex % colors.length],
-      borderColor: colors[colorIndex % colors.length].replace('0.7', '1').replace('0.5', '0.8'),
+      data: totalTimeData.dailyData.map(day => day[domain] || 0),
+      backgroundColor: color,
+      borderColor: color.replace('0.7', '1').replace('0.5', '0.8'),
       borderWidth: 1,
-      fill: true
-    };
+      order: 1 // Higher order for bars
+    });
   });
   
   return {
-    type: 'line',
+    type: 'bar',
     data: {
-      labels: stackedData.dates.map(date => formatDateForDisplay(date)),
+      labels: totalTimeData.dailyData.map(day => formatDateForDisplay(day.date)),
       datasets: datasets
     },
     options: {
@@ -325,50 +371,52 @@ function buildStackedAreaConfig(stackedData) {
           }
         }
       },
+      interaction: {
+        intersect: false,
+        mode: 'index'
+      },
       elements: {
-        line: {
-          tension: 0.2
-        },
-        point: {
-          radius: 0
+        bar: {
+          barPercentage: 0.8,
+          categoryPercentage: 0.9
         }
       },
       plugins: {
+        legend: {
+          display: false
+        },
         tooltip: {
-          mode: 'index',
-          intersect: false,
           animation: {
-            duration: 200  // Fast but smooth animation
+            duration: 200
           },
-          backgroundColor: 'rgba(0, 0, 0, 0.6)',  // More transparent background
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
           callbacks: {
             title: function(context) {
-              return formatDateForDisplay(stackedData.dates[context[0].dataIndex]);
+              return formatDateForDisplay(totalTimeData.dailyData[context[0].dataIndex].date);
             },
             label: function(context) {
-              const domain = context.dataset.label;
-              const hours = context.parsed.y;
-              const minutes = Math.round((hours % 1) * 60);
-              const hoursInt = Math.floor(hours);
+              const dataIndex = context.dataIndex;
+              const dayData = totalTimeData.dailyData[dataIndex];
               
-              // Shorten long domain names
-              const shortDomain = domain.length > 15 ? domain.substring(0, 12) + '...' : domain;
-              
-              if (hoursInt === 0 && minutes === 0) {
-                return null; // Don't show domains with 0 time
+              // Check if this is the moving average line
+              if (context.dataset.label.includes('Average')) {
+                const time = context.dataset.formattedTimes[dataIndex];
+                return `${context.dataset.label}: ${time}`;
               }
               
-              return `${shortDomain}: ${hoursInt}h ${minutes}m`;
+              // For stacked bars, don't show individual domain labels
+              return null;
             },
-            filter: function(tooltipItem) {
-              return tooltipItem.parsed.y > 0; // Only show non-zero values
+            afterLabel: function(context) {
+              // Only show total for the first item to avoid repetition
+              if (context.datasetIndex === 0) {
+                const dataIndex = context.dataIndex;
+                const dayData = totalTimeData.dailyData[dataIndex];
+                return `Total: ${dayData.formattedTime}`;
+              }
+              return null;
             }
-          },
-          displayColors: true,
-          cornerRadius: 6,
-          bodySpacing: 2,
-          titleSpacing: 6,
-          caretPadding: 8
+          }
         }
       }
     }
@@ -376,50 +424,39 @@ function buildStackedAreaConfig(stackedData) {
 }
   
 function buildChartConfig(processedData) {
-  const datasets = [
-    // Bottom segment - Current domain usage
-    {
-      type: 'bar',
-      label: 'Current Domain',
-      data: processedData.dailyData.map(day => day.domainHours),
-      backgroundColor: 'rgba(69, 113, 231, 0.7)',
-      borderColor: 'rgba(69, 113, 231)',
-      borderWidth: 1,
-      formattedTimes: processedData.dailyData.map(day => day.domainFormattedTime)
-    },
-    // Top segment - Other sites (Total - Domain)
-    {
-      type: 'bar',
-      label: 'Other Sites',
-      data: processedData.dailyData.map(day => day.totalHours - day.domainHours),
-      backgroundColor: 'rgba(125, 125, 125, 0.4)',
-      borderColor: 'rgba(125, 125, 125, 0.6)',
-      borderWidth: 1,
-      formattedTimes: processedData.dailyData.map(day => {
-        const otherSeconds = day.totalSeconds - day.domainSeconds;
-        return formatTime(otherSeconds);
-      })
-    }
-  ];
+  const datasets = [];
   
+  // Add moving average FIRST if available - this ensures it's on top
   if (processedData.movingAverageData) {
     datasets.push({
       type: 'line',
       label: `${CONFIG.movingAverageDays}-Day Average`,
       data: processedData.movingAverageData.map(day => day.averageHours),
       formattedTimes: processedData.movingAverageData.map(day => day.formattedTime),
-      backgroundColor: 'rgb(88, 90, 224, 0.2)',
-      borderColor: 'rgb(88, 90, 224)', 
-      borderWidth: 2,
+      backgroundColor: COLORS.movingAverage.background,
+      borderColor: COLORS.movingAverage.border,
+      borderWidth: COLORS.movingAverage.width,
       fill: false,
       tension: 0.2,
       pointRadius: 3,
-      order: 1 // Top layer
+      order: -1 // Very low order to ensure it's on top
     });
   }
   
+  // Then add the domain bar dataset
+  datasets.push({
+    type: 'bar',
+    label: 'Current Domain',
+    data: processedData.dailyData.map(day => day.domainHours),
+    backgroundColor: COLORS.currentDomain.background,
+    borderColor: COLORS.currentDomain.border,
+    borderWidth: 1,
+    formattedTimes: processedData.dailyData.map(day => day.domainFormattedTime),
+    order: 1 // Higher order for bars
+  });
+  
   return {
-    type: 'bar',  // Default type (for backward compatibility)
+    type: 'bar',
     data: {
       labels: processedData.dailyData.map(day => formatDateForDisplay(day.date)),
       datasets: datasets
@@ -428,9 +465,6 @@ function buildChartConfig(processedData) {
       responsive: true,
       maintainAspectRatio: false,
       scales: {
-        x: {
-          stacked: true
-        },
         y: {
           grid: {
             color: gridColor
@@ -439,8 +473,7 @@ function buildChartConfig(processedData) {
           title: {
             display: true,
             text: 'Hours'
-          },
-          stacked: true
+          }
         }
       },
       interaction: {
@@ -449,36 +482,21 @@ function buildChartConfig(processedData) {
       },
       elements: {
         bar: {
-          barPercentage: 1.0,
-          categoryPercentage: 1.0
+          barPercentage: 0.8,
+          categoryPercentage: 0.9
         }
       },
       plugins: {
         tooltip: {
           animation: {
-            duration: 200 // Fast but smooth animation
+            duration: 200
           },
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
           callbacks: {
             label: function(context) {
-              const datasetIndex = context.datasetIndex;
-              const dataIndex = context.dataIndex;
-              const lines = [];
-              
-              // Get the dataset being hovered
-              const dataset = context.chart.data.datasets[datasetIndex];
-              const label = dataset.label;
-              const time = dataset.formattedTimes[dataIndex];
-              
-              lines.push(`${label}: ${time}`);
-              
-              // If hovering over domain usage, also show total usage
-              if (datasetIndex === 1) { // Domain usage dataset
-                const totalDataset = context.chart.data.datasets[0];
-                const totalTime = totalDataset.formattedTimes[dataIndex];
-                lines.push(`${totalDataset.label}: ${totalTime}`);
-              }
-              
-              return lines;
+              const dataset = context.chart.data.datasets[context.datasetIndex];
+              const time = dataset.formattedTimes[context.dataIndex];
+              return `${dataset.label}: ${time}`;
             }
           }
         }
@@ -541,6 +559,27 @@ function calculateMovingAverage(dailyData, windowSize) {
     return {
       date: dayData.date,
       averageSeconds: roundedAverageDomainSeconds,
+      averageHours: Math.round(averageHours * 10) / 10,  // Round to 1 decimal for display
+      formattedTime: formattedTime  
+    };
+  });
+}
+
+function calculateMovingAverageTotal(dailyData, windowSize) {
+  return dailyData.map((dayData, index) => {
+    const startIndex = Math.max(0, index - windowSize + 1);
+    const maSlidingWindow = dailyData.slice(startIndex, index + 1);
+    
+    const totalSeconds = maSlidingWindow.reduce((sum, day) => sum + day.totalSeconds, 0);
+    const averageSeconds = maSlidingWindow.length > 0 ? totalSeconds / maSlidingWindow.length : 0;
+    
+    const roundedAverageSeconds = Math.round(averageSeconds);
+    const formattedTime = formatTime(roundedAverageSeconds);
+    const averageHours = averageSeconds / 3600;
+    
+    return {
+      date: dayData.date,
+      averageSeconds: roundedAverageSeconds,
       averageHours: Math.round(averageHours * 10) / 10,  // Round to 1 decimal for display
       formattedTime: formattedTime  
     };
