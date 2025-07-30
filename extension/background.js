@@ -3,9 +3,9 @@ let activeTabId = null;
 const trackedTabIds = new Set();
 let timerInterval = null;
 const SAVE_INTERVAL_SECONDS = 60;
-let tabActivity = {};
+let tabLastActivity = {};
 let trackedTabDomain = null;
-const INACTIVITY_TRHESHOLD_MS = 6000;
+const INACTIVITY_THRESHOLD_MS = 6000;
 const ACTIVTY_CHECK_INTERVAL_MS = 1500;
 
 let currentDateStr = getLocalDateStr(); 
@@ -172,6 +172,17 @@ function updateTimerDisplay(updatedTime) {
     });
 }
 
+function updateTimerDisplay(updatedTime) {
+    const message = { type: "TIME_UPDATE", time: updatedTime };
+    trackedTabIds.forEach((tabId) => {
+        browser.tabs.sendMessage(tabId, message).catch((error) => {
+            console.warn(`Failed to send TIME_UPDATE to tab ${tabId}. Removing from tracking.`);
+            trackedTabIds.delete(tabId); 
+            delete tabLastActivity[tabId]; 
+        });
+    });
+}
+
 async function updateTimingState(tabId) {
     try {
         const activeTab = await browser.tabs.get(tabId);
@@ -201,6 +212,7 @@ function handleDomainSwitch(url) {
     trackedTabDomain = domain;
     
     if (!trackedTabDomain) {
+        console.log(`Switched to non-trackable URL: ${url}`);
         todaysTotalTime = 0;
         updateTimerDisplay(0);
         return;
@@ -219,8 +231,8 @@ function handleTimerState(activeTab, tabId) {
         return;
     }
 
-    const lastActivity = tabActivity[tabId] || 0;
-    const isUserActive = (Date.now() - lastActivity) < INACTIVITY_TRHESHOLD_MS;
+    const lastActivity = tabLastActivity[tabId] || 0;
+    const isUserActive = (Date.now() - lastActivity) < INACTIVITY_THRESHOLD_MS;
     
     if (activeTab.audible || isUserActive) {
         startTimer();
@@ -243,6 +255,7 @@ function handleTabUpdated(tabId, changeInfo, tab) {
             console.log(`Added tab ${tabId} to tracked tabs`);
         } else {
             trackedTabIds.delete(tabId);
+            delete tabLastActivity[tabId]; 
             console.log(`Removed tab ${tabId} from tracked tabs`);
         }
     }
@@ -258,16 +271,17 @@ function handleTabRemoved(tabId, removeInfo) {
         activeTabId = null;
     }
     trackedTabIds.delete(tabId);
+    delete tabLastActivity[tabId];
 }
 
-function handleMessageRecieved(message, sender, sendResponse) {
+function handleMessageReceived(message, sender, sendResponse) {
     console.log(`handleMessage()`, message, sender);
     if (message.type === "CONTENT_SCRIPT_READY" && sender.tab) {
         trackedTabIds.add(sender.tab.id);
         updateTimerDisplay(todaysTotalTime);
     }
     if (message.type === "USER_ACTIVE" && sender.tab) {
-        tabActivity[sender.tab.id] = Date.now();
+        tabLastActivity[sender.tab.id] = Date.now();
     }
 }
 
@@ -299,7 +313,7 @@ async function init() {
     browser.tabs.onActivated.addListener(handleTabActivated);
     browser.tabs.onUpdated.addListener(handleTabUpdated);
     browser.tabs.onRemoved.addListener(handleTabRemoved);
-    browser.runtime.onMessage.addListener(handleMessageRecieved);
+    browser.runtime.onMessage.addListener(handleMessageReceived);
 
     await loadTimeData();
 

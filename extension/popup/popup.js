@@ -1,6 +1,7 @@
 const CONFIG = {
   movingAverageDays: 7,  // 7-day moving average
   daysToDisplay: 30,     // Number of days to display
+  initAnimationDuration: 600, // Animation duration for initial chart load
 };
 
 const COLORS = {
@@ -38,6 +39,7 @@ const gridColor = getComputedStyle(document.documentElement).getPropertyValue('-
 let currentView = ViewState.DETAIL; // Default to detail view (existing behavior)
 let currentDomain = null;
 let allTimeHistory = null;
+let generalChartCreated = false; // Track if general view chart has been created
 
 document.addEventListener('DOMContentLoaded', initializePopup);
 
@@ -80,11 +82,11 @@ async function initializePopup() {
       return;
     }
     
-    if (currentView === ViewState.GENERAL) {
-      renderGeneralView();
-    } else {
-      renderDomainDetailView(currentDomain);
-    }
+    // Render only the detail view at startup
+    renderDomainDetailView(currentDomain);
+    
+    // Show the detail view (general view will be created on demand)
+    showDetailView();
       
   } catch (error) {
     console.error("Error initializing popup:", error);
@@ -101,8 +103,12 @@ function showGeneralView() {
   currentView = ViewState.GENERAL;
   const pagesContainer = document.querySelector('.pages-container');
   pagesContainer.className = 'pages-container show-general';
-  // Actually render the content
-  renderGeneralView();
+  
+  // Only create chart on first visit
+  if (!generalChartCreated) {
+    renderGeneralView();
+    generalChartCreated = true;
+  }
 }
 
 function showDetailView() {
@@ -116,29 +122,17 @@ function renderGeneralView() {
   console.log('renderGeneralView called');
   console.log('allTimeHistory:', allTimeHistory);
   
-  // Update general page content
-  const generalContent = document.querySelector('#general-page .page-content');
-  console.log('generalContent found:', !!generalContent);
-  
   // Build total daily time chart
   const totalTimeData = processDataForTotalTime(allTimeHistory);
   console.log('totalTimeData:', totalTimeData);
   
   if (totalTimeData.dailyData.length === 0) {
+    const generalContent = document.querySelector('#general-page .page-content');
     generalContent.innerHTML = '<p class="message">No time data available.</p>';
     return;
   }
   
-  // Always set up the HTML structure
-  generalContent.innerHTML = `
-    <canvas id="total-time-chart"></canvas>
-    <div id="daily-breakdown" class="daily-breakdown">
-      <div class="breakdown-title">Hover over a day to see breakdown</div>
-      <div class="breakdown-bars"></div>
-    </div>
-  `;
-  
-  console.log('HTML structure created');
+  console.log('Creating chart with existing HTML structure');
   
   const chartConfig = buildTotalTimeChartConfig(totalTimeData);
   console.log('chartConfig:', chartConfig);
@@ -168,6 +162,7 @@ function renderGeneralView() {
     
   } catch (error) {
     console.error('Error creating chart:', error);
+    const generalContent = document.querySelector('#general-page .page-content');
     generalContent.innerHTML = '<p class="message error">Error creating chart: ' + error.message + '</p>';
   }
 }
@@ -370,6 +365,9 @@ function buildTotalTimeChartConfig(totalTimeData) {
       datasets: datasets
     },
     options: {
+      animation: {
+        duration: CONFIG.initAnimationDuration
+      },
       responsive: true,
       maintainAspectRatio: false,
       scales: {
@@ -487,6 +485,9 @@ function buildChartConfig(processedData) {
       datasets: datasets
     },
     options: {
+      animation: {
+        duration: CONFIG.initAnimationDuration
+      },
       responsive: true,
       maintainAspectRatio: false,
       scales: {
