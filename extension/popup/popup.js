@@ -608,6 +608,15 @@ const UIManager = {
     container.innerHTML = domainData.map(item => {
       const widthPercent = Math.max((item.seconds / maxSeconds) * 100, 2);
       const formattedTime = PopUpUtils.formatTime(item.seconds);
+
+    container.onclick = (e) => {
+      const bar = e.target.closest('.breakdown-bar');
+      if (bar) {
+        const domain = bar.querySelector('.breakdown-label').textContent;
+        this.renderDetailView(domain);
+        this.showDetailView();
+      }
+    };
       
       return `
         <div class="breakdown-bar">
