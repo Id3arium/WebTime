@@ -23,13 +23,13 @@
   },
   
   "background": {
-    "scripts": ["background.js"]
+    "scripts": ["shared/constants.js", "shared/utils.js", "background.js"]
   },
   
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "js": ["shared/constants.js", "shared/utils.js", "content.js"],
       "css": ["timer.css"]
     }
   ],

@@ -2,40 +2,24 @@ let todaysTotalTime = 0;
 let activeTabId = null;
 const trackedTabIds = new Set();
 let timerInterval = null;
-const SAVE_INTERVAL_SECONDS = 60;
+
+const SAVE_INTERVAL_SECONDS = Constants.SAVE_INTERVAL_SECONDS;
 let tabLastActivity = {};
 let trackedTabDomain = null;
-const INACTIVITY_THRESHOLD_MS = 6000;
-const ACTIVTY_CHECK_INTERVAL_MS = 1500;
+const INACTIVITY_THRESHOLD_MS = Constants.INACTIVITY_THRESHOLD_MS;
+const ACTIVITY_CHECK_INTERVAL_MS = Constants.ACTIVITY_CHECK_INTERVAL_MS;
 
 let currentDateStr = getLocalDateStr(); 
 let timeHistory = {};
 
-function getLocalDateStr() { 
-    const now = new Date();
-    const monthNum = now.getMonth() + 1; 
-
-    const yyyy = now.getFullYear();
-    const mm = String(monthNum).padStart(2, "0");
-    const dd = String(now.getDate()).padStart(2, "0");
-
-    return `${yyyy}-${mm}-${dd}`;
+// Use shared utility function
+function getLocalDateStr() {
+    return Utils.getLocalDateStr();
 }
 
+// Use shared utility function
 function extractDomain(url) {
-    try {
-        const parsedUrl = new URL(url);
-        let hostname = parsedUrl.hostname;
-        
-        if (hostname.startsWith('www.')) {
-            hostname = hostname.substring(4);
-        }
-        
-        return hostname;
-    } catch (error) {
-        console.error("Error parsing URL:", error);
-        return null;
-    }
+    return Utils.extractDomain(url);
 }
 
 function migrateDataIfNeeded(oldTimeHistory) {
@@ -164,18 +148,6 @@ function updateTimerDisplay(updatedTime) {
     const message = { type: "TIME_UPDATE", time: updatedTime };
     trackedTabIds.forEach((tabId) => {
         browser.tabs.sendMessage(tabId, message).catch((error) => {
-            console.warn(
-                `Failed to send TIME_UPDATE to tab ${tabId}. Maybe it closed? Error:`,
-                error
-            );
-        });
-    });
-}
-
-function updateTimerDisplay(updatedTime) {
-    const message = { type: "TIME_UPDATE", time: updatedTime };
-    trackedTabIds.forEach((tabId) => {
-        browser.tabs.sendMessage(tabId, message).catch((error) => {
             console.warn(`Failed to send TIME_UPDATE to tab ${tabId}. Removing from tracking.`);
             trackedTabIds.delete(tabId); 
             delete tabLastActivity[tabId]; 
@@ -212,7 +184,7 @@ function handleDomainSwitch(url) {
     trackedTabDomain = domain;
     
     if (!trackedTabDomain) {
-        console.log(`Switched to non-trackable URL: ${url}`);
+        Utils.log(`Switched to non-trackable URL: ${url}`);
         todaysTotalTime = 0;
         updateTimerDisplay(0);
         return;
@@ -335,7 +307,7 @@ async function init() {
         if (activeTabId) {
             updateTimingState(activeTabId);
         }
-    }, ACTIVTY_CHECK_INTERVAL_MS);
+    }, ACTIVITY_CHECK_INTERVAL_MS);
     console.log("Initialization complete.");
 }
 init();

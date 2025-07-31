@@ -18,21 +18,10 @@ function createTimerElement() {
     console.log("Timer element created and added to page.");
 }
 
-function formatTime(timeInSeconds) {
-  timeInSeconds = Math.max(0, Math.floor(timeInSeconds));
-  
-  const hours = Math.floor(timeInSeconds / 3600);
-  const minutes = Math.floor((timeInSeconds % 3600) / 60);
-  const seconds = timeInSeconds % 60;
-  
-  // Format seconds into HH:MM:SS
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
-
 function handleIncomingMessage(message, sender, sendResponse) {
   if (message.type === "TIME_UPDATE") {
     if (timerText) {
-      timerText.textContent = formatTime(message.time);
+      timerText.textContent = Utils.formatTimeWithSeconds(message.time);
     } else {
       console.error("Timer text element not found when trying to update time!");
     }
