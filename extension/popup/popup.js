@@ -92,6 +92,19 @@ const PopUpUtils = {
     const date = new Date(year, month - 1, day);
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return `${months[date.getMonth()]} ${date.getDate()}`;
+  },
+
+  getDayOfWeek(dateString) {
+    const [year, month, day] = dateString.split('-').map(num => parseInt(num, 10));
+    const date = new Date(year, month - 1, day);
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return days[date.getDay()];
+  },
+
+  formatDateWithDayOfWeek(dateString) {
+    const formattedDate = this.formatDateForDisplay(dateString);
+    const dayOfWeek = this.getDayOfWeek(dateString);
+    return `${formattedDate} (${dayOfWeek})`;
   }
 };
 
@@ -322,7 +335,7 @@ const ChartBuilder = {
     });
   },
 
-  createSingleDomainDataset(dailyData, label = 'Current Domain') {
+  createSingleDomainDataset(dailyData, label = 'This Day') {
     return {
       type: 'bar',
       label: label,
@@ -416,7 +429,7 @@ const ChartBuilder = {
     
     const options = {
       ...this.getBaseChartOptions(),
-      plugins: { tooltip: this.getDetailViewTooltipConfig() }
+      plugins: { tooltip: this.getDetailViewTooltipConfig(processedData) }
     };
     
     return {
@@ -435,7 +448,8 @@ const ChartBuilder = {
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
       callbacks: {
         title: (context) => {
-          return PopUpUtils.formatDateForDisplay(totalTimeData.dailyData[context[0].dataIndex].date);
+          const dateString = totalTimeData.dailyData[context[0].dataIndex].date;
+          return PopUpUtils.formatDateWithDayOfWeek(dateString);
         },
         label: (context) => {
           const dataIndex = context.dataIndex;
@@ -459,11 +473,15 @@ const ChartBuilder = {
     };
   },
 
-  getDetailViewTooltipConfig() {
+  getDetailViewTooltipConfig(processedData) {
     return {
       animation: { duration: 200 },
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
       callbacks: {
+        title: (context) => {
+          const dateString = processedData.dailyData[context[0].dataIndex].date;
+          return PopUpUtils.formatDateWithDayOfWeek(dateString);
+        },
         label: (context) => {
           const dataset = context.chart.data.datasets[context.datasetIndex];
           const time = dataset.formattedTimes[context.dataIndex];
@@ -511,6 +529,9 @@ const UIManager = {
       
       const chart = new Chart(canvasElement.getContext('2d'), chartConfig);
       chart.totalTimeData = totalTimeData;
+
+      const todayIndex = totalTimeData.dailyData.length - 1;
+      UIManager.updateDailyBreakdown(totalTimeData, todayIndex);
       
     } catch (error) {
       console.error('Error creating general view chart:', error);
