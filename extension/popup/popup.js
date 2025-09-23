@@ -46,6 +46,9 @@ const AppState = {
   scrollPosition: 0,  // 0 = most recent days, positive = scroll back in time
   totalDays: 0,       // Total number of days available
   chartInstance: null, // Reference to the Chart.js instance
+  
+  // Click-to-lock state
+  lockedDayIndex: null,  // null = hover mode, number = locked to specific day
 
   setCurrentDomain(domain) {
     this.currentDomain = domain;
@@ -55,6 +58,7 @@ const AppState = {
     this.allTimeHistory = history;
     this.totalDays = Object.keys(history).length;
     this.scrollPosition = 0; // Reset to most recent when data changes
+    this.lockedDayIndex = null; // Reset lock when data changes
   },
 
   setView(view) {
@@ -67,6 +71,18 @@ const AppState = {
   
   setChartInstance(chart) {
     this.chartInstance = chart;
+  },
+  
+  lockDay(dayIndex) {
+    this.lockedDayIndex = dayIndex;
+  },
+  
+  unlockDay() {
+    this.lockedDayIndex = null;
+  },
+  
+  isLocked() {
+    return this.lockedDayIndex !== null;
   },
   
   updateScrollPosition(delta) {
@@ -346,13 +362,17 @@ const ChartBuilder = {
       const color = domain === 'Others' ? COLORS.others : 
         COLORS.domains[index % COLORS.domains.length];
       
+      // Create arrays for colors to enable per-bar highlighting
+      const dataLength = dailyData.length;
+      const borderColor = color.replace('0.7', '1').replace('0.5', '0.8');
+      
       return {
         type: 'bar',
         label: domain,
         data: dailyData.map(day => day[domain] || 0),
-        backgroundColor: color,
-        borderColor: color.replace('0.7', '1').replace('0.5', '0.8'),
-        borderWidth: 1,
+        backgroundColor: new Array(dataLength).fill(color),
+        borderColor: new Array(dataLength).fill(borderColor),
+        borderWidth: new Array(dataLength).fill(1),
         order: 1
       };
     });
@@ -432,9 +452,30 @@ const ChartBuilder = {
         tooltip: this.getGeneralViewTooltipConfig(totalTimeData)
       },
       onHover: (event, elements, chart) => {
-        if (elements.length > 0) {
+        // Only update breakdown on hover if not in locked mode
+        if (!AppState.isLocked() && elements.length > 0) {
           const dataIndex = elements[0].index;
           UIManager.updateDailyBreakdown(chart.totalTimeData, dataIndex);
+        }
+      },
+      onClick: (event, elements, chart) => {
+        if (elements.length > 0) {
+          const clickedIndex = elements[0].index;
+          
+          if (AppState.lockedDayIndex === clickedIndex) {
+            // Clicking the same day unlocks it
+            AppState.unlockDay();
+            ChartBuilder.removeBarHighlight(chart);
+          } else {
+            // Lock to new day
+            AppState.lockDay(clickedIndex);
+            UIManager.updateDailyBreakdown(chart.totalTimeData, clickedIndex);
+            ChartBuilder.highlightBar(chart, clickedIndex);
+          }
+        } else {
+          // Clicked empty area - unlock
+          AppState.unlockDay();
+          ChartBuilder.removeBarHighlight(chart);
         }
       }
     };
@@ -481,7 +522,7 @@ const ChartBuilder = {
   getGeneralViewTooltipConfig(totalTimeData) {
     return {
       animation: { duration: 200 },
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      backgroundColor: 'rgba(0, 0, 0, 0.25)',
       callbacks: {
         title: (context) => {
           const dateString = totalTimeData.dailyData[context[0].dataIndex].date;
@@ -507,6 +548,46 @@ const ChartBuilder = {
         }
       }
     };
+  },
+  
+  highlightBar(chart, barIndex) {
+    // Add visual highlight to the clicked bar
+    chart.data.datasets.forEach((dataset, datasetIndex) => {
+      if (dataset.type === 'bar') {
+        // Store original colors if not already stored
+        if (!dataset._originalBackgroundColor) {
+          dataset._originalBackgroundColor = [...dataset.backgroundColor];
+          dataset._originalBorderColor = [...dataset.borderColor];
+          dataset._originalBorderWidth = [...dataset.borderWidth];
+        }
+        
+        // Reset all bars to original colors first
+        dataset.backgroundColor = [...dataset._originalBackgroundColor];
+        dataset.borderColor = [...dataset._originalBorderColor];
+        dataset.borderWidth = [...dataset._originalBorderWidth];
+        
+        // Highlight the selected bar
+        if (Array.isArray(dataset.borderColor)) {
+          dataset.borderColor[barIndex] = '#ffffffff'; //Highlighted border
+          dataset.borderWidth[barIndex] = 1;
+        }
+      }
+    });
+    
+    chart.update('none'); // Update without animation
+  },
+  
+  removeBarHighlight(chart) {
+    // Remove highlight from all bars
+    chart.data.datasets.forEach((dataset) => {
+      if (dataset.type === 'bar' && dataset._originalBackgroundColor) {
+        dataset.backgroundColor = [...dataset._originalBackgroundColor];
+        dataset.borderColor = [...dataset._originalBorderColor];
+        dataset.borderWidth = [...dataset._originalBorderWidth];
+      }
+    });
+    
+    chart.update('none'); // Update without animation
   },
 
   getDetailViewTooltipConfig(processedData) {
@@ -700,11 +781,8 @@ const UIManager = {
     
     // Only enable scrolling if we have more data than the window size
     if (totalDays <= windowSize) {
-      console.log('Not enough data for scrolling:', totalDays, 'days');
       return;
     }
-    
-    console.log('Setting up scroll handling for', totalDays, 'days of data');
     
     // Add wheel event listener to the canvas
     canvasElement.addEventListener('wheel', (event) => {
@@ -718,8 +796,6 @@ const UIManager = {
       
       // Update chart viewport
       this.updateChartViewport(totalDays, windowSize, newPosition);
-      
-      console.log('Scrolled to position:', newPosition, 'of max:', totalDays - windowSize);
     });
     
     // Optional: Add keyboard navigation
@@ -761,8 +837,13 @@ const UIManager = {
     // Redraw chart with new viewport
     chart.update('none'); // Use 'none' mode for instant update without animation
     
-    // Update breakdown to show the last visible day
-    const visibleIndex = maxIndex;
+    // Restore highlight if a day is locked and visible
+    if (AppState.isLocked() && AppState.lockedDayIndex >= minIndex && AppState.lockedDayIndex <= maxIndex) {
+      ChartBuilder.highlightBar(chart, AppState.lockedDayIndex);
+    }
+    
+    // Update breakdown to show the locked day if locked, otherwise the last visible day
+    const visibleIndex = AppState.isLocked() ? AppState.lockedDayIndex : maxIndex;
     this.updateDailyBreakdown(chart.totalTimeData, visibleIndex);
   }
 };
