@@ -290,7 +290,7 @@ async function init() {
     await loadTimeData();
 
     let trackedTabs = await browser.tabs.query({
-        url: ["http://*/*", "https://*/*"],
+        url: ["http://*", "https://*"],
     });
     trackedTabs.forEach((tab) => trackedTabIds.add(tab.id));
 
