@@ -452,10 +452,26 @@ const ChartBuilder = {
         tooltip: this.getGeneralViewTooltipConfig(totalTimeData)
       },
       onHover: (event, elements, chart) => {
-        // Only update breakdown on hover if not in locked mode
-        if (!AppState.isLocked() && elements.length > 0) {
+        if (elements.length > 0) {
           const dataIndex = elements[0].index;
+          
+          // Always update breakdown on hover
           UIManager.updateDailyBreakdown(chart.totalTimeData, dataIndex);
+          
+          // Always show hover preview (even when locked)
+          ChartBuilder.showHoverPreview(chart, dataIndex);
+        } else {
+          // No elements detected - treat as "left bars area" even if still on canvas
+          if (AppState.isLocked()) {
+            // Return to locked day
+            ChartBuilder.highlightBar(chart, AppState.lockedDayIndex);
+            UIManager.updateDailyBreakdown(chart.totalTimeData, AppState.lockedDayIndex);
+          } else {
+            // Return to today if not locked
+            const todayIndex = chart.totalTimeData.dailyData.length - 1;
+            ChartBuilder.highlightBar(chart, todayIndex);
+            UIManager.updateDailyBreakdown(chart.totalTimeData, todayIndex);
+          }
         }
       },
       onClick: (event, elements, chart) => {
@@ -568,7 +584,7 @@ const ChartBuilder = {
         
         // Highlight the selected bar
         if (Array.isArray(dataset.borderColor)) {
-          dataset.borderColor[barIndex] = '#ffffffff'; //Highlighted border
+          dataset.borderColor[barIndex] = 'white'; // White border
           dataset.borderWidth[barIndex] = 1;
         }
       }
@@ -584,6 +600,39 @@ const ChartBuilder = {
         dataset.backgroundColor = [...dataset._originalBackgroundColor];
         dataset.borderColor = [...dataset._originalBorderColor];
         dataset.borderWidth = [...dataset._originalBorderWidth];
+      }
+    });
+    
+    chart.update('none'); // Update without animation
+  },
+  
+  showHoverPreview(chart, barIndex) {
+    // Temporarily highlight the hovered bar while preserving locked state
+    chart.data.datasets.forEach((dataset) => {
+      if (dataset.type === 'bar') {
+        // Store original colors if not already stored
+        if (!dataset._originalBackgroundColor) {
+          dataset._originalBackgroundColor = [...dataset.backgroundColor];
+          dataset._originalBorderColor = [...dataset.borderColor];
+          dataset._originalBorderWidth = [...dataset.borderWidth];
+        }
+        
+        // Reset all bars to original colors first
+        dataset.backgroundColor = [...dataset._originalBackgroundColor];
+        dataset.borderColor = [...dataset._originalBorderColor];
+        dataset.borderWidth = [...dataset._originalBorderWidth];
+        
+        // Restore locked highlight if there is one
+        if (AppState.isLocked() && Array.isArray(dataset.borderColor)) {
+          dataset.borderColor[AppState.lockedDayIndex] = 'white'; // Solid white for locked
+          dataset.borderWidth[AppState.lockedDayIndex] = 1;
+        }
+        
+        // Show preview highlight (only if different from locked bar)
+        if (Array.isArray(dataset.borderColor) && barIndex !== AppState.lockedDayIndex) {
+          dataset.borderColor[barIndex] = 'rgba(255, 255, 255, 0.8)'; // Semi-transparent white for preview
+          dataset.borderWidth[barIndex] = 1;
+        }
       }
     });
     
@@ -650,11 +699,27 @@ const UIManager = {
       // Store chart instance for scroll updates
       AppState.setChartInstance(chart);
       
+      // Highlight today by default (but not locked)
+      const todayIndex = totalTimeData.dailyData.length - 1;
+      ChartBuilder.highlightBar(chart, todayIndex);
+      UIManager.updateDailyBreakdown(totalTimeData, todayIndex);
+      
       // Add scroll event handling to the chart container
       this.setupScrollHandling(canvasElement, totalTimeData);
-
-      const todayIndex = totalTimeData.dailyData.length - 1;
-      UIManager.updateDailyBreakdown(totalTimeData, todayIndex);
+      
+      // Add explicit mouse leave handler for more reliable behavior
+      canvasElement.addEventListener('mouseleave', () => {
+        if (AppState.isLocked()) {
+          // Return to locked day
+          ChartBuilder.highlightBar(chart, AppState.lockedDayIndex);
+          UIManager.updateDailyBreakdown(chart.totalTimeData, AppState.lockedDayIndex);
+        } else {
+          // Return to today if not locked
+          const todayIndex = chart.totalTimeData.dailyData.length - 1;
+          ChartBuilder.highlightBar(chart, todayIndex);
+          UIManager.updateDailyBreakdown(chart.totalTimeData, todayIndex);
+        }
+      });
       
     } catch (error) {
       console.error('Error creating general view chart:', error);
