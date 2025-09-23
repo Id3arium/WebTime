@@ -1,6 +1,6 @@
 const CONFIG = {
   movingAverageDays: 7,
-  daysToDisplay: 30,
+  daysToDisplay: 30,  // Window size - how many days to show at once
   initAnimationDuration: 600,
   topDomainsLimit: 7
 };
@@ -41,6 +41,11 @@ const AppState = {
   currentDomain: null,
   allTimeHistory: null,
   generalChartCreated: false,
+  
+  // Scroll state for general view
+  scrollPosition: 0,  // 0 = most recent days, positive = scroll back in time
+  totalDays: 0,       // Total number of days available
+  chartInstance: null, // Reference to the Chart.js instance
 
   setCurrentDomain(domain) {
     this.currentDomain = domain;
@@ -48,6 +53,8 @@ const AppState = {
 
   setTimeHistory(history) {
     this.allTimeHistory = history;
+    this.totalDays = Object.keys(history).length;
+    this.scrollPosition = 0; // Reset to most recent when data changes
   },
 
   setView(view) {
@@ -56,6 +63,22 @@ const AppState = {
 
   markGeneralChartCreated() {
     this.generalChartCreated = true;
+  },
+  
+  setChartInstance(chart) {
+    this.chartInstance = chart;
+  },
+  
+  updateScrollPosition(delta) {
+    const maxScroll = Math.max(0, this.totalDays - CONFIG.daysToDisplay);
+    this.scrollPosition = Math.max(0, Math.min(maxScroll, this.scrollPosition + delta));
+    return this.scrollPosition;
+  },
+  
+  getVisibleDateRange() {
+    const startIndex = this.totalDays - CONFIG.daysToDisplay - this.scrollPosition;
+    const endIndex = this.totalDays - this.scrollPosition;
+    return { startIndex: Math.max(0, startIndex), endIndex };
   }
 };
 
@@ -196,8 +219,8 @@ const DataProcessor = {
       return { date, ...transformed };
     });
     
-    const visibleData = CONFIG.daysToDisplay > 0 ? 
-      allDailyData.slice(-CONFIG.daysToDisplay) : allDailyData;
+    // Return ALL data - no slicing here, window will be handled by Chart.js viewport
+    const visibleData = allDailyData;
     
     const finalDomains = [...topDomains];
     if (otherDomains.length > 0) {
@@ -206,7 +229,7 @@ const DataProcessor = {
     
     return {
       dailyData: visibleData,
-      allData: allDailyData,
+      allData: allDailyData,  // Keep this for compatibility
       domains: finalDomains,
       movingAverageData: this.calculateMovingAverageTotal(visibleData)
     };
@@ -384,11 +407,24 @@ const ChartBuilder = {
     );
     datasets.push(...domainDatasets);
     
+    const totalDays = totalTimeData.dailyData.length;
+    const windowSize = CONFIG.daysToDisplay;
+    
+    // Calculate initial viewport - show most recent days
+    const maxIndex = totalDays - 1;
+    const minIndex = Math.max(0, totalDays - windowSize);
+    
     const options = {
       ...this.getBaseChartOptions(),
       scales: {
         ...this.getBaseChartOptions().scales,
-        x: { stacked: true },
+        x: { 
+          stacked: true,
+          min: minIndex,
+          max: maxIndex,
+          // Enable scrolling if we have more data than window size
+          display: true
+        },
         y: { ...this.getBaseChartOptions().scales.y, stacked: true }
       },
       plugins: {
@@ -529,6 +565,12 @@ const UIManager = {
       
       const chart = new Chart(canvasElement.getContext('2d'), chartConfig);
       chart.totalTimeData = totalTimeData;
+      
+      // Store chart instance for scroll updates
+      AppState.setChartInstance(chart);
+      
+      // Add scroll event handling to the chart container
+      this.setupScrollHandling(canvasElement, totalTimeData);
 
       const todayIndex = totalTimeData.dailyData.length - 1;
       UIManager.updateDailyBreakdown(totalTimeData, todayIndex);
@@ -650,6 +692,78 @@ const UIManager = {
         </div>
       `;
     }).join('');
+  },
+  
+  setupScrollHandling(canvasElement, totalTimeData) {
+    const totalDays = totalTimeData.dailyData.length;
+    const windowSize = CONFIG.daysToDisplay;
+    
+    // Only enable scrolling if we have more data than the window size
+    if (totalDays <= windowSize) {
+      console.log('Not enough data for scrolling:', totalDays, 'days');
+      return;
+    }
+    
+    console.log('Setting up scroll handling for', totalDays, 'days of data');
+    
+    // Add wheel event listener to the canvas
+    canvasElement.addEventListener('wheel', (event) => {
+      event.preventDefault(); // Prevent page scrolling
+      
+      // Determine scroll direction (positive = scroll back in time)
+      const scrollDelta = Math.sign(event.deltaY) * 3; // Scroll 3 days at a time
+      
+      // Update scroll position
+      const newPosition = AppState.updateScrollPosition(scrollDelta);
+      
+      // Update chart viewport
+      this.updateChartViewport(totalDays, windowSize, newPosition);
+      
+      console.log('Scrolled to position:', newPosition, 'of max:', totalDays - windowSize);
+    });
+    
+    // Optional: Add keyboard navigation
+    canvasElement.addEventListener('keydown', (event) => {
+      let scrollDelta = 0;
+      
+      switch (event.key) {
+        case 'ArrowLeft':
+          scrollDelta = 5; // Scroll back in time
+          break;
+        case 'ArrowRight':
+          scrollDelta = -5; // Scroll forward in time
+          break;
+        default:
+          return;
+      }
+      
+      event.preventDefault();
+      const newPosition = AppState.updateScrollPosition(scrollDelta);
+      this.updateChartViewport(totalDays, windowSize, newPosition);
+    });
+    
+    // Make canvas focusable for keyboard events
+    canvasElement.tabIndex = 0;
+  },
+  
+  updateChartViewport(totalDays, windowSize, scrollPosition) {
+    const chart = AppState.chartInstance;
+    if (!chart) return;
+    
+    // Calculate new min/max indices
+    const maxIndex = totalDays - 1 - scrollPosition;
+    const minIndex = Math.max(0, maxIndex - windowSize + 1);
+    
+    // Update chart scales
+    chart.options.scales.x.min = minIndex;
+    chart.options.scales.x.max = maxIndex;
+    
+    // Redraw chart with new viewport
+    chart.update('none'); // Use 'none' mode for instant update without animation
+    
+    // Update breakdown to show the last visible day
+    const visibleIndex = maxIndex;
+    this.updateDailyBreakdown(chart.totalTimeData, visibleIndex);
   }
 };
 
