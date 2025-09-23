@@ -707,6 +707,9 @@ const UIManager = {
       // Add scroll event handling to the chart container
       this.setupScrollHandling(canvasElement, totalTimeData);
       
+      // Add invisible hitbox over x-axis labels to handle dead zone
+      this.createDeadZoneHitbox(canvasElement, chart);
+      
       // Add explicit mouse leave handler for more reliable behavior
       canvasElement.addEventListener('mouseleave', () => {
         if (AppState.isLocked()) {
@@ -910,6 +913,50 @@ const UIManager = {
     // Update breakdown to show the locked day if locked, otherwise the last visible day
     const visibleIndex = AppState.isLocked() ? AppState.lockedDayIndex : maxIndex;
     this.updateDailyBreakdown(chart.totalTimeData, visibleIndex);
+  },
+  
+  createDeadZoneHitbox(canvasElement, chart) {
+    // Create invisible div that covers the x-axis labels area
+    const hitbox = document.createElement('div');
+    hitbox.style.position = 'absolute';
+    hitbox.style.pointerEvents = 'auto';
+    hitbox.style.backgroundColor = 'transparent';
+    hitbox.style.zIndex = '10';
+    
+    // Position it over the x-axis labels area
+    const updateHitboxPosition = () => {
+      const rect = canvasElement.getBoundingClientRect();
+      const chartArea = chart.chartArea;
+      
+      // Position hitbox to cover x-axis labels (below chart area)
+      hitbox.style.left = `${chartArea.left}px`;
+      hitbox.style.top = `${chartArea.bottom}px`;
+      hitbox.style.width = `${chartArea.right - chartArea.left}px`;
+      hitbox.style.height = `${rect.height - chartArea.bottom}px`;
+    };
+    
+    // Add mouseenter listener to restore locked selection
+    hitbox.addEventListener('mouseenter', () => {
+      if (AppState.isLocked()) {
+        ChartBuilder.highlightBar(chart, AppState.lockedDayIndex);
+        UIManager.updateDailyBreakdown(chart.totalTimeData, AppState.lockedDayIndex);
+      } else {
+        const todayIndex = chart.totalTimeData.dailyData.length - 1;
+        ChartBuilder.highlightBar(chart, todayIndex);
+        UIManager.updateDailyBreakdown(chart.totalTimeData, todayIndex);
+      }
+    });
+    
+    // Position the hitbox initially
+    updateHitboxPosition();
+    
+    // Add hitbox to the canvas container
+    const container = canvasElement.parentElement;
+    container.style.position = 'relative'; // Ensure container can position children
+    container.appendChild(hitbox);
+    
+    // Store reference for cleanup if needed
+    chart._deadZoneHitbox = hitbox;
   }
 };
 
