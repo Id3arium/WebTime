@@ -24,7 +24,8 @@ const COLORS = {
   currentDomain: {
     background: 'rgba(69, 113, 231, 0.7)',
     border: 'rgba(69, 113, 231)'
-  }
+  },
+  tooltipBackground: 'rgba(0, 0, 0, 0.35)',
 };
 
 const ViewState = {
@@ -538,7 +539,7 @@ const ChartBuilder = {
   getGeneralViewTooltipConfig(totalTimeData) {
     return {
       animation: { duration: 200 },
-      backgroundColor: 'rgba(0, 0, 0, 0.25)',
+      backgroundColor: COLORS.tooltipBackground,
       callbacks: {
         title: (context) => {
           const dateString = totalTimeData.dailyData[context[0].dataIndex].date;
@@ -642,7 +643,7 @@ const ChartBuilder = {
   getDetailViewTooltipConfig(processedData) {
     return {
       animation: { duration: 200 },
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      backgroundColor: COLORS.tooltipBackground,
       callbacks: {
         title: (context) => {
           const dateString = processedData.dailyData[context[0].dataIndex].date;
@@ -783,6 +784,24 @@ const UIManager = {
     
     const domainData = this.calculateDomainBreakdown(dayData, totalTimeData.domains);
     this.renderBreakdownBars(breakdownBars, domainData);
+    
+    // Update the header to show which day we're viewing
+    this.updateGeneralViewHeader(dayData.date);
+  },
+  
+  updateGeneralViewHeader(dateString) {
+    const headerSummary = document.querySelector('#general-page .time-summary');
+    if (!headerSummary) return;
+    
+    const today = PopUpUtils.getLocalDateStr();
+    
+    const formattedDate = PopUpUtils.formatDateWithDayOfWeek(dateString);
+    if (dateString === today) {
+      headerSummary.textContent =  "Today - " + formattedDate;
+    } else {
+      // Format as "Sep 18 (Thu)"
+      headerSummary.textContent = formattedDate;
+    }
   },
 
   calculateDomainBreakdown(dayData, domains) {
