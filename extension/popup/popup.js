@@ -279,8 +279,8 @@ const DataProcessor = {
       };
     });
     
-    const visibleData = CONFIG.daysToDisplay > 0 ? 
-      dailyData.slice(-CONFIG.daysToDisplay) : dailyData;
+    // Return ALL data - scrolling will be handled by Chart.js viewport (like general view)
+    const visibleData = dailyData;
     
     return {
       dailyData: visibleData,
@@ -521,8 +521,23 @@ const ChartBuilder = {
     const domainDataset = this.createSingleDomainDataset(processedData.dailyData);
     datasets.push(domainDataset);
     
+    const totalDays = processedData.dailyData.length;
+    const windowSize = CONFIG.daysToDisplay;
+    
+    // Calculate initial viewport - show most recent days
+    const maxIndex = totalDays - 1;
+    const minIndex = Math.max(0, totalDays - windowSize);
+    
     const options = {
       ...this.getBaseChartOptions(),
+      scales: {
+        ...this.getBaseChartOptions().scales,
+        x: { 
+          min: minIndex,
+          max: maxIndex,
+          display: true
+        }
+      },
       plugins: { tooltip: this.getDetailViewTooltipConfig(processedData) }
     };
     
@@ -751,7 +766,12 @@ const UIManager = {
     const chartConfig = ChartBuilder.buildDetailViewChart(processedData);
     
     const canvasElement = document.getElementById('time-chart');
-    new Chart(canvasElement.getContext('2d'), chartConfig);
+    const chart = new Chart(canvasElement.getContext('2d'), chartConfig);
+    
+    // Add scrolling support if there's enough data
+    if (processedData.dailyData.length > CONFIG.daysToDisplay) {
+      this.setupDetailViewScrolling(canvasElement, chart, processedData);
+    }
   },
 
   updateDetailHeader(domain) {
@@ -976,6 +996,60 @@ const UIManager = {
     
     // Store reference for cleanup if needed
     chart._deadZoneHitbox = hitbox;
+  },
+  
+  setupDetailViewScrolling(canvasElement, chart, processedData) {
+    const totalDays = processedData.dailyData.length;
+    const windowSize = CONFIG.daysToDisplay;
+    
+    // Use a separate scroll state for detail view
+    let detailScrollPosition = 0;
+    
+    // Add wheel event listener
+    canvasElement.addEventListener('wheel', (event) => {
+      event.preventDefault();
+      
+      const scrollDelta = Math.sign(event.deltaY) * 3;
+      const maxScroll = Math.max(0, totalDays - windowSize);
+      detailScrollPosition = Math.max(0, Math.min(maxScroll, detailScrollPosition + scrollDelta));
+      
+      // Update viewport
+      const maxIndex = totalDays - 1 - detailScrollPosition;
+      const minIndex = Math.max(0, maxIndex - windowSize + 1);
+      
+      chart.options.scales.x.min = minIndex;
+      chart.options.scales.x.max = maxIndex;
+      chart.update('none');
+    });
+    
+    // Add keyboard navigation
+    canvasElement.addEventListener('keydown', (event) => {
+      let scrollDelta = 0;
+      
+      switch (event.key) {
+        case 'ArrowLeft':
+          scrollDelta = 5;
+          break;
+        case 'ArrowRight':
+          scrollDelta = -5;
+          break;
+        default:
+          return;
+      }
+      
+      event.preventDefault();
+      const maxScroll = Math.max(0, totalDays - windowSize);
+      detailScrollPosition = Math.max(0, Math.min(maxScroll, detailScrollPosition + scrollDelta));
+      
+      const maxIndex = totalDays - 1 - detailScrollPosition;
+      const minIndex = Math.max(0, maxIndex - windowSize + 1);
+      
+      chart.options.scales.x.min = minIndex;
+      chart.options.scales.x.max = maxIndex;
+      chart.update('none');
+    });
+    
+    canvasElement.tabIndex = 0;
   }
 };
 
