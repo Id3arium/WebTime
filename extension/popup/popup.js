@@ -435,6 +435,10 @@ const ChartBuilder = {
     const maxIndex = totalDays - 1;
     const minIndex = Math.max(0, totalDays - windowSize);
     
+    // Calculate global max for y-axis (across ALL data, not just visible)
+    const globalMaxHours = Math.max(...totalTimeData.dailyData.map(day => day.totalHours));
+    const yAxisMax = Math.ceil(globalMaxHours);
+    
     const options = {
       ...this.getBaseChartOptions(),
       scales: {
@@ -443,10 +447,13 @@ const ChartBuilder = {
           stacked: true,
           min: minIndex,
           max: maxIndex,
-          // Enable scrolling if we have more data than window size
           display: true
         },
-        y: { ...this.getBaseChartOptions().scales.y, stacked: true }
+        y: { 
+          ...this.getBaseChartOptions().scales.y, 
+          stacked: true,
+          max: yAxisMax // Lock y-axis to global max
+        }
       },
       plugins: {
         legend: { display: false },
@@ -528,6 +535,10 @@ const ChartBuilder = {
     const maxIndex = totalDays - 1;
     const minIndex = Math.max(0, totalDays - windowSize);
     
+    // Calculate global max for y-axis (across ALL data, not just visible)
+    const globalMaxHours = Math.max(...processedData.dailyData.map(day => day.domainHours));
+    const yAxisMax = Math.ceil(globalMaxHours);
+    
     const options = {
       ...this.getBaseChartOptions(),
       scales: {
@@ -536,6 +547,10 @@ const ChartBuilder = {
           min: minIndex,
           max: maxIndex,
           display: true
+        },
+        y: {
+          ...this.getBaseChartOptions().scales.y,
+          max: yAxisMax // Lock y-axis to global max
         }
       },
       plugins: { tooltip: this.getDetailViewTooltipConfig(processedData) }
