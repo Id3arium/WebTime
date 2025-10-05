@@ -12,6 +12,14 @@ const ACTIVITY_CHECK_INTERVAL_MS = Constants.ACTIVITY_CHECK_INTERVAL_MS;
 let currentDateStr = getLocalDateStr(); 
 let timeHistory = {};
 
+// Nudge system state
+let nudgeState = {
+    lastFlashTime: {},      // domain -> timestamp
+    lastNudgeTime: {},      // domain -> timestamp
+    snoozedUntil: {},       // domain -> timestamp or 'tomorrow'
+    limitReached: {}        // domain -> boolean
+};
+
 // Use shared utility function
 function getLocalDateStr() {
     return Utils.getLocalDateStr();
@@ -120,6 +128,13 @@ function incrementTimer() {
         saveTimeData();
         currentDateStr = newDateStr;
         todaysTotalTime = 0;
+        // Reset nudge state for new day
+        nudgeState = {
+            lastFlashTime: {},
+            lastNudgeTime: {},
+            snoozedUntil: {},
+            limitReached: {}
+        };
         console.log("New day, reset timer.");
     }
     updateTimerDisplay(todaysTotalTime);
@@ -127,6 +142,9 @@ function incrementTimer() {
     if (todaysTotalTime % SAVE_INTERVAL_SECONDS === 0) {
         saveTimeData();
     }
+    
+    // Check for nudges
+    checkNudges();
 }
 
 function startTimer() {
@@ -255,6 +273,13 @@ function handleMessageReceived(message, sender, sendResponse) {
     if (message.type === "USER_ACTIVE" && sender.tab) {
         tabLastActivity[sender.tab.id] = Date.now();
     }
+    if (message.type === "SNOOZE_NUDGES" && sender.tab) {
+        const domain = extractDomain(sender.tab.url);
+        if (domain) {
+            nudgeState.snoozedUntil[domain] = message.duration;
+            console.log(`Snoozed nudges for ${domain} until`, message.duration);
+        }
+    }
 }
 
 function importData(file) {
@@ -279,6 +304,84 @@ function exportData() {
             saveAs: true,
         });
     });
+}
+
+async function checkNudges() {
+    if (!trackedTabDomain || !activeTabId) return;
+    
+    // Check if snoozed
+    const snoozeUntil = nudgeState.snoozedUntil[trackedTabDomain];
+    if (snoozeUntil) {
+        if (snoozeUntil === 'tomorrow') {
+            // Still snoozed until tomorrow
+            return;
+        } else if (Date.now() < snoozeUntil) {
+            // Still snoozed
+            return;
+        } else {
+            // Snooze expired
+            delete nudgeState.snoozedUntil[trackedTabDomain];
+        }
+    }
+    
+    // Get settings
+    const data = await browser.storage.local.get('webTimeSettings');
+    const settings = data.webTimeSettings || { global: {}, domains: {} };
+    const global = settings.global || {};
+    const domainSettings = settings.domains?.[trackedTabDomain] || {};
+    
+    // Check if this domain has a limit
+    if (!domainSettings.dailyLimit) return;
+    
+    const limitSeconds = domainSettings.dailyLimit * 60;
+    const timeInSeconds = todaysTotalTime;
+    const warningThreshold = limitSeconds * 0.8;
+    
+    const flashInterval = (global.flashInterval || 2) * 60; // Convert to seconds
+    const remindInterval = (global.remindInterval || 15) * 60; // Convert to seconds
+    
+    // Check for warning flash (80-100%)
+    if (timeInSeconds >= warningThreshold && timeInSeconds < limitSeconds) {
+        const lastFlash = nudgeState.lastFlashTime[trackedTabDomain] || 0;
+        if (timeInSeconds - lastFlash >= flashInterval) {
+            sendWarningFlash();
+            nudgeState.lastFlashTime[trackedTabDomain] = timeInSeconds;
+        }
+    }
+    
+    // Check for nudge popup (at limit or after)
+    if (timeInSeconds >= limitSeconds) {
+        const justReachedLimit = !nudgeState.limitReached[trackedTabDomain];
+        const lastNudge = nudgeState.lastNudgeTime[trackedTabDomain] || 0;
+        const shouldShowNudge = justReachedLimit || (timeInSeconds - lastNudge >= remindInterval);
+        
+        if (shouldShowNudge) {
+            showNudge(global.customMessage || "Reflect on this session if you'd like.");
+            nudgeState.lastNudgeTime[trackedTabDomain] = timeInSeconds;
+            nudgeState.limitReached[trackedTabDomain] = true;
+        }
+    }
+}
+
+function sendWarningFlash() {
+    if (!activeTabId) return;
+    
+    browser.tabs.sendMessage(activeTabId, {
+        type: 'WARNING_FLASH'
+    }).catch(err => console.warn('Failed to send warning flash:', err));
+}
+
+function showNudge(customMessage) {
+    if (!activeTabId) return;
+    
+    const totalTime = Utils.formatTime(todaysTotalTime);
+    
+    browser.tabs.sendMessage(activeTabId, {
+        type: 'SHOW_NUDGE',
+        customMessage: customMessage,
+        totalTime: totalTime,
+        duration: 3000
+    }).catch(err => console.warn('Failed to show nudge:', err));
 }
 
 async function init() {
