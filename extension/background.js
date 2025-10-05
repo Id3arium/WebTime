@@ -380,7 +380,7 @@ function showNudge(customMessage) {
         type: 'SHOW_NUDGE',
         customMessage: customMessage,
         totalTime: totalTime,
-        duration: 3000
+        duration: Constants.OVERLAY_DURATIONS.POPUP_DISPLAY_MS
     }).catch(err => console.warn('Failed to show nudge:', err));
 }
 

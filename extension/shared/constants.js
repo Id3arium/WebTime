@@ -4,6 +4,12 @@ const Constants = {
   ACTIVITY_CHECK_INTERVAL_MS: 1500,
   SAVE_INTERVAL_SECONDS: 60,
 
+  // Nudge system
+  OVERLAY_DURATIONS: {
+    WARNING_FLASH_MS: 1000,      // How long the blur flash lasts
+    POPUP_DISPLAY_MS: 10000      // How long the popup stays visible
+  },
+
   // UI Configuration  
   CHART_CONFIG: {
     movingAverageDays: 7,

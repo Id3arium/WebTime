@@ -35,13 +35,20 @@ function createBlurOverlay() {
         backdrop-filter: blur(3px);
         -webkit-backdrop-filter: blur(3px);
         background: rgba(0, 0, 0, 0.1);
-        z-index: 2147483646;
+        z-index: 999999;
         pointer-events: none;
         opacity: 0;
         transition: opacity 0.3s ease;
     `;
     
-    document.body.appendChild(overlay);
+    // Insert BEFORE timer so timer renders on top and doesn't get blurred
+    const timer = document.querySelector('.web-time-timer');
+    if (timer) {
+        document.body.insertBefore(overlay, timer);
+    } else {
+        document.body.appendChild(overlay);
+    }
+    
     blurOverlay = overlay;
     return overlay;
 }
@@ -61,23 +68,37 @@ function createNudgePopup(message, totalTime) {
         padding: 24px 32px;
         border-radius: 12px;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-        z-index: 2147483647;
+        z-index: 1000001;
         pointer-events: auto;
         min-width: 320px;
         max-width: 400px;
         text-align: center;
         opacity: 0;
         transition: opacity 0.3s ease;
+        overflow: hidden;
     `;
     
     popup.innerHTML = `
+        <button class="web-time-close-btn" style="
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: none;
+            border: none;
+            color: #999;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 4px 8px;
+            line-height: 1;
+            transition: color 0.2s;
+        " onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#999'">×</button>
         <div style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">
             ${totalTime} on this site today
         </div>
         <div style="font-size: 14px; color: #bbb; margin-bottom: 20px;">
             ${message}
         </div>
-        <div style="display: flex; gap: 12px; justify-content: center;">
+        <div style="display: flex; gap: 12px; justify-content: center; margin-bottom: 16px;">
             <button class="web-time-snooze-btn" data-duration="3600000" style="
                 background: #444;
                 border: none;
@@ -99,20 +120,41 @@ function createNudgePopup(message, totalTime) {
                 transition: background 0.2s;
             ">Snooze till tmrw</button>
         </div>
+        <div style="
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+        ">
+            <div class="web-time-progress-bar" style="
+                height: 100%;
+                background: #4a9eff;
+                width: 100%;
+                transition: width linear;
+            "></div>
+        </div>
     `;
     
     // Add hover effects
     const buttons = popup.querySelectorAll('button');
     buttons.forEach(btn => {
-        btn.addEventListener('mouseenter', () => {
-            btn.style.background = '#555';
-        });
-        btn.addEventListener('mouseleave', () => {
-            btn.style.background = '#444';
-        });
-        btn.addEventListener('click', () => {
-            handleSnooze(btn.dataset.duration);
-        });
+        if (btn.classList.contains('web-time-close-btn')) {
+            btn.addEventListener('click', () => {
+                hideNudgePopup();
+            });
+        } else if (btn.classList.contains('web-time-snooze-btn')) {
+            btn.addEventListener('mouseenter', () => {
+                btn.style.background = '#555';
+            });
+            btn.addEventListener('mouseleave', () => {
+                btn.style.background = '#444';
+            });
+            btn.addEventListener('click', () => {
+                handleSnooze(btn.dataset.duration);
+            });
+        }
     });
     
     document.body.appendChild(popup);
@@ -124,12 +166,23 @@ function showWarningFlash() {
     const overlay = createBlurOverlay();
     overlay.style.opacity = '1';
     
+    // Pulse the timer
+    const timer = document.querySelector('.web-time-timer');
+    if (timer) {
+        timer.style.transition = 'transform 0.3s ease-in-out';
+        timer.style.transform = 'scale(2.5)';
+        
+        setTimeout(() => {
+            timer.style.transform = 'scale(1)';
+        }, Constants.OVERLAY_DURATIONS.WARNING_FLASH_MS / 2); // Pulse for half the duration
+    }
+    
     setTimeout(() => {
         overlay.style.opacity = '0';
-    }, 500);
+    }, Constants.OVERLAY_DURATIONS.WARNING_FLASH_MS);
 }
 
-function showNudgePopup(message, totalTime, duration = 3000) {
+function showNudgePopup(message, totalTime, duration = Constants.OVERLAY_DURATIONS.POPUP_DISPLAY_MS) {
     const overlay = createBlurOverlay();
     const popup = createNudgePopup(message, totalTime);
     
@@ -137,6 +190,13 @@ function showNudgePopup(message, totalTime, duration = 3000) {
     overlay.style.opacity = '1';
     setTimeout(() => {
         popup.style.opacity = '1';
+        
+        // Animate progress bar
+        const progressBar = popup.querySelector('.web-time-progress-bar');
+        if (progressBar) {
+            progressBar.style.transitionDuration = `${duration}ms`;
+            progressBar.style.width = '0%';
+        }
     }, 100);
     
     // Auto-dismiss
