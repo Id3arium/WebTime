@@ -46,7 +46,7 @@ const UIManager = {
       // Load global settings
       const global = settings.global || {};
       document.getElementById('day-reset-time').value = global.dayResetTime || 0;
-      document.getElementById('custom-message').value = global.customMessage || '';
+      document.getElementById('custom-message').value = global.customMessage || 'Was this time mindful?';
       document.getElementById('flash-interval').value = global.flashInterval || 2;
       document.getElementById('remind-interval').value = global.remindInterval || 15;
       

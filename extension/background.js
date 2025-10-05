@@ -356,7 +356,7 @@ async function checkNudges() {
         const shouldShowNudge = justReachedLimit || (timeInSeconds - lastNudge >= remindInterval);
         
         if (shouldShowNudge) {
-            showNudge(global.customMessage || "Reflect on this session if you'd like.");
+            showNudge(global.customMessage);
             nudgeState.lastNudgeTime[trackedTabDomain] = timeInSeconds;
             nudgeState.limitReached[trackedTabDomain] = true;
         }

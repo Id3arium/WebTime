@@ -66,7 +66,7 @@ function createNudgePopup(message, totalTime) {
         background: #2a2a2a;
         color: #eee;
         padding: 24px 32px;
-        border-radius: 12px;
+        border-radius: 8px;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
         z-index: 1000001;
         pointer-events: auto;
@@ -169,8 +169,9 @@ function showWarningFlash() {
     // Pulse the timer
     const timer = document.querySelector('.web-time-timer');
     if (timer) {
+        timer.style.transformOrigin = 'top right';
         timer.style.transition = 'transform 0.3s ease-in-out';
-        timer.style.transform = 'scale(2.5)';
+        timer.style.transform = 'scale(3)';
         
         setTimeout(() => {
             timer.style.transform = 'scale(1)';
