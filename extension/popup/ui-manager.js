@@ -16,6 +16,98 @@ const UIManager = {
     container.className = 'pages-container show-detail';
   },
 
+  showSettingsView() {
+    AppState.setView(ViewState.SETTINGS);
+    const container = document.querySelector('.pages-container');
+    container.className = 'pages-container show-settings';
+    
+    // Update the domain name in settings header and inline
+    if (AppState.currentDomain) {
+      const settingsDomain = document.getElementById('settings-domain');
+      const settingsDomainInline = document.getElementById('settings-domain-inline');
+      
+      if (settingsDomain) {
+        settingsDomain.textContent = AppState.currentDomain;
+      }
+      if (settingsDomainInline) {
+        settingsDomainInline.textContent = AppState.currentDomain;
+      }
+    }
+    
+    // Load settings for current domain
+    this.loadSettings();
+  },
+
+  async loadSettings() {
+    try {
+      const data = await browser.storage.local.get('webTimeSettings');
+      const settings = data.webTimeSettings || { global: {}, domains: {} };
+      
+      // Load global settings
+      const global = settings.global || {};
+      document.getElementById('day-reset-time').value = global.dayResetTime || 0;
+      document.getElementById('custom-message').value = global.customMessage || '';
+      document.getElementById('flash-interval').value = global.flashInterval || 2;
+      document.getElementById('remind-interval').value = global.remindInterval || 15;
+      
+      // Load domain-specific limit
+      const domainSettings = settings.domains?.[AppState.currentDomain] || {};
+      const limitInput = document.getElementById('daily-limit');
+      limitInput.value = domainSettings.dailyLimit || '';
+      
+    } catch (error) {
+      console.error('Error loading settings:', error);
+    }
+  },
+
+  async saveSettings() {
+    try {
+      // Get current settings from storage
+      const data = await browser.storage.local.get('webTimeSettings');
+      const settings = data.webTimeSettings || { global: {}, domains: {} };
+      
+      // Update global settings
+      settings.global = {
+        dayResetTime: parseInt(document.getElementById('day-reset-time').value),
+        customMessage: document.getElementById('custom-message').value,
+        flashInterval: parseInt(document.getElementById('flash-interval').value),
+        remindInterval: parseInt(document.getElementById('remind-interval').value)
+      };
+      
+      // Update domain-specific limit
+      if (!settings.domains) settings.domains = {};
+      
+      const limitValue = document.getElementById('daily-limit').value;
+      if (limitValue) {
+        settings.domains[AppState.currentDomain] = {
+          dailyLimit: parseInt(limitValue)
+        };
+      } else {
+        // Remove limit if empty
+        if (settings.domains[AppState.currentDomain]) {
+          delete settings.domains[AppState.currentDomain];
+        }
+      }
+      
+      // Save to storage
+      await browser.storage.local.set({ webTimeSettings: settings });
+      
+      // Visual feedback
+      const saveBtn = document.getElementById('save-settings-btn');
+      const originalText = saveBtn.textContent;
+      saveBtn.textContent = 'Saved!';
+      saveBtn.style.background = '#4ade80';
+      
+      setTimeout(() => {
+        saveBtn.textContent = originalText;
+        saveBtn.style.background = '';
+      }, 1500);
+      
+    } catch (error) {
+      console.error('Error saving settings:', error);
+    }
+  },
+
   renderGeneralView() {
     try {
       const totalTimeData = DataProcessor.processGeneralViewData(AppState.allTimeHistory);

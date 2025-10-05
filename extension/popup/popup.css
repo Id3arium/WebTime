@@ -28,7 +28,7 @@ body {
 
 .pages-container {
   display: flex;
-  width: 200%;
+  width: 300%;
   height: 100%;
   transition: transform 0.3s ease-in-out;
 }
@@ -38,11 +38,15 @@ body {
 }
 
 .pages-container.show-detail {
-  transform: translateX(-50%);
+  transform: translateX(-33.333%);
+}
+
+.pages-container.show-settings {
+  transform: translateX(-66.666%);
 }
 
 .half-page {
-  width: 50%;
+  width: 33.333%;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -92,6 +96,14 @@ body {
 
 #forward-btn {
   right: 0px;
+}
+
+#settings-btn {
+  right: 0px;
+}
+
+#settings-back-btn {
+  left: 0px;
 }
 
 .nav-btn:hover {
@@ -219,4 +231,84 @@ body {
   flex: 0 0 auto;
   text-align: right;
   white-space: nowrap;
+}
+
+/* Settings Styles */
+.settings-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-section h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--summary-text);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.settings-divider {
+  height: 1px;
+  background: var(--border-line);
+  margin: 4px 0 8px 0;
+}
+
+.settings-section label {
+  font-size: 13px;
+  color: var(--light-text);
+  margin-bottom: -8px;
+}
+
+.settings-section select,
+.settings-section input[type="text"],
+.settings-section input[type="number"] {
+  background: var(--light-bg);
+  border: 1px solid var(--border-line);
+  border-radius: 4px;
+  color: var(--light-text);
+  padding: 8px 12px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.settings-section select:focus,
+.settings-section input[type="text"]:focus,
+.settings-section input[type="number"]:focus {
+  border-color: #4a9eff;
+}
+
+.settings-section input::placeholder {
+  color: #666;
+}
+
+.save-btn {
+  background: #4a9eff;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  margin-top: 8px;
+}
+
+.save-btn:hover {
+  background: #3a8eef;
+}
+
+.save-btn:active {
+  background: #2a7edf;
 }

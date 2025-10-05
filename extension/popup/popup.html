@@ -34,9 +34,60 @@
             <div class="header-text">WebTime</div>
             <div class="time-summary">0:00 / 0:00</div>
           </div>
+          <button id="settings-btn" class="nav-btn">⚙️</button>
         </div>
         <div class="page-content">
           <canvas id="time-chart"></canvas>
+        </div>
+      </div>
+      
+      <!-- Settings View Half-Page -->
+      <div class="half-page" id="settings-page">
+        <div class="page-header">
+          <button id="settings-back-btn" class="nav-btn">←</button>
+          <div class="header-content">
+            <div class="header-text">Settings</div>
+            <div class="time-summary" id="settings-domain"></div>
+          </div>
+        </div>
+        <div class="page-content">
+          <div class="settings-container">
+            <div class="settings-section">
+              <label>Day resets at:</label>
+              <select id="day-reset-time">
+                <option value="0">Midnight</option>
+                <option value="1">1:00 AM</option>
+                <option value="2">2:00 AM</option>
+                <option value="3">3:00 AM</option>
+                <option value="4">4:00 AM</option>
+              </select>
+              
+              <label>Custom message:</label>
+              <input type="text" id="custom-message" placeholder="Reflect on this session if you'd like.">
+              
+              <label>Warning flash (at 80%), every:</label>
+              <select id="flash-interval">
+                <option value="1">1 minute</option>
+                <option value="2">2 minutes</option>
+                <option value="5">5 minutes</option>
+              </select>
+              
+              <label>After limit, remind every:</label>
+              <select id="remind-interval">
+                <option value="10">10 minutes</option>
+                <option value="15">15 minutes</option>
+                <option value="20">20 minutes</option>
+                <option value="30">30 minutes</option>
+              </select>
+            </div>
+            
+            <div class="settings-section">
+              <label>Daily limit for <span id="settings-domain-inline"></span> (minutes):</label>
+              <input type="number" id="daily-limit" min="0" placeholder="No limit">
+            </div>
+            
+            <button id="save-settings-btn" class="save-btn">Save Changes</button>
+          </div>
         </div>
       </div>
     </div>

@@ -12,12 +12,29 @@ const App = {
   },
 
   setupEventListeners() {
+    // General -> Detail
+    document.getElementById('forward-btn').addEventListener('click', () => {
+      UIManager.showDetailView();
+    });
+    
+    // Detail -> General
     document.getElementById('back-btn').addEventListener('click', () => {
       UIManager.showGeneralView();
     });
     
-    document.getElementById('forward-btn').addEventListener('click', () => {
+    // Detail -> Settings
+    document.getElementById('settings-btn').addEventListener('click', () => {
+      UIManager.showSettingsView();
+    });
+    
+    // Settings -> Detail
+    document.getElementById('settings-back-btn').addEventListener('click', () => {
       UIManager.showDetailView();
+    });
+    
+    // Save settings button
+    document.getElementById('save-settings-btn').addEventListener('click', () => {
+      UIManager.saveSettings();
     });
   },
 
