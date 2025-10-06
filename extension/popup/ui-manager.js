@@ -52,8 +52,12 @@ const UIManager = {
       
       // Load domain-specific limit
       const domainSettings = settings.domains?.[AppState.currentDomain] || {};
-      const limitInput = document.getElementById('daily-limit');
-      limitInput.value = domainSettings.dailyLimit || '';
+      const limitMinutes = domainSettings.dailyLimit || 0;
+      const hours = Math.floor(limitMinutes / 60);
+      const minutes = limitMinutes % 60;
+      
+      document.getElementById('daily-limit-hours').value = limitMinutes > 0 ? hours : '';
+      document.getElementById('daily-limit-minutes').value = limitMinutes > 0 ? minutes : '';
       
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -77,10 +81,13 @@ const UIManager = {
       // Update domain-specific limit
       if (!settings.domains) settings.domains = {};
       
-      const limitValue = document.getElementById('daily-limit').value;
-      if (limitValue) {
+      const hours = parseInt(document.getElementById('daily-limit-hours').value) || 0;
+      const minutes = parseInt(document.getElementById('daily-limit-minutes').value) || 0;
+      const totalMinutes = (hours * 60) + minutes;
+      
+      if (totalMinutes > 0) {
         settings.domains[AppState.currentDomain] = {
-          dailyLimit: parseInt(limitValue)
+          dailyLimit: totalMinutes
         };
       } else {
         // Remove limit if empty

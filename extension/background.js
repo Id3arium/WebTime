@@ -374,7 +374,7 @@ function sendWarningFlash() {
 function showNudge(customMessage) {
     if (!activeTabId) return;
     
-    const totalTime = Utils.formatTime(todaysTotalTime);
+    const totalTime = Utils.formatTimeWithSeconds(todaysTotalTime);
     
     browser.tabs.sendMessage(activeTabId, {
         type: 'SHOW_NUDGE',

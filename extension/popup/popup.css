@@ -312,3 +312,35 @@ body {
 .save-btn:active {
   background: #2a7edf;
 }
+
+.time-limit-inputs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.time-limit-inputs input[type="number"] {
+  flex: 1;
+  background: var(--light-bg);
+  border: 1px solid var(--border-line);
+  border-radius: 4px;
+  color: var(--light-text);
+  padding: 8px 12px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.time-limit-inputs input[type="number"]:focus {
+  border-color: #4a9eff;
+}
+
+.time-limit-inputs span {
+  color: var(--light-text);
+}
+
+.time-limit-helper {
+  font-size: 12px;
+  color: #888;
+  margin-top: -8px;
+}

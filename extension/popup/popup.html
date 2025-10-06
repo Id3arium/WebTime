@@ -88,8 +88,14 @@
             </div>
             
             <div class="settings-section">
-              <label>Daily limit for <span id="settings-domain-inline"></span> (minutes):</label>
-              <input type="number" id="daily-limit" min="0" placeholder="No limit">
+              <label>Daily limit for <span id="settings-domain-inline"></span>:</label>
+              <div class="time-limit-inputs">
+                <input type="number" id="daily-limit-hours" min="0" max="23" placeholder="0">
+                <span>h</span>
+                <input type="number" id="daily-limit-minutes" min="0" max="59" placeholder="0">
+                <span>min</span>
+              </div>
+              <div class="time-limit-helper">Leave empty for no limit</div>
             </div>
             
             <button id="save-settings-btn" class="save-btn">Save Changes</button>
