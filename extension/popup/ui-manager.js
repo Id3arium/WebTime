@@ -47,8 +47,9 @@ const UIManager = {
       const global = settings.global || {};
       document.getElementById('day-reset-time').value = global.dayResetTime || 0;
       document.getElementById('custom-message').value = global.customMessage || 'Was this time mindful?';
-      document.getElementById('flash-interval').value = global.flashInterval || 2;
-      document.getElementById('remind-interval').value = global.remindInterval || 15;
+      document.getElementById('flash-interval').value = global.flashInterval || '';
+      document.getElementById('grace-period').value = global.gracePeriod || '';
+      document.getElementById('popup-interval').value = global.popupInterval || '';
       
       // Load domain-specific limit
       const domainSettings = settings.domains?.[AppState.currentDomain] || {};
@@ -74,8 +75,9 @@ const UIManager = {
       settings.global = {
         dayResetTime: parseInt(document.getElementById('day-reset-time').value),
         customMessage: document.getElementById('custom-message').value,
-        flashInterval: parseInt(document.getElementById('flash-interval').value),
-        remindInterval: parseInt(document.getElementById('remind-interval').value)
+        flashInterval: parseInt(document.getElementById('flash-interval').value) || null,
+        gracePeriod: parseInt(document.getElementById('grace-period').value) || null,
+        popupInterval: parseInt(document.getElementById('popup-interval').value) || null
       };
       
       // Update domain-specific limit

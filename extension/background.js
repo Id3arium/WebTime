@@ -335,30 +335,45 @@ async function checkNudges() {
     
     const limitSeconds = domainSettings.dailyLimit * 60;
     const timeInSeconds = todaysTotalTime;
-    const warningThreshold = limitSeconds * 0.8;
     
-    const flashInterval = (global.flashInterval || 2) * 60; // Convert to seconds
-    const remindInterval = (global.remindInterval || 15) * 60; // Convert to seconds
+    const flashInterval = global.flashInterval; // minutes
+    const gracePeriod = global.gracePeriod; // minutes  
+    const popupInterval = global.popupInterval; // minutes
     
-    // Check for warning flash (80-100%)
-    if (timeInSeconds >= warningThreshold && timeInSeconds < limitSeconds) {
-        const lastFlash = nudgeState.lastFlashTime[trackedTabDomain] || 0;
-        if (timeInSeconds - lastFlash >= flashInterval) {
-            sendWarningFlash();
-            nudgeState.lastFlashTime[trackedTabDomain] = timeInSeconds;
+    // Tier 1: Flash warnings (from limit until grace period ends)
+    if (flashInterval && timeInSeconds >= limitSeconds) {
+        const gracePeriodSeconds = gracePeriod ? gracePeriod * 60 : 0;
+        const timeOverLimit = timeInSeconds - limitSeconds;
+        
+        // Only flash if we're still in grace period (or grace period is disabled)
+        if (!gracePeriod || timeOverLimit < gracePeriodSeconds) {
+            const lastFlash = nudgeState.lastFlashTime[trackedTabDomain] || limitSeconds - 1;
+            const flashIntervalSeconds = flashInterval * 60;
+            
+            if (timeInSeconds - lastFlash >= flashIntervalSeconds) {
+                sendWarningFlash();
+                nudgeState.lastFlashTime[trackedTabDomain] = timeInSeconds;
+            }
         }
     }
     
-    // Check for nudge popup (at limit or after)
-    if (timeInSeconds >= limitSeconds) {
-        const justReachedLimit = !nudgeState.limitReached[trackedTabDomain];
-        const lastNudge = nudgeState.lastNudgeTime[trackedTabDomain] || 0;
-        const shouldShowNudge = justReachedLimit || (timeInSeconds - lastNudge >= remindInterval);
+    // Tier 2: Popup reminders (after grace period)
+    if (popupInterval && gracePeriod && timeInSeconds >= limitSeconds) {
+        const gracePeriodSeconds = gracePeriod * 60;
+        const timeOverLimit = timeInSeconds - limitSeconds;
         
-        if (shouldShowNudge) {
-            showNudge(global.customMessage);
-            nudgeState.lastNudgeTime[trackedTabDomain] = timeInSeconds;
-            nudgeState.limitReached[trackedTabDomain] = true;
+        // Only show popups after grace period
+        if (timeOverLimit >= gracePeriodSeconds) {
+            const justReachedTier2 = !nudgeState.limitReached[trackedTabDomain];
+            const lastPopup = nudgeState.lastNudgeTime[trackedTabDomain] || 0;
+            const popupIntervalSeconds = popupInterval * 60;
+            const shouldShowPopup = justReachedTier2 || (timeInSeconds - lastPopup >= popupIntervalSeconds);
+            
+            if (shouldShowPopup) {
+                showNudge(global.customMessage);
+                nudgeState.lastNudgeTime[trackedTabDomain] = timeInSeconds;
+                nudgeState.limitReached[trackedTabDomain] = true;
+            }
         }
     }
 }

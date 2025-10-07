@@ -64,27 +64,6 @@
               
               <label>Custom message:</label>
               <input type="text" id="custom-message" placeholder="Was this time mindful?">
-              
-              <label>Warning flash (at 80%), every:</label>
-              <select id="flash-interval">
-                <option value="1">1 minute</option>
-                <option value="2">2 minutes</option>
-                <option value="3">3 minutes</option>
-                <option value="5">5 minutes</option>
-                <option value="10">10 minutes</option>
-              </select>
-              
-              <label>After limit, remind every:</label>
-              <select id="remind-interval">
-                <option value="5">5 minutes</option>
-                <option value="10">10 minutes</option>
-                <option value="15">15 minutes</option>
-                <option value="20">20 minutes</option>
-                <option value="30">30 minutes</option>
-                <option value="40">40 minutes</option>
-                <option value="50">50 minutes</option>
-                <option value="60">60 minutes</option>
-              </select>
             </div>
             
             <div class="settings-section">
@@ -95,7 +74,23 @@
                 <input type="number" id="daily-limit-minutes" min="0" max="59" placeholder="0">
                 <span>min</span>
               </div>
-              <div class="time-limit-helper">Leave empty for no limit</div>
+              
+              <label>After limit, nudge every:</label>
+              <div class="time-limit-inputs">
+                <input type="number" id="flash-interval" min="1" placeholder="">
+                <span>min</span>
+                <span style="margin-left: auto;">for:</span>
+                <input type="number" id="grace-period" min="1" placeholder="">
+                <span>min</span>
+              </div>
+              
+              <label>After nudges, display reminder every:</label>
+              <div class="time-limit-inputs">
+                <input type="number" id="popup-interval" min="1" placeholder="">
+                <span>min</span>
+              </div>
+              
+              <div class="time-limit-helper">Leave empty to disable</div>
             </div>
             
             <button id="save-settings-btn" class="save-btn">Save Changes</button>
