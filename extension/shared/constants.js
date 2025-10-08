@@ -1,12 +1,12 @@
 const Constants = {
   // Timing thresholds
   INACTIVITY_THRESHOLD_MS: 6000,
-  ACTIVITY_CHECK_INTERVAL_MS: 1500,
+  ACTIVITY_CHECK_INTERVAL_MS: 1000,
   SAVE_INTERVAL_SECONDS: 60,
 
   // Nudge system
   OVERLAY_DURATIONS: {
-    WARNING_FLASH_MS: 1000,      // How long the blur flash lasts
+    NUDGE_MS: 1500,      // How long the blur flash lasts
     POPUP_DISPLAY_MS: 10000      // How long the popup stays visible
   },
 

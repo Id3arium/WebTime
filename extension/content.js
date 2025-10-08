@@ -171,16 +171,16 @@ function showWarningFlash() {
     if (timer) {
         timer.style.transformOrigin = 'top right';
         timer.style.transition = 'transform 0.3s ease-in-out';
-        timer.style.transform = 'scale(3)';
+        timer.style.transform = 'scale(3.5)';
         
         setTimeout(() => {
             timer.style.transform = 'scale(1)';
-        }, Constants.OVERLAY_DURATIONS.WARNING_FLASH_MS / 2); // Pulse for half the duration
+        }, Constants.OVERLAY_DURATIONS.NUDGE_MS / 2); // Pulse for half the duration
     }
     
     setTimeout(() => {
         overlay.style.opacity = '0';
-    }, Constants.OVERLAY_DURATIONS.WARNING_FLASH_MS);
+    }, Constants.OVERLAY_DURATIONS.NUDGE_MS);
 }
 
 function showNudgePopup(message, totalTime, duration = Constants.OVERLAY_DURATIONS.POPUP_DISPLAY_MS) {
