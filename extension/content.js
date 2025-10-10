@@ -4,7 +4,7 @@
 let timerText = null;
 let lastActivityTime = Date.now();
 let blurOverlay = null;
-let nudgePopup = null;
+let reminderPopup = null;
 let flashInterval = null;
 
 function createTimerElement() {
@@ -34,7 +34,7 @@ function createBlurOverlay() {
         height: 100%;
         backdrop-filter: blur(3px);
         -webkit-backdrop-filter: blur(3px);
-        background: rgba(0, 0, 0, 0.1);
+        background: rgba(0, 0, 0, 0.3);
         z-index: 999999;
         pointer-events: none;
         opacity: 0;
@@ -53,12 +53,12 @@ function createBlurOverlay() {
     return overlay;
 }
 
-function createNudgePopup(message, totalTime) {
-    if (nudgePopup) return nudgePopup;
+function createReminderPopup(message, totalTime) {
+    if (reminderPopup) return reminderPopup;
     
-    const popup = document.createElement('div');
-    popup.className = 'web-time-nudge-popup';
-    popup.style.cssText = `
+    const reminderPopup = document.createElement('div');
+    reminderPopup.className = 'web-time-reminder-popup';
+    reminderPopup.style.cssText = `
         position: fixed;
         top: 50%;
         left: 50%;
@@ -66,8 +66,8 @@ function createNudgePopup(message, totalTime) {
         background: #2a2a2a;
         color: #eee;
         padding: 24px 32px;
-        border-radius: 8px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        border-radius: 6px;
+        box-shadow: 0 6px 32px rgba(0, 0, 0, 0.4);
         z-index: 1000001;
         pointer-events: auto;
         min-width: 320px;
@@ -78,7 +78,7 @@ function createNudgePopup(message, totalTime) {
         overflow: hidden;
     `;
     
-    popup.innerHTML = `
+    reminderPopup.innerHTML = `
         <button class="web-time-close-btn" style="
             position: absolute;
             top: 12px;
@@ -138,11 +138,11 @@ function createNudgePopup(message, totalTime) {
     `;
     
     // Add hover effects
-    const buttons = popup.querySelectorAll('button');
+    const buttons = reminderPopup.querySelectorAll('button');
     buttons.forEach(btn => {
         if (btn.classList.contains('web-time-close-btn')) {
             btn.addEventListener('click', () => {
-                hideNudgePopup();
+                hideReminderPopup();
             });
         } else if (btn.classList.contains('web-time-snooze-btn')) {
             btn.addEventListener('mouseenter', () => {
@@ -157,9 +157,9 @@ function createNudgePopup(message, totalTime) {
         }
     });
     
-    document.body.appendChild(popup);
-    nudgePopup = popup;
-    return popup;
+    document.body.appendChild(reminderPopup);
+    reminderPopup = reminderPopup;
+    return reminderPopup;
 }
 
 function showWarningFlash() {
@@ -183,17 +183,17 @@ function showWarningFlash() {
     }, Constants.OVERLAY_DURATIONS.NUDGE_MS);
 }
 
-function showNudgePopup(message, totalTime, duration = Constants.OVERLAY_DURATIONS.POPUP_DISPLAY_MS) {
+function showReminderPopup(message, totalTime, duration = Constants.OVERLAY_DURATIONS.REMINDER_DISPLAY_MS) {
     const overlay = createBlurOverlay();
-    const popup = createNudgePopup(message, totalTime);
+    const reminderPopup = createReminderPopup(message, totalTime);
     
     // Show overlay and popup
     overlay.style.opacity = '1';
     setTimeout(() => {
-        popup.style.opacity = '1';
+        reminderPopup.style.opacity = '1';
         
         // Animate progress bar
-        const progressBar = popup.querySelector('.web-time-progress-bar');
+        const progressBar = reminderPopup.querySelector('.web-time-progress-bar');
         if (progressBar) {
             progressBar.style.transitionDuration = `${duration}ms`;
             progressBar.style.width = '0%';
@@ -202,34 +202,34 @@ function showNudgePopup(message, totalTime, duration = Constants.OVERLAY_DURATIO
     
     // Auto-dismiss
     setTimeout(() => {
-        hideNudgePopup();
+        hideReminderPopup();
     }, duration);
 }
 
-function hideNudgePopup() {
+function hideReminderPopup() {
     if (blurOverlay) {
         blurOverlay.style.opacity = '0';
     }
-    if (nudgePopup) {
-        nudgePopup.style.opacity = '0';
+    if (reminderPopup) {
+        reminderPopup.style.opacity = '0';
         setTimeout(() => {
-            if (nudgePopup && nudgePopup.parentNode) {
-                nudgePopup.parentNode.removeChild(nudgePopup);
-                nudgePopup = null;
+            if (reminderPopup && reminderPopup.parentNode) {
+                reminderPopup.parentNode.removeChild(reminderPopup);
+                reminderPopup = null;
             }
         }, 300);
     }
 }
 
 function handleSnooze(duration) {
-    hideNudgePopup();
+    hideReminderPopup();
     
     const snoozeUntil = duration === 'tomorrow' 
         ? 'tomorrow'
         : Date.now() + parseInt(duration);
     
     browser.runtime.sendMessage({
-        type: 'SNOOZE_NUDGES',
+        type: 'SNOOZE_REMINDERS',
         duration: snoozeUntil
     });
 }
@@ -245,8 +245,8 @@ function handleIncomingMessage(message, sender, sendResponse) {
         }
     } else if (message.type === "WARNING_FLASH") {
         showWarningFlash();
-    } else if (message.type === "SHOW_NUDGE") {
-        showNudgePopup(message.customMessage, message.totalTime, message.duration);
+    } else if (message.type === "SHOW_REMINDER") {
+        showReminderPopup(message.customMessage, message.totalTime, message.duration);
     }
 }
 

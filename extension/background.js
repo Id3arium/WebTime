@@ -1,4 +1,4 @@
-let todaysTotalTime = 0;
+let todaysTotalTimeInActiveDomain = 0;
 let activeTabId = null;
 const trackedTabIds = new Set();
 let timerInterval = null;
@@ -9,8 +9,9 @@ let trackedTabDomain = null;
 const INACTIVITY_THRESHOLD_MS = Constants.INACTIVITY_THRESHOLD_MS;
 const ACTIVITY_CHECK_INTERVAL_MS = Constants.ACTIVITY_CHECK_INTERVAL_MS;
 
-let currentDateStr = getLocalDateStr(); 
+let currentDateStr = Utils.getLocalDateStr(); 
 let timeHistory = {};
+let dayResetTime = 0; // Hour when day resets (0-4)
 
 // Nudge system state
 let nudgeState = {
@@ -22,7 +23,7 @@ let nudgeState = {
 
 // Use shared utility function
 function getLocalDateStr() {
-    return Utils.getLocalDateStr();
+    return Utils.getLocalDateStr(dayResetTime);
 }
 
 // Use shared utility function
@@ -57,21 +58,21 @@ function migrateDataIfNeeded(oldTimeHistory) {
 }
 
 function initDefaultTimeData() {
-    todaysTotalTime = 0;
+    todaysTotalTimeInActiveDomain = 0;
     timeHistory = {};
     console.log("Initialized with default values");
 }
 
 async function saveTimeData() {
-    console.log(`saveTimeData() ${currentDateStr}: ${todaysTotalTime} seconds`);
+    console.log(`saveTimeData() ${currentDateStr}: ${todaysTotalTimeInActiveDomain} seconds`);
     try {
         if (!timeHistory[currentDateStr]) {
             timeHistory[currentDateStr] = {};
         }
 
-        // timeHistory[currentDateStr]["youtube.com"] = todaysTotalTime;
+        // timeHistory[currentDateStr]["youtube.com"] = todaysTotalTimeInActiveDomain;
         if (trackedTabDomain) {
-            timeHistory[currentDateStr][trackedTabDomain] = todaysTotalTime;
+            timeHistory[currentDateStr][trackedTabDomain] = todaysTotalTimeInActiveDomain;
         }
 
         const storageData = {
@@ -105,15 +106,15 @@ async function loadTimeData() {
             console.log(
                 `New day detected (Last: ${trackedTime.lastDate}, Now: ${currentDateStr})`
             );
-            todaysTotalTime = 0;
+            todaysTotalTimeInActiveDomain = 0;
         } else {
             const todaysData = timeHistory[currentDateStr] || {};
-            // todaysTotalTime = todaysData["youtube.com"] || 0;
-            todaysTotalTime = trackedTabDomain ? (todaysData[trackedTabDomain] || 0) : 0;
+            // todaysTotalTimeInActiveDomain = todaysData["youtube.com"] || 0;
+            todaysTotalTimeInActiveDomain = trackedTabDomain ? (todaysData[trackedTabDomain] || 0) : 0;
         }
 
         console.log(
-            `Loaded data for ${currentDateStr}, time: ${todaysTotalTime}`
+            `Loaded data for ${currentDateStr}, time: ${todaysTotalTimeInActiveDomain}`
         );
     } catch (error) {
         console.error("Error loading time data:", error);
@@ -122,12 +123,12 @@ async function loadTimeData() {
 }
 
 function incrementTimer() {
-    todaysTotalTime++;
+    todaysTotalTimeInActiveDomain++;
     const newDateStr = getLocalDateStr();
     if (newDateStr !== currentDateStr) {
         saveTimeData();
         currentDateStr = newDateStr;
-        todaysTotalTime = 0;
+        todaysTotalTimeInActiveDomain = 0;
         // Reset nudge state for new day
         nudgeState = {
             lastFlashTime: {},
@@ -137,9 +138,9 @@ function incrementTimer() {
         };
         console.log("New day, reset timer.");
     }
-    updateTimerDisplay(todaysTotalTime);
+    updateTimerDisplay(todaysTotalTimeInActiveDomain);
 
-    if (todaysTotalTime % SAVE_INTERVAL_SECONDS === 0) {
+    if (todaysTotalTimeInActiveDomain % SAVE_INTERVAL_SECONDS === 0) {
         saveTimeData();
     }
     
@@ -203,15 +204,15 @@ function handleDomainSwitch(url) {
     
     if (!trackedTabDomain) {
         Utils.log(`Switched to non-trackable URL: ${url}`);
-        todaysTotalTime = 0;
+        todaysTotalTimeInActiveDomain = 0;
         updateTimerDisplay(0);
         return;
     }
 
     const todayData = timeHistory[currentDateStr] || {};
-    todaysTotalTime = todayData[trackedTabDomain] || 0;
-    console.log(`Switched to domain: ${trackedTabDomain}, time: ${todaysTotalTime}`);
-    updateTimerDisplay(todaysTotalTime);
+    todaysTotalTimeInActiveDomain = todayData[trackedTabDomain] || 0;
+    console.log(`Switched to domain: ${trackedTabDomain}, time: ${todaysTotalTimeInActiveDomain}`);
+    updateTimerDisplay(todaysTotalTimeInActiveDomain);
 }
 
 function handleTimerState(activeTab, tabId) {
@@ -268,17 +269,39 @@ function handleMessageReceived(message, sender, sendResponse) {
     console.log(`handleMessage()`, message, sender);
     if (message.type === "CONTENT_SCRIPT_READY" && sender.tab) {
         trackedTabIds.add(sender.tab.id);
-        updateTimerDisplay(todaysTotalTime);
+        updateTimerDisplay(todaysTotalTimeInActiveDomain);
     }
     if (message.type === "USER_ACTIVE" && sender.tab) {
         tabLastActivity[sender.tab.id] = Date.now();
     }
-    if (message.type === "SNOOZE_NUDGES" && sender.tab) {
+    if (message.type === "SNOOZE_REMINDERS" && sender.tab) {
         const domain = extractDomain(sender.tab.url);
         if (domain) {
             nudgeState.snoozedUntil[domain] = message.duration;
-            console.log(`Snoozed nudges for ${domain} until`, message.duration);
+            console.log(`Snoozed reminders for ${domain} until`, message.duration);
         }
+    }
+    if (message.type === "SETTINGS_UPDATED") {
+        // Reload day reset time when settings change
+        browser.storage.local.get('webTimeSettings').then(data => {
+            const settings = data.webTimeSettings || { global: {} };
+            const newResetTime = settings.global?.dayResetTime || 0;
+            if (newResetTime !== dayResetTime) {
+                dayResetTime = newResetTime;
+                console.log(`Day reset time updated to: ${dayResetTime}:00`);
+                // Recalculate current date with new reset time
+                const newDateStr = getLocalDateStr();
+                if (newDateStr !== currentDateStr) {
+                    // Date changed due to reset time change, trigger rollover
+                    saveTimeData();
+                    currentDateStr = newDateStr;
+                    const todayData = timeHistory[currentDateStr] || {};
+                    todaysTotalTimeInActiveDomain = trackedTabDomain ? (todayData[trackedTabDomain] || 0) : 0;
+                    updateTimerDisplay(todaysTotalTimeInActiveDomain);
+                    console.log(`Date changed to ${currentDateStr} due to reset time change`);
+                }
+            }
+        });
     }
 }
 
@@ -324,7 +347,7 @@ async function checkNudges() {
         }
     }
     
-    // Get settings
+    // Get settings (per domain)
     const data = await browser.storage.local.get('webTimeSettings');
     const settings = data.webTimeSettings || { global: {}, domains: {} };
     const global = settings.global || {};
@@ -334,43 +357,43 @@ async function checkNudges() {
     if (!domainSettings.dailyLimit) return;
     
     const limitSeconds = domainSettings.dailyLimit * 60;
-    const timeInSeconds = todaysTotalTime;
+    const timeInSeconds = todaysTotalTimeInActiveDomain;
     
-    const flashInterval = global.flashInterval; // minutes
-    const gracePeriod = global.gracePeriod; // minutes  
-    const popupInterval = global.popupInterval; // minutes
+    const nudgeInterval = domainSettings.nudgeInterval; // minutes
+    const nudgePeriod = domainSettings.nudgePeriod; // minutes  
+    const reminderInterval = domainSettings.reminderInterval; // minutes
     
-    // Tier 1: Flash warnings (from limit until grace period ends)
-    if (flashInterval && timeInSeconds >= limitSeconds) {
-        const gracePeriodSeconds = gracePeriod ? gracePeriod * 60 : 0;
+    // Tier 1: Flash nudges (from limit until nudge period ends)
+    if (nudgeInterval && timeInSeconds >= limitSeconds) {
+        const nudgePeriodSeconds = nudgePeriod ? nudgePeriod * 60 : 0;
         const timeOverLimit = timeInSeconds - limitSeconds;
         
-        // Only flash if we're still in grace period (or grace period is disabled)
-        if (!gracePeriod || timeOverLimit < gracePeriodSeconds) {
+        // Only nudge if we're still in nudge period (or nudge period is disabled)
+        if (!nudgePeriod || timeOverLimit < nudgePeriodSeconds) {
             const lastFlash = nudgeState.lastFlashTime[trackedTabDomain] || limitSeconds - 1;
-            const flashIntervalSeconds = flashInterval * 60;
+            const nudgeIntervalSeconds = nudgeInterval * 60;
             
-            if (timeInSeconds - lastFlash >= flashIntervalSeconds) {
+            if (timeInSeconds - lastFlash >= nudgeIntervalSeconds) {
                 sendWarningFlash();
                 nudgeState.lastFlashTime[trackedTabDomain] = timeInSeconds;
             }
         }
     }
     
-    // Tier 2: Popup reminders (after grace period)
-    if (popupInterval && gracePeriod && timeInSeconds >= limitSeconds) {
-        const gracePeriodSeconds = gracePeriod * 60;
+    // Tier 2: Reminders (after nudge period)
+    if (reminderInterval && nudgePeriod && timeInSeconds >= limitSeconds) {
+        const nudgePeriodSeconds = nudgePeriod * 60;
         const timeOverLimit = timeInSeconds - limitSeconds;
         
-        // Only show popups after grace period
-        if (timeOverLimit >= gracePeriodSeconds) {
+        // Only show reminders after nudge period
+        if (timeOverLimit >= nudgePeriodSeconds) {
             const justReachedTier2 = !nudgeState.limitReached[trackedTabDomain];
-            const lastPopup = nudgeState.lastNudgeTime[trackedTabDomain] || 0;
-            const popupIntervalSeconds = popupInterval * 60;
-            const shouldShowPopup = justReachedTier2 || (timeInSeconds - lastPopup >= popupIntervalSeconds);
+            const lastReminder = nudgeState.lastNudgeTime[trackedTabDomain] || 0;
+            const reminderIntervalSeconds = reminderInterval * 60;
+            const shouldShowReminder = justReachedTier2 || (timeInSeconds - lastReminder >= reminderIntervalSeconds);
             
-            if (shouldShowPopup) {
-                showNudge(global.customMessage);
+            if (shouldShowReminder) {
+                showReminder(global.customMessage);
                 nudgeState.lastNudgeTime[trackedTabDomain] = timeInSeconds;
                 nudgeState.limitReached[trackedTabDomain] = true;
             }
@@ -386,17 +409,17 @@ function sendWarningFlash() {
     }).catch(err => console.warn('Failed to send warning flash:', err));
 }
 
-function showNudge(customMessage) {
+function showReminder(customMessage) {
     if (!activeTabId) return;
     
-    const totalTime = Utils.formatTimeWithSeconds(todaysTotalTime);
+    const totalTime = Utils.formatTimeWithSeconds(todaysTotalTimeInActiveDomain);
     
     browser.tabs.sendMessage(activeTabId, {
-        type: 'SHOW_NUDGE',
+        type: 'SHOW_REMINDER',
         customMessage: customMessage,
         totalTime: totalTime,
-        duration: Constants.OVERLAY_DURATIONS.POPUP_DISPLAY_MS
-    }).catch(err => console.warn('Failed to show nudge:', err));
+        duration: Constants.OVERLAY_DURATIONS.REMINDER_DISPLAY_MS
+    }).catch(err => console.warn('Failed to show reminder:', err));
 }
 
 async function init() {
@@ -404,6 +427,15 @@ async function init() {
     browser.tabs.onUpdated.addListener(handleTabUpdated);
     browser.tabs.onRemoved.addListener(handleTabRemoved);
     browser.runtime.onMessage.addListener(handleMessageReceived);
+
+    // Load day reset time setting
+    const settingsData = await browser.storage.local.get('webTimeSettings');
+    const settings = settingsData.webTimeSettings || { global: {} };
+    dayResetTime = settings.global?.dayResetTime || 0;
+    console.log(`Day reset time loaded: ${dayResetTime}:00`);
+    
+    // Update currentDateStr with the loaded reset time
+    currentDateStr = getLocalDateStr();
 
     await loadTimeData();
 

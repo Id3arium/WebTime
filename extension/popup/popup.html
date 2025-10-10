@@ -77,32 +77,29 @@
               
               <label>After limit, nudge every:</label>
               <div class="time-limit-inputs">
-                <select id="flash-interval">
+                <select id="nudge-interval">
                   <option value="">-</option>
-                  <option value="1">1 min</option>
                   <option value="2">2 min</option>
                   <option value="5">5 min</option>
+                  <option value="7">7 min</option>
                   <option value="10">10 min</option>
                   <option value="15">15 min</option>
-                  <option value="20">20 min</option>
-                  <option value="30">30 min</option>
                 </select>
                 <span>for:</span>
-                <input type="number" id="grace-period" min="1" placeholder="">
+                <input type="number" id="nudge-period" min="1" placeholder="">
                 <span>m</span>
               </div>
               
-              <label>After nudges, display reminder every:</label>
+              <label>After nudges, remind every:</label>
               <div class="time-limit-inputs">
-                <select id="popup-interval">
+                <select id="reminder-interval">
                   <option value="">-</option>
                   <option value="5">5 min</option>
                   <option value="10">10 min</option>
+                  <option value="12">12 min</option>
                   <option value="15">15 min</option>
                   <option value="20">20 min</option>
                   <option value="30">30 min</option>
-                  <option value="45">45 min</option>
-                  <option value="60">60 min</option>
                 </select>
               </div>
               

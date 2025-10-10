@@ -43,22 +43,25 @@ const UIManager = {
       const data = await browser.storage.local.get('webTimeSettings');
       const settings = data.webTimeSettings || { global: {}, domains: {} };
       
-      // Load global settings
+      // Load global settings (only message and reset time)
       const global = settings.global || {};
       document.getElementById('day-reset-time').value = global.dayResetTime || 0;
       document.getElementById('custom-message').value = global.customMessage || 'Was this time mindful?';
-      document.getElementById('flash-interval').value = global.flashInterval || '';
-      document.getElementById('grace-period').value = global.gracePeriod || '';
-      document.getElementById('popup-interval').value = global.popupInterval || '';
       
-      // Load domain-specific limit
+      // Load domain-specific settings
       const domainSettings = settings.domains?.[AppState.currentDomain] || {};
+      
+      // Daily limit
       const limitMinutes = domainSettings.dailyLimit || 0;
       const hours = Math.floor(limitMinutes / 60);
       const minutes = limitMinutes % 60;
-      
       document.getElementById('daily-limit-hours').value = limitMinutes > 0 ? hours : '';
       document.getElementById('daily-limit-minutes').value = limitMinutes > 0 ? minutes : '';
+      
+      // Nudge and reminder settings (per domain)
+      document.getElementById('nudge-interval').value = domainSettings.nudgeInterval || '';
+      document.getElementById('nudge-period').value = domainSettings.nudgePeriod || '';
+      document.getElementById('reminder-interval').value = domainSettings.reminderInterval || '';
       
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -71,28 +74,33 @@ const UIManager = {
       const data = await browser.storage.local.get('webTimeSettings');
       const settings = data.webTimeSettings || { global: {}, domains: {} };
       
-      // Update global settings
+      // Update global settings (only message and reset time)
       settings.global = {
         dayResetTime: parseInt(document.getElementById('day-reset-time').value),
-        customMessage: document.getElementById('custom-message').value,
-        flashInterval: parseInt(document.getElementById('flash-interval').value) || null,
-        gracePeriod: parseInt(document.getElementById('grace-period').value) || null,
-        popupInterval: parseInt(document.getElementById('popup-interval').value) || null
+        customMessage: document.getElementById('custom-message').value
       };
       
-      // Update domain-specific limit
+      // Update domain-specific settings
       if (!settings.domains) settings.domains = {};
       
       const hours = parseInt(document.getElementById('daily-limit-hours').value) || 0;
       const minutes = parseInt(document.getElementById('daily-limit-minutes').value) || 0;
       const totalMinutes = (hours * 60) + minutes;
       
-      if (totalMinutes > 0) {
+      const nudgeInterval = parseInt(document.getElementById('nudge-interval').value) || null;
+      const nudgePeriod = parseInt(document.getElementById('nudge-period').value) || null;
+      const reminderInterval = parseInt(document.getElementById('reminder-interval').value) || null;
+      
+      // Save domain settings if any values are set
+      if (totalMinutes > 0 || nudgeInterval || nudgePeriod || reminderInterval) {
         settings.domains[AppState.currentDomain] = {
-          dailyLimit: totalMinutes
+          dailyLimit: totalMinutes > 0 ? totalMinutes : null,
+          nudgeInterval: nudgeInterval,
+          nudgePeriod: nudgePeriod,
+          reminderInterval: reminderInterval
         };
       } else {
-        // Remove limit if empty
+        // Remove domain if all settings are empty
         if (settings.domains[AppState.currentDomain]) {
           delete settings.domains[AppState.currentDomain];
         }
@@ -100,6 +108,9 @@ const UIManager = {
       
       // Save to storage
       await browser.storage.local.set({ webTimeSettings: settings });
+      
+      // Notify background script that settings changed
+      browser.runtime.sendMessage({ type: 'SETTINGS_UPDATED' });
       
       // Visual feedback
       const saveBtn = document.getElementById('save-settings-btn');

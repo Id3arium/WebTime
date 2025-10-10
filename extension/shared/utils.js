@@ -51,13 +51,20 @@ const Utils = {
   },
 
   /**
-   * Get current date as YYYY-MM-DD string in local timezone
+   * Get current date as YYYY-MM-DD string in local timezone,
+   * adjusted for custom day reset time
+   * @param {number} resetHour - Hour when day resets (0-23), defaults to 0 (midnight)
    * @returns {string} Date string in YYYY-MM-DD format
    */
-  getLocalDateStr() {
+  getLocalDateStr(resetHour = 0) {
     const now = new Date();
+    
+    // If current hour is before reset hour, use previous day
+    if (now.getHours() < resetHour) {
+      now.setDate(now.getDate() - 1);
+    }
+    
     const monthNum = now.getMonth() + 1;
-
     const yyyy = now.getFullYear();
     const mm = String(monthNum).padStart(2, "0");
     const dd = String(now.getDate()).padStart(2, "0");
