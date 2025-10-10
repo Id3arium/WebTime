@@ -7,7 +7,7 @@ const Constants = {
   // Nudge system
   OVERLAY_DURATIONS: {
     NUDGE_MS: 1500,      // How long the blur flash lasts
-    POPUP_DISPLAY_MS: 10000      // How long the popup stays visible
+    POPUP_DISPLAY_MS: 21000      // How long the popup stays visible
   },
 
   // UI Configuration  
