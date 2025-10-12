@@ -4,7 +4,7 @@
 let timerText = null;
 let lastActivityTime = Date.now();
 let blurOverlay = null;
-let reminderPopup = null;
+let reminderDialog = null;
 
 function createTimerElement() {
     const timer = document.createElement("div");
@@ -52,12 +52,12 @@ function createBlurOverlay() {
     return overlay;
 }
 
-function createReminderPopup(message, totalTime) {
-    if (reminderPopup) return reminderPopup;
+function createReminderOverlay(message, totalTime) {
+    if (reminderDialog) return reminderDialog;
     
-    const reminderPopup = document.createElement('div');
-    reminderPopup.className = 'web-time-reminder-popup';
-    reminderPopup.style.cssText = `
+    const reminderElement = document.createElement('div');
+    reminderElement.className = 'web-time-reminder-overlay';
+    reminderElement.style.cssText = `
         position: fixed;
         top: 50%;
         left: 50%;
@@ -77,7 +77,7 @@ function createReminderPopup(message, totalTime) {
         overflow: hidden;
     `;
     
-    reminderPopup.innerHTML = `
+    reminderElement.innerHTML = `
         <button class="web-time-close-btn" style="
             position: absolute;
             top: 12px;
@@ -137,11 +137,11 @@ function createReminderPopup(message, totalTime) {
     `;
     
     // Add hover effects
-    const buttons = reminderPopup.querySelectorAll('button');
+    const buttons = reminderElement.querySelectorAll('button');
     buttons.forEach(btn => {
         if (btn.classList.contains('web-time-close-btn')) {
             btn.addEventListener('click', () => {
-                hideReminderPopup();
+                hideReminderOverlay();
             });
         } else if (btn.classList.contains('web-time-snooze-btn')) {
             btn.addEventListener('mouseenter', () => {
@@ -156,9 +156,9 @@ function createReminderPopup(message, totalTime) {
         }
     });
     
-    document.body.appendChild(reminderPopup);
-    reminderPopup = reminderPopup;
-    return reminderPopup;
+    document.body.appendChild(reminderElement);
+    reminderDialog = reminderElement;
+    return reminderElement;
 }
 
 function showNudge() {
@@ -182,17 +182,17 @@ function showNudge() {
     }, Constants.OVERLAY_DURATIONS.NUDGE_MS);
 }
 
-function showReminderPopup(message, totalTime, duration = Constants.OVERLAY_DURATIONS.REMINDER_DISPLAY_MS) {
-    const overlay = createBlurOverlay();
-    const reminderPopup = createReminderPopup(message, totalTime);
+function showReminderOverlay(message, totalTime, duration = Constants.OVERLAY_DURATIONS.REMINDER_DISPLAY_MS) {
+    const blurBg = createBlurOverlay();
+    const reminderElement = createReminderOverlay(message, totalTime);
     
-    // Show overlay and popup
-    overlay.style.opacity = '1';
+    // Show blur and reminder
+    blurBg.style.opacity = '1';
     setTimeout(() => {
-        reminderPopup.style.opacity = '1';
+        reminderElement.style.opacity = '1';
         
         // Animate progress bar
-        const progressBar = reminderPopup.querySelector('.web-time-progress-bar');
+        const progressBar = reminderElement.querySelector('.web-time-progress-bar');
         if (progressBar) {
             progressBar.style.transitionDuration = `${duration}ms`;
             progressBar.style.width = '0%';
@@ -201,27 +201,27 @@ function showReminderPopup(message, totalTime, duration = Constants.OVERLAY_DURA
     
     // Auto-dismiss
     setTimeout(() => {
-        hideReminderPopup();
+        hideReminderOverlay();
     }, duration);
 }
 
-function hideReminderPopup() {
+function hideReminderOverlay() {
     if (blurOverlay) {
         blurOverlay.style.opacity = '0';
     }
-    if (reminderPopup) {
-        reminderPopup.style.opacity = '0';
+    if (reminderDialog) {
+        reminderDialog.style.opacity = '0';
         setTimeout(() => {
-            if (reminderPopup && reminderPopup.parentNode) {
-                reminderPopup.parentNode.removeChild(reminderPopup);
-                reminderPopup = null;
+            if (reminderDialog && reminderDialog.parentNode) {
+                reminderDialog.parentNode.removeChild(reminderDialog);
+                reminderDialog = null;
             }
         }, 300);
     }
 }
 
 function handleSnooze(duration) {
-    hideReminderPopup();
+    hideReminderOverlay();
     
     const snoozeUntil = duration === 'tomorrow' 
         ? 'tomorrow'
@@ -242,10 +242,10 @@ function handleIncomingMessage(message, sender, sendResponse) {
                 "Timer text element not found when trying to update time!"
             );
         }
-    } else if (message.type === "SHOW_NUDGE") {
+    } else if (message.type === "NUDGE") {
         showNudge();
     } else if (message.type === "SHOW_REMINDER") {
-        showReminderPopup(message.customMessage, message.totalTime, message.duration);
+        showReminderOverlay(message.customMessage, message.totalTime, message.duration);
     }
 }
 

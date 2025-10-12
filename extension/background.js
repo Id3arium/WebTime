@@ -413,8 +413,8 @@ function sendNudge() {
     if (!activeTabId) return;
     
     browser.tabs.sendMessage(activeTabId, {
-        type: 'SHOW_NUDGE',
-    }).catch(err => console.warn('Failed to send warning flash:', err));
+        type: 'NUDGE'
+    }).catch(err => console.warn('Failed to send nudge:', err));
 }
 
 function showReminder(customMessage) {
