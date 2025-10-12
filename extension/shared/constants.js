@@ -6,7 +6,7 @@ const Constants = {
 
   // Nudge and reminder system
   OVERLAY_DURATIONS: {
-    NUDGE_MS: 1500,         // How long the blur flash lasts
+    NUDGE_MS: 1000,         // How long the nudge blur lasts
     REMINDER_DISPLAY_MS: 21000  // How long the reminder stays visible
   },
 

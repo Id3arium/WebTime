@@ -5,7 +5,6 @@ let timerText = null;
 let lastActivityTime = Date.now();
 let blurOverlay = null;
 let reminderPopup = null;
-let flashInterval = null;
 
 function createTimerElement() {
     const timer = document.createElement("div");
@@ -162,7 +161,7 @@ function createReminderPopup(message, totalTime) {
     return reminderPopup;
 }
 
-function showWarningFlash() {
+function showNudge() {
     const overlay = createBlurOverlay();
     overlay.style.opacity = '1';
     
@@ -243,8 +242,8 @@ function handleIncomingMessage(message, sender, sendResponse) {
                 "Timer text element not found when trying to update time!"
             );
         }
-    } else if (message.type === "WARNING_FLASH") {
-        showWarningFlash();
+    } else if (message.type === "SHOW_NUDGE") {
+        showNudge();
     } else if (message.type === "SHOW_REMINDER") {
         showReminderPopup(message.customMessage, message.totalTime, message.duration);
     }

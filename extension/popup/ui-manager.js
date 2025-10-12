@@ -46,7 +46,7 @@ const UIManager = {
       // Load global settings (only message and reset time)
       const global = settings.global || {};
       document.getElementById('day-reset-time').value = global.dayResetTime || 0;
-      document.getElementById('custom-message').value = global.customMessage || 'Was this time mindful?';
+      document.getElementById('custom-message').value = global.customMessage;
       
       // Load domain-specific settings
       const domainSettings = settings.domains?.[AppState.currentDomain] || {};

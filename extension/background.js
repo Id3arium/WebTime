@@ -13,12 +13,12 @@ let currentDateStr = Utils.getLocalDateStr();
 let timeHistory = {};
 let dayResetTime = 0; // Hour when day resets (0-4)
 
-// Nudge system state
-let nudgeState = {
-    lastFlashTime: {},      // domain -> timestamp
-    lastNudgeTime: {},      // domain -> timestamp
-    snoozedUntil: {},       // domain -> timestamp or 'tomorrow'
-    limitReached: {}        // domain -> boolean
+// Nudge and reminder system state
+let interventionState = {
+    lastNudgeTime: {},         // domain -> timestamp (Tier 1: visual nudges)
+    lastReminderTime: {},      // domain -> timestamp (Tier 2: popup reminders)
+    snoozedUntil: {},          // domain -> timestamp or 'tomorrow'
+    reminderPhaseReached: {}   // domain -> boolean
 };
 
 // Use shared utility function
@@ -129,12 +129,12 @@ function incrementTimer() {
         saveTimeData();
         currentDateStr = newDateStr;
         todaysTotalTimeInActiveDomain = 0;
-        // Reset nudge state for new day
-        nudgeState = {
-            lastFlashTime: {},
+        // Reset intervention state for new day
+        interventionState = {
             lastNudgeTime: {},
+            lastReminderTime: {},
             snoozedUntil: {},
-            limitReached: {}
+            reminderPhaseReached: {}
         };
         console.log("New day, reset timer.");
     }
@@ -277,7 +277,7 @@ function handleMessageReceived(message, sender, sendResponse) {
     if (message.type === "SNOOZE_REMINDERS" && sender.tab) {
         const domain = extractDomain(sender.tab.url);
         if (domain) {
-            nudgeState.snoozedUntil[domain] = message.duration;
+            interventionState.snoozedUntil[domain] = message.duration;
             console.log(`Snoozed reminders for ${domain} until`, message.duration);
         }
     }
@@ -333,7 +333,7 @@ async function checkNudges() {
     if (!trackedTabDomain || !activeTabId) return;
     
     // Check if snoozed
-    const snoozeUntil = nudgeState.snoozedUntil[trackedTabDomain];
+    const snoozeUntil = interventionState.snoozedUntil[trackedTabDomain];
     if (snoozeUntil) {
         if (snoozeUntil === 'tomorrow') {
             // Still snoozed until tomorrow
@@ -343,7 +343,7 @@ async function checkNudges() {
             return;
         } else {
             // Snooze expired
-            delete nudgeState.snoozedUntil[trackedTabDomain];
+            delete interventionState.snoozedUntil[trackedTabDomain];
         }
     }
     
@@ -363,19 +363,24 @@ async function checkNudges() {
     const nudgePeriod = domainSettings.nudgePeriod; // minutes  
     const reminderInterval = domainSettings.reminderInterval; // minutes
     
-    // Tier 1: Flash nudges (from limit until nudge period ends)
+    // Tier 1: nudges (from limit until nudge period ends)
     if (nudgeInterval && timeInSeconds >= limitSeconds) {
         const nudgePeriodSeconds = nudgePeriod ? nudgePeriod * 60 : 0;
         const timeOverLimit = timeInSeconds - limitSeconds;
         
         // Only nudge if we're still in nudge period (or nudge period is disabled)
         if (!nudgePeriod || timeOverLimit < nudgePeriodSeconds) {
-            const lastFlash = nudgeState.lastFlashTime[trackedTabDomain] || limitSeconds - 1;
+            // First nudge happens immediately at limit (timeOverLimit = 0)
+            // Then every nudgeInterval after that
             const nudgeIntervalSeconds = nudgeInterval * 60;
             
-            if (timeInSeconds - lastFlash >= nudgeIntervalSeconds) {
-                sendWarningFlash();
-                nudgeState.lastFlashTime[trackedTabDomain] = timeInSeconds;
+            if (timeOverLimit % nudgeIntervalSeconds === 0) {
+                // Check if we haven't already nudged at this exact time
+                const lastNudge = interventionState.lastNudgeTime[trackedTabDomain] || -1;
+                if (timeInSeconds !== lastNudge) {
+                    sendNudge();
+                    interventionState.lastNudgeTime[trackedTabDomain] = timeInSeconds;
+                }
             }
         }
     }
@@ -385,27 +390,30 @@ async function checkNudges() {
         const nudgePeriodSeconds = nudgePeriod * 60;
         const timeOverLimit = timeInSeconds - limitSeconds;
         
-        // Only show reminders after nudge period
+        // Show first reminder immediately when nudge period ends
+        // Then every reminderInterval after that
         if (timeOverLimit >= nudgePeriodSeconds) {
-            const justReachedTier2 = !nudgeState.limitReached[trackedTabDomain];
-            const lastReminder = nudgeState.lastNudgeTime[trackedTabDomain] || 0;
+            const timeInTier2 = timeOverLimit - nudgePeriodSeconds;
             const reminderIntervalSeconds = reminderInterval * 60;
-            const shouldShowReminder = justReachedTier2 || (timeInSeconds - lastReminder >= reminderIntervalSeconds);
             
-            if (shouldShowReminder) {
-                showReminder(global.customMessage);
-                nudgeState.lastNudgeTime[trackedTabDomain] = timeInSeconds;
-                nudgeState.limitReached[trackedTabDomain] = true;
+            if (timeInTier2 % reminderIntervalSeconds === 0) {
+                // Check if we haven't already shown reminder at this exact time
+                const lastReminder = interventionState.lastReminderTime[trackedTabDomain] || -1;
+                if (timeInSeconds !== lastReminder) {
+                    showReminder(global.customMessage);
+                    interventionState.lastReminderTime[trackedTabDomain] = timeInSeconds;
+                    interventionState.reminderPhaseReached[trackedTabDomain] = true;
+                }
             }
         }
     }
 }
 
-function sendWarningFlash() {
+function sendNudge() {
     if (!activeTabId) return;
     
     browser.tabs.sendMessage(activeTabId, {
-        type: 'WARNING_FLASH'
+        type: 'SHOW_NUDGE',
     }).catch(err => console.warn('Failed to send warning flash:', err));
 }
 
