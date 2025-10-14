@@ -53,11 +53,11 @@ const App = {
   renderInitialView() {
     if (Object.keys(AppState.allTimeHistory).length === 0) {
       UIManager.displayMessage('#detail-page .page-content', 
-        `No tracking data available yet for ${AppState.currentDomain || "any site"}. Start browsing to collect data.`);
+        `No tracking data available yet for ${AppState.activeTabDomain || "any site"}. Start browsing to collect data.`);
       return;
     }
     
-    UIManager.renderDetailView(AppState.currentDomain);
+    UIManager.renderDetailView(AppState.selectedDomain);
     UIManager.showDetailView();
   }
 };

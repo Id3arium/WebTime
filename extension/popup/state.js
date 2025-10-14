@@ -4,7 +4,8 @@
 
 const AppState = {
   currentView: ViewState.DETAIL,
-  currentDomain: null,
+  activeTabDomain: null,    // Domain of the currently active browser tab
+  selectedDomain: null,     // Domain selected to view/configure in the popup UI
   allTimeHistory: null,
   generalChartCreated: false,
   
@@ -17,7 +18,12 @@ const AppState = {
   lockedDayIndex: null,  // null = hover mode, number = locked to specific day
 
   setCurrentDomain(domain) {
-    this.currentDomain = domain;
+    this.activeTabDomain = domain;
+    this.selectedDomain = domain;  // By default, select the active tab's domain
+  },
+
+  setSelectedDomain(domain) {
+    this.selectedDomain = domain;
   },
 
   setTimeHistory(history) {

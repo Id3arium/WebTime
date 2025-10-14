@@ -22,19 +22,19 @@ const UIManager = {
     container.className = 'pages-container show-settings';
     
     // Update the domain name in settings header and inline
-    if (AppState.currentDomain) {
+    if (AppState.selectedDomain) {
       const settingsDomain = document.getElementById('settings-domain');
       const settingsDomainInline = document.getElementById('settings-domain-inline');
       
       if (settingsDomain) {
-        settingsDomain.textContent = AppState.currentDomain;
+        settingsDomain.textContent = AppState.selectedDomain;
       }
       if (settingsDomainInline) {
-        settingsDomainInline.textContent = AppState.currentDomain;
+        settingsDomainInline.textContent = AppState.selectedDomain;
       }
     }
     
-    // Load settings for current domain
+    // Load settings for selected domain
     this.loadSettings();
   },
 
@@ -49,7 +49,7 @@ const UIManager = {
       document.getElementById('custom-message').value = global.customMessage;
       
       // Load domain-specific settings
-      const domainSettings = settings.domains?.[AppState.currentDomain] || {};
+      const domainSettings = settings.domains?.[AppState.selectedDomain] || {};
       
       // Daily limit
       const limitMinutes = domainSettings.dailyLimit || 0;
@@ -93,7 +93,7 @@ const UIManager = {
       
       // Save domain settings if any values are set
       if (totalMinutes > 0 || nudgeInterval || nudgePeriod || reminderInterval) {
-        settings.domains[AppState.currentDomain] = {
+        settings.domains[AppState.selectedDomain] = {
           dailyLimit: totalMinutes > 0 ? totalMinutes : null,
           nudgeInterval: nudgeInterval,
           nudgePeriod: nudgePeriod,
@@ -101,8 +101,8 @@ const UIManager = {
         };
       } else {
         // Remove domain if all settings are empty
-        if (settings.domains[AppState.currentDomain]) {
-          delete settings.domains[AppState.currentDomain];
+        if (settings.domains[AppState.selectedDomain]) {
+          delete settings.domains[AppState.selectedDomain];
         }
       }
       
@@ -312,6 +312,7 @@ const UIManager = {
       const bar = e.target.closest('.breakdown-bar');
       if (bar) {
         const domain = bar.querySelector('.breakdown-label').textContent;
+        AppState.setSelectedDomain(domain);  // Update which domain is selected
         this.renderDetailView(domain);
         this.showDetailView();
       }
