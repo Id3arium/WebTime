@@ -11,8 +11,8 @@ function createTimerElement() {
     timer.className = "web-time-timer";
 
     timerText = document.createElement("div");
-    timerText.className = "web-time-timer-text";
     timerText.textContent = "00:00:00";
+    timerText.style.cssText = "color: #f7f7f7 !important;";
 
     timer.appendChild(timerText);
     document.body.appendChild(timer);
