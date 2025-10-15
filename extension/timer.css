@@ -11,9 +11,13 @@
   z-index: 1000002; /* Above overlay (1000000) and popup (1000001) */
   border: 1px solid grey;
   line-height: 1; /* Adjust this value as needed */
-  pointer-events: none; /* Allow clicks to pass through */
+  transition: opacity 0.2s ease;
   /* backdrop-filter: blur(0px); */
   /* -webkit-backdrop-filter: blur(0px); For Safari */
+}
+
+.web-time-timer:hover {
+  opacity: 0.25;
 }
 
 
