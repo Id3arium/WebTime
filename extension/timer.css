@@ -3,7 +3,7 @@
   top: 0px;
   right: 0px;
   background-color: #17171780;
-  color: #f7f7f7;
+  color: #f7f7f7 !important;
   padding: 4px;
   border-radius: 4px;
   font-family: Arial, sans-serif;
@@ -12,6 +12,7 @@
   border: 1px solid grey;
   line-height: 1; /* Adjust this value as needed */
   transition: opacity 0.2s ease;
+  cursor: default;
   /* backdrop-filter: blur(0px); */
   /* -webkit-backdrop-filter: blur(0px); For Safari */
 }
