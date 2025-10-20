@@ -46,22 +46,30 @@ const UIManager = {
       // Load global settings (only message and reset time)
       const global = settings.global || {};
       document.getElementById('day-reset-time').value = global.dayResetTime || 0;
-      document.getElementById('custom-message').value = global.customMessage;
+      document.getElementById('custom-message').value = global.customMessage || '';
       
       // Load domain-specific settings
       const domainSettings = settings.domains?.[AppState.selectedDomain] || {};
       
-      // Daily limit
-      const limitMinutes = domainSettings.dailyLimit || 0;
-      const hours = Math.floor(limitMinutes / 60);
-      const minutes = limitMinutes % 60;
-      document.getElementById('daily-limit-hours').value = limitMinutes > 0 ? hours : '';
-      document.getElementById('daily-limit-minutes').value = limitMinutes > 0 ? minutes : '';
+      // Nudge settings
+      const nudgeEnabled = domainSettings.nudgeEnabled || false;
+      const nudgeThreshold = domainSettings.nudgeThreshold || 150; // default 2h30m
+      const nudgeInterval = domainSettings.nudgeInterval || 5;
       
-      // Nudge and reminder settings (per domain)
-      document.getElementById('nudge-interval').value = domainSettings.nudgeInterval || '';
-      document.getElementById('nudge-period').value = domainSettings.nudgePeriod || '';
-      document.getElementById('reminder-interval').value = domainSettings.reminderInterval || '';
+      document.getElementById('nudge-enabled').checked = nudgeEnabled;
+      document.getElementById('nudge-hours').value = Math.floor(nudgeThreshold / 60);
+      document.getElementById('nudge-minutes').value = nudgeThreshold % 60;
+      document.getElementById('nudge-interval').value = nudgeInterval;
+      
+      // Reminder settings
+      const reminderEnabled = domainSettings.reminderEnabled || false;
+      const reminderThreshold = domainSettings.reminderThreshold || 180; // default 3h
+      const reminderInterval = domainSettings.reminderInterval || 15;
+      
+      document.getElementById('reminder-enabled').checked = reminderEnabled;
+      document.getElementById('reminder-hours').value = Math.floor(reminderThreshold / 60);
+      document.getElementById('reminder-minutes').value = reminderThreshold % 60;
+      document.getElementById('reminder-interval').value = reminderInterval;
       
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -83,24 +91,32 @@ const UIManager = {
       // Update domain-specific settings
       if (!settings.domains) settings.domains = {};
       
-      const hours = parseInt(document.getElementById('daily-limit-hours').value) || 0;
-      const minutes = parseInt(document.getElementById('daily-limit-minutes').value) || 0;
-      const totalMinutes = (hours * 60) + minutes;
+      // Nudge settings
+      const nudgeEnabled = document.getElementById('nudge-enabled').checked;
+      const nudgeHours = parseInt(document.getElementById('nudge-hours').value) || 0;
+      const nudgeMinutes = parseInt(document.getElementById('nudge-minutes').value) || 0;
+      const nudgeThreshold = (nudgeHours * 60) + nudgeMinutes;
+      const nudgeInterval = parseInt(document.getElementById('nudge-interval').value) || 5;
       
-      const nudgeInterval = parseInt(document.getElementById('nudge-interval').value) || null;
-      const nudgePeriod = parseInt(document.getElementById('nudge-period').value) || null;
-      const reminderInterval = parseInt(document.getElementById('reminder-interval').value) || null;
+      // Reminder settings
+      const reminderEnabled = document.getElementById('reminder-enabled').checked;
+      const reminderHours = parseInt(document.getElementById('reminder-hours').value) || 0;
+      const reminderMinutes = parseInt(document.getElementById('reminder-minutes').value) || 0;
+      const reminderThreshold = (reminderHours * 60) + reminderMinutes;
+      const reminderInterval = parseInt(document.getElementById('reminder-interval').value) || 15;
       
-      // Save domain settings if any values are set
-      if (totalMinutes > 0 || nudgeInterval || nudgePeriod || reminderInterval) {
+      // Save domain settings if either intervention is enabled
+      if (nudgeEnabled || reminderEnabled) {
         settings.domains[AppState.selectedDomain] = {
-          dailyLimit: totalMinutes > 0 ? totalMinutes : null,
+          nudgeEnabled: nudgeEnabled,
+          nudgeThreshold: nudgeThreshold,
           nudgeInterval: nudgeInterval,
-          nudgePeriod: nudgePeriod,
+          reminderEnabled: reminderEnabled,
+          reminderThreshold: reminderThreshold,
           reminderInterval: reminderInterval
         };
       } else {
-        // Remove domain if all settings are empty
+        // Remove domain if both are disabled
         if (settings.domains[AppState.selectedDomain]) {
           delete settings.domains[AppState.selectedDomain];
         }

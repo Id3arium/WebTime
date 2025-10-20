@@ -238,7 +238,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  padding: 16px;
+  padding: 16px 0;
   overflow-y: auto;
 }
 
@@ -355,4 +355,67 @@ body {
   font-size: 12px;
   color: #888;
   margin-top: -8px;
+}
+
+.intervention-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+}
+
+.intervention-option input[type="checkbox"] {
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.intervention-label {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--light-text);
+  cursor: pointer;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.intervention-label span {
+  flex-shrink: 0;
+}
+
+.inline-input {
+  width: 42px;
+  background: var(--light-bg);
+  border: 1px solid var(--border-line);
+  border-radius: 3px;
+  color: var(--light-text);
+  padding: 2px 2px;
+  font-size: 12px;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.2s;
+  flex-shrink: 0;
+}
+
+.inline-input:focus {
+  border-color: #4a9eff;
+}
+
+.intervention-option:has(input[type="checkbox"]:not(:checked)) .inline-input {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.intervention-option:has(input[type="checkbox"]:not(:checked)) .intervention-label span {
+  opacity: 0.4;
+}
+
+.intervention-helper {
+  font-size: 12px;
+  color: #888;
+  margin-top: 4px;
+  padding-left: 24px;
 }

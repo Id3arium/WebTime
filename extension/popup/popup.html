@@ -67,43 +67,37 @@
             </div>
             
             <div class="settings-section">
-              <label>Daily limit for <span id="settings-domain-inline"></span>:</label>
-              <div class="time-limit-inputs">
-                <input type="number" id="daily-limit-hours" min="0" max="23" placeholder="0">
-                <span>h</span>
-                <input type="number" id="daily-limit-minutes" min="0" max="59" placeholder="0">
-                <span>m</span>
+              <label>Interventions for <span id="settings-domain-inline"></span>:</label>
+              
+              <div class="intervention-option">
+                <input type="checkbox" id="nudge-enabled">
+                <label for="nudge-enabled" class="intervention-label">
+                  <span>After</span>
+                  <input type="number" id="nudge-hours" min="0" max="23" placeholder="2" class="inline-input">
+                  <span>h</span>
+                  <input type="number" id="nudge-minutes" min="0" max="59" placeholder="30" class="inline-input">
+                  <span>m, nudge every</span>
+                  <input type="number" id="nudge-interval" min="1" placeholder="5" class="inline-input">
+                  <span>m</span>
+                </label>
               </div>
               
-              <label>After limit, nudge every:</label>
-              <div class="time-limit-inputs">
-                <select id="nudge-interval">
-                  <option value="">-</option>
-                  <option value="2">2 min</option>
-                  <option value="5">5 min</option>
-                  <option value="7">7 min</option>
-                  <option value="10">10 min</option>
-                  <option value="15">15 min</option>
-                </select>
-                <span>for:</span>
-                <input type="number" id="nudge-period" min="1" placeholder="">
-                <span>m</span>
+              <div class="intervention-option">
+                <input type="checkbox" id="reminder-enabled">
+                <label for="reminder-enabled" class="intervention-label">
+                  <span>After</span>
+                  <input type="number" id="reminder-hours" min="0" max="23" placeholder="3" class="inline-input">
+                  <span>h</span>
+                  <input type="number" id="reminder-minutes" min="0" max="59" placeholder="0" class="inline-input">
+                  <span>m, remind every</span>
+                  <input type="number" id="reminder-interval" min="1" placeholder="15" class="inline-input">
+                  <span>m</span>
+                </label>
               </div>
               
-              <label>After nudges, remind every:</label>
-              <div class="time-limit-inputs">
-                <select id="reminder-interval">
-                  <option value="">-</option>
-                  <option value="5">5 min</option>
-                  <option value="10">10 min</option>
-                  <option value="12">12 min</option>
-                  <option value="15">15 min</option>
-                  <option value="20">20 min</option>
-                  <option value="30">30 min</option>
-                </select>
+              <div class="intervention-helper">
+                ℹ️ Reminders override nudges once they begin
               </div>
-              
-              <div class="time-limit-helper">Leave values empty to disable</div>
             </div>
             
             <button id="save-settings-btn" class="save-btn">Save Changes</button>

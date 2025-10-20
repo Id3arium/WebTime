@@ -362,34 +362,38 @@ async function loadInterventionSettings() {
     const global = settings.global || {};
     const domainSettings = settings.domains?.[trackedTabDomain] || {};
     
-    const hasLimit = !!domainSettings.dailyLimit;
-    if (!hasLimit) return null;
+    const nudgeEnabled = domainSettings.nudgeEnabled || false;
+    const reminderEnabled = domainSettings.reminderEnabled || false;
+    
+    if (!nudgeEnabled && !reminderEnabled) return null;
     
     return {
         global,
         domainSettings,
-        limitSeconds: domainSettings.dailyLimit * 60,
-        timeInSeconds: todaysTotalTimeInActiveDomain,
+        nudgeEnabled,
+        nudgeThreshold: domainSettings.nudgeThreshold * 60, // convert to seconds
         nudgeInterval: domainSettings.nudgeInterval,
-        nudgePeriod: domainSettings.nudgePeriod,
-        reminderInterval: domainSettings.reminderInterval
+        reminderEnabled,
+        reminderThreshold: domainSettings.reminderThreshold * 60, // convert to seconds
+        reminderInterval: domainSettings.reminderInterval,
+        timeInSeconds: todaysTotalTimeInActiveDomain
     };
 }
 
 function checkTier1Nudges(settings) {
-    const { nudgeInterval, nudgePeriod, limitSeconds, timeInSeconds } = settings;
+    const { nudgeEnabled, nudgeThreshold, nudgeInterval, reminderEnabled, reminderThreshold, timeInSeconds } = settings;
     
-    const hasReachedLimit = timeInSeconds >= limitSeconds;
-    if (!nudgeInterval || !hasReachedLimit) return;
+    if (!nudgeEnabled) return;
     
-    const nudgePeriodSeconds = nudgePeriod ? nudgePeriod * 60 : 0;
-    const timeOverLimit = timeInSeconds - limitSeconds;
+    const hasReachedNudgeThreshold = timeInSeconds >= nudgeThreshold;
+    if (!hasReachedNudgeThreshold) return;
     
-    const isInNudgePeriod = !nudgePeriod || timeOverLimit < nudgePeriodSeconds;
-    if (!isInNudgePeriod) return;
+    // If reminders are enabled and we've hit reminder threshold, stop nudging
+    if (reminderEnabled && timeInSeconds >= reminderThreshold) return;
     
+    const timeOverThreshold = timeInSeconds - nudgeThreshold;
     const nudgeIntervalSeconds = nudgeInterval * 60;
-    const isOnNudgeInterval = timeOverLimit % nudgeIntervalSeconds === 0;
+    const isOnNudgeInterval = timeOverThreshold % nudgeIntervalSeconds === 0;
     if (!isOnNudgeInterval) return;
     
     const lastNudge = interventionState.lastNudgeTime[trackedTabDomain] || -1;
@@ -401,21 +405,16 @@ function checkTier1Nudges(settings) {
 }
 
 function checkTier2Reminders(settings) {
-    const { reminderInterval, nudgePeriod, limitSeconds, timeInSeconds, global } = settings;
+    const { reminderEnabled, reminderThreshold, reminderInterval, timeInSeconds, global } = settings;
     
-    const hasNudgePeriod = !!nudgePeriod;
-    const hasReachedLimit = timeInSeconds >= limitSeconds;
-    if (!reminderInterval || !hasNudgePeriod || !hasReachedLimit) return;
+    if (!reminderEnabled) return;
     
-    const nudgePeriodSeconds = nudgePeriod * 60;
-    const timeOverLimit = timeInSeconds - limitSeconds;
+    const hasReachedReminderThreshold = timeInSeconds >= reminderThreshold;
+    if (!hasReachedReminderThreshold) return;
     
-    const hasPassedNudgePeriod = timeOverLimit >= nudgePeriodSeconds;
-    if (!hasPassedNudgePeriod) return;
-    
-    const timeInTier2 = timeOverLimit - nudgePeriodSeconds;
+    const timeOverThreshold = timeInSeconds - reminderThreshold;
     const reminderIntervalSeconds = reminderInterval * 60;
-    const isOnReminderInterval = timeInTier2 % reminderIntervalSeconds === 0;
+    const isOnReminderInterval = timeOverThreshold % reminderIntervalSeconds === 0;
     if (!isOnReminderInterval) return;
     
     const lastReminder = interventionState.lastReminderTime[trackedTabDomain] || -1;
