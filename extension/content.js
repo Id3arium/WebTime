@@ -91,11 +91,11 @@ function createReminderOverlay(message, totalTime) {
             line-height: 1;
             transition: color 0.2s;
         " onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#999'">×</button>
-        <div style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">
-            ${totalTime} on this site today
-        </div>
-        <div style="font-size: 14px; color: #bbb; margin-bottom: 20px;">
+        <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px; color: #fff;">
             ${message}
+        </div>
+        <div style="font-size: 14px; color: #999; margin-bottom: 20px;">
+            ${totalTime} on this site today
         </div>
         <div style="display: flex; gap: 12px; justify-content: center; margin-bottom: 16px;">
             <button class="web-time-snooze-btn" data-duration="3600000" style="

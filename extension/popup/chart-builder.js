@@ -63,7 +63,30 @@ const ChartBuilder = {
         y: {
           grid: { color: this.getGridColor() },
           beginAtZero: true,
-          title: { display: true, text: 'Hours' }
+          ticks: {
+            color: '#aaa',
+            font: {
+              size: 11,
+              weight: '500'
+            }
+          },
+          title: { 
+            display: true, 
+            text: 'Hours',
+            color: '#ccc',
+            font: {
+              size: 12,
+              weight: '600'
+            }
+          }
+        },
+        x: {
+          ticks: {
+            color: '#888',
+            font: {
+              size: 10
+            }
+          }
         }
       },
       interaction: { intersect: false, mode: 'index' },
@@ -97,9 +120,13 @@ const ChartBuilder = {
     const maxIndex = totalDays - 1;
     const minIndex = Math.max(0, totalDays - windowSize);
     
-    // Calculate global max for y-axis (across ALL data, not just visible)
-    const globalMaxHours = Math.max(...totalTimeData.dailyData.map(day => day.totalHours));
-    const yAxisMax = Math.ceil(globalMaxHours);
+    // Calculate y-axis max with 2 SD cap (95% of data)
+    const allTotalHours = totalTimeData.dailyData.map(day => day.totalHours);
+    const mean = allTotalHours.reduce((sum, val) => sum + val, 0) / allTotalHours.length;
+    const variance = allTotalHours.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / allTotalHours.length;
+    const stdDev = Math.sqrt(variance);
+    const cappedMax = mean + (2 * stdDev);
+    const yAxisMax = Math.ceil(cappedMax);
     
     const options = {
       ...this.getBaseChartOptions(),
@@ -197,9 +224,13 @@ const ChartBuilder = {
     const maxIndex = totalDays - 1;
     const minIndex = Math.max(0, totalDays - windowSize);
     
-    // Calculate global max for y-axis (across ALL data, not just visible)
-    const globalMaxHours = Math.max(...processedData.dailyData.map(day => day.domainHours));
-    const yAxisMax = Math.ceil(globalMaxHours);
+    // Calculate y-axis max with 2 SD cap (95% of data)
+    const allDomainHours = processedData.dailyData.map(day => day.domainHours);
+    const mean = allDomainHours.reduce((sum, val) => sum + val, 0) / allDomainHours.length;
+    const variance = allDomainHours.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / allDomainHours.length;
+    const stdDev = Math.sqrt(variance);
+    const cappedMax = mean + (2 * stdDev);
+    const yAxisMax = Math.ceil(cappedMax);
     
     const options = {
       ...this.getBaseChartOptions(),
