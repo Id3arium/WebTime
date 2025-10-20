@@ -254,7 +254,9 @@ const UIManager = {
     
     breakdownTitle.style.display = 'none';
     
-    const domainData = this.calculateDomainBreakdown(dayData, totalTimeData.domains);
+    // Get ALL domains for this specific day from the raw time history
+    const allDomainsForDay = totalTimeData.allDomains || [];
+    const domainData = this.calculateDomainBreakdown(dayData, allDomainsForDay);
     this.renderBreakdownBars(breakdownBars, domainData);
     
     // Update the header to show which day we're viewing
@@ -276,16 +278,24 @@ const UIManager = {
     }
   },
 
-  calculateDomainBreakdown(dayData, domains) {
+  calculateDomainBreakdown(dayData, allDomains) {
     const domainData = [];
     
-    domains.forEach((domain, index) => {
+    // Get all domains that actually have data for this day
+    Object.keys(dayData).forEach(domain => {
+      // Skip metadata fields
+      if (domain.startsWith('_') || domain === 'date' || domain === 'totalSeconds' || 
+          domain === 'totalHours' || domain === 'formattedTime' || domain === 'Others') {
+        return;
+      }
+      
       const hours = dayData[domain] || 0;
       const seconds = Math.round(hours * 3600);
       
       if (seconds > 0) {
-        const color = domain === 'Others' ? COLORS.others : 
-          COLORS.domains[index % COLORS.domains.length];
+        // Find the color for this domain
+        const domainIndex = allDomains.indexOf(domain);
+        const color = COLORS.domains[domainIndex % COLORS.domains.length];
         
         domainData.push({
           domain,

@@ -98,6 +98,7 @@ const DataProcessor = {
       dailyData: visibleData,
       allData: allDailyData,  // Keep this for compatibility
       domains: finalDomains,
+      allDomains: allDomains,  // Pass ALL domains for breakdown
       movingAverageData: this.calculateMovingAverageTotal(visibleData)
     };
   },

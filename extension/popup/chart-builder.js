@@ -128,6 +128,9 @@ const ChartBuilder = {
     const cappedMax = mean + (2 * stdDev);
     const yAxisMax = Math.ceil(cappedMax);
     
+    // Store yAxisMax for tooltip
+    totalTimeData._yAxisMax = yAxisMax;
+    
     const options = {
       ...this.getBaseChartOptions(),
       scales: {
@@ -232,6 +235,9 @@ const ChartBuilder = {
     const cappedMax = mean + (2 * stdDev);
     const yAxisMax = Math.ceil(cappedMax);
     
+    // Store yAxisMax for tooltip
+    processedData._yAxisMax = yAxisMax;
+    
     const options = {
       ...this.getBaseChartOptions(),
       scales: {
@@ -282,6 +288,14 @@ const ChartBuilder = {
           if (context.datasetIndex === 0) {
             const dataIndex = context.dataIndex;
             const dayData = totalTimeData.dailyData[dataIndex];
+            const actualHours = dayData.totalHours;
+            const yMax = totalTimeData._yAxisMax;
+            
+            if (actualHours > yMax) {
+              const actualTime = PopUpUtils.formatTime(actualHours * 3600);
+              const cappedTime = PopUpUtils.formatTime(yMax * 3600);
+              return `Total: ${actualTime} (capped at ${cappedTime} for scale)`;
+            }
             return `Total: ${dayData.formattedTime}`;
           }
           return null;
@@ -374,7 +388,17 @@ const ChartBuilder = {
         },
         label: (context) => {
           const dataset = context.chart.data.datasets[context.datasetIndex];
-          const time = dataset.formattedTimes[context.dataIndex];
+          const dataIndex = context.dataIndex;
+          const dayData = processedData.dailyData[dataIndex];
+          const time = dataset.formattedTimes[dataIndex];
+          
+          // Check if this bar is capped
+          if (dataset.type === 'bar' && dayData.domainHours > processedData._yAxisMax) {
+            const actualTime = dayData.domainFormattedTime;
+            const cappedTime = PopUpUtils.formatTime(processedData._yAxisMax * 3600);
+            return `${dataset.label}: ${actualTime} (capped at ${cappedTime} for scale)`;
+          }
+          
           return `${dataset.label}: ${time}`;
         }
       }
