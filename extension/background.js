@@ -12,6 +12,7 @@ const ACTIVITY_CHECK_INTERVAL_MS = Constants.ACTIVITY_CHECK_INTERVAL_MS;
 let currentDateStr = Utils.getLocalDateStr(); 
 let timeHistory = {};
 let dayResetTime = 0; // Hour when day resets (0-4)
+let isSaving = false; // Lock to prevent race conditions during simultaneous saves
 
 // Nudge and reminder system state
 let interventionState = {
@@ -64,7 +65,14 @@ function initDefaultTimeData() {
 }
 
 async function saveTimeData() {
+    if (isSaving) {
+        console.log('Save already in progress, skipping...');
+        return;
+    }
+    
+    isSaving = true;
     console.log(`saveTimeData() ${currentDateStr}: ${todaysTotalTimeInActiveDomain} seconds`);
+    
     try {
         if (!timeHistory[currentDateStr]) {
             timeHistory[currentDateStr] = {};
@@ -87,6 +95,8 @@ async function saveTimeData() {
         console.log("Time data successfully saved with history.");
     } catch (error) {
         console.error("Error saving time data to storage:", error);
+    } finally {
+        isSaving = false;
     }
 }
 
