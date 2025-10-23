@@ -367,6 +367,7 @@ body {
 .intervention-option input[type="checkbox"] {
   cursor: pointer;
   flex-shrink: 0;
+  margin-top: 8px;
 }
 
 .intervention-label {
