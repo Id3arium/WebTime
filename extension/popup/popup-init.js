@@ -17,10 +17,6 @@ const App = {
       UIManager.showDetailView();
     });
     
-    document.getElementById('general-settings-btn').addEventListener('click', () => {
-      UIManager.showSettingsView();
-    });
-    
     document.getElementById('detail-general-btn').addEventListener('click', () => {
       UIManager.showGeneralView();
     });

@@ -12,9 +12,9 @@
       <div class="half-page" id="general-page">
         <div class="page-header">
           <div class="header-row-buttons">
-            <button id="general-detail-btn" class="nav-btn-text">Current Site</button>
+            <button id="general-detail-btn" class="nav-btn-text">→ This Site</button>
             <div class="time-summary">Overview</div>
-            <button id="general-settings-btn" class="nav-btn-text">Settings</button>
+            <div style="width: 80px;"></div>
           </div>
           <div class="header-row-context">
             <div class="header-text">All Sites</div>
@@ -33,9 +33,9 @@
       <div class="half-page" id="detail-page">
         <div class="page-header">
           <div class="header-row-buttons">
-            <button id="detail-general-btn" class="nav-btn-text">All Sites</button>
+            <button id="detail-general-btn" class="nav-btn-text">← All Sites</button>
             <div class="time-summary">0:00 / 0:00</div>
-            <button id="detail-settings-btn" class="nav-btn-text">Settings</button>
+            <button id="detail-settings-btn" class="nav-btn-text">Settings ⚙️</button>
           </div>
           <div class="header-row-context">
             <div class="header-text">WebTime</div>
@@ -50,12 +50,12 @@
       <div class="half-page" id="settings-page">
         <div class="page-header">
           <div class="header-row-buttons">
-            <button id="settings-back-btn" class="nav-btn-text">Back</button>
-            <div class="time-summary" id="settings-domain"></div>
+            <button id="settings-back-btn" class="nav-btn-text">← Back</button>
+            <div style="flex: 1;"></div>
             <div style="width: 80px;"></div>
           </div>
           <div class="header-row-context">
-            <div class="header-text">Settings</div>
+            <div class="header-text" id="settings-domain"></div>
           </div>
         </div>
         <div class="page-content">

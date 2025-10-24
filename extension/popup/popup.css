@@ -57,7 +57,7 @@ body {
   color: var(--light-text);
   background-color: var(--dark-bg); 
   text-align: center;
-  padding: 12px 0;
+  padding: 16px 0;
   border-bottom: 1px solid var(--border-line);
   margin-bottom: 8px;
   display: flex;
@@ -82,8 +82,8 @@ body {
   background: none;
   border: 1px solid var(--border-line);
   color: var(--light-text);
-  font-size: 12px;
-  padding: 8px 12px;
+  font-size: 14px;
+  padding: 8px;
   border-radius: 4px;
   cursor: pointer;
   transition: background-color 0.2s;
@@ -104,7 +104,7 @@ body {
 }
 
 .header-text {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 400;
   color: var(--summary-text);
   transition: opacity 0.2s ease-in-out, transform 0.3s ease-in-out;
@@ -164,7 +164,7 @@ body {
 }
 
 .breakdown-title {
-  font-size: 14px;
+  font-size: 16px;
   margin-bottom: 12px;
   color: var(--summary-text);
   font-weight: 500;
@@ -194,7 +194,7 @@ body {
   flex: 1;
   min-width: 60px;
   max-width: 150px;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--light-text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -259,7 +259,7 @@ body {
 }
 
 .settings-section label {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--light-text);
   margin-bottom: -8px;
 }
