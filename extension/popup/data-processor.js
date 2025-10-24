@@ -77,29 +77,67 @@ const DataProcessor = {
 
   processGeneralViewData(timeHistory) {
     const sortedDates = Object.keys(timeHistory).sort();
-    const allDomains = this.getAllDomains(timeHistory);
-    const {topDomains, otherDomains} = this.rankDomainsByUsage(allDomains, timeHistory);
     
-    const allDailyData = sortedDates.map(date => {
-      const dayData = timeHistory[date];
-      const transformed = this.transformDayData(dayData, topDomains, otherDomains);
-      return { date, ...transformed };
+    // Process each day independently
+    const dailyRankedData = sortedDates.map(date => {
+      const rawDayData = timeHistory[date];
+      
+      // Build domain list for this day
+      const domains = [];
+      let totalSeconds = 0;
+      
+      Object.keys(rawDayData).forEach(domain => {
+        const seconds = rawDayData[domain] || 0;
+        totalSeconds += seconds;
+        if (seconds > 0) {
+          domains.push({ domain, seconds });
+        }
+      });
+      
+      // Sort by seconds descending (rank by usage for this day)
+      domains.sort((a, b) => b.seconds - a.seconds);
+      
+      // Split into top 7 and others
+      const topDomains = domains.slice(0, CONFIG.topDomainsLimit);
+      const otherDomains = domains.slice(CONFIG.topDomainsLimit);
+      
+      // Calculate others total
+      const othersSeconds = otherDomains.reduce((sum, d) => sum + d.seconds, 0);
+      
+      // Build ranked structure
+      const ranked = {
+        date,
+        totalSeconds,
+        totalHours: totalSeconds / 3600,
+        formattedTime: PopUpUtils.formatTime(totalSeconds),
+        ranks: [] // Will hold {domain, hours} for each rank position
+      };
+      
+      // Fill rank positions 0-6 (top 7)
+      for (let i = 0; i < CONFIG.topDomainsLimit; i++) {
+        if (i < topDomains.length) {
+          ranked.ranks[i] = {
+            domain: topDomains[i].domain,
+            hours: topDomains[i].seconds / 3600
+          };
+        } else {
+          ranked.ranks[i] = { domain: null, hours: 0 };
+        }
+      }
+      
+      // Add "Others" as rank position 7
+      ranked.ranks[CONFIG.topDomainsLimit] = {
+        domain: 'Others',
+        hours: othersSeconds / 3600,
+        count: otherDomains.length
+      };
+      
+      return ranked;
     });
     
-    // Return ALL data - no slicing here, window will be handled by Chart.js viewport
-    const visibleData = allDailyData;
-    
-    const finalDomains = [...topDomains];
-    if (otherDomains.length > 0) {
-      finalDomains.push('Others');
-    }
-    
     return {
-      dailyData: visibleData,
-      allData: allDailyData,  // Keep this for compatibility
-      domains: finalDomains,
-      allDomains: allDomains,  // Pass ALL domains for breakdown
-      movingAverageData: this.calculateMovingAverageTotal(visibleData)
+      dailyData: dailyRankedData,
+      movingAverageData: this.calculateMovingAverageTotal(dailyRankedData)
     };
   },
 
@@ -162,7 +200,7 @@ const DataProcessor = {
       const startIndex = Math.max(0, index - CONFIG.movingAverageDays + 1);
       const window = dailyData.slice(startIndex, index + 1);
       
-      const totalSeconds = window.reduce((sum, day) => sum + day.totalSeconds, 0);
+      const totalSeconds = window.reduce((sum, day) => sum + (day.totalSeconds || 0), 0);
       const averageSeconds = window.length > 0 ? totalSeconds / window.length : 0;
       const roundedAverage = Math.round(averageSeconds);
       

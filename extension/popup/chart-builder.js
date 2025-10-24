@@ -20,25 +20,42 @@ const ChartBuilder = {
     };
   },
 
-  createDomainDatasets(domains, dailyData) {
-    return domains.map((domain, index) => {
-      const color = domain === 'Others' ? COLORS.others : 
-        COLORS.domains[index % COLORS.domains.length];
+  createRankBasedDatasets(dailyData) {
+    const numRanks = CONFIG.topDomainsLimit + 1; // 7 ranks + Others
+    const datasets = [];
+    
+    // Create one dataset per rank position
+    // Reverse order so Rank 1 (biggest) is at bottom
+    for (let rankIndex = numRanks - 1; rankIndex >= 0; rankIndex--) {
+      const isOthers = rankIndex === CONFIG.topDomainsLimit;
+      const color = isOthers ? COLORS.others : COLORS.domains[rankIndex % COLORS.domains.length];
+      const borderColor = color.replace('0.7', '1').replace('0.6', '0.8');
       
-      // Create arrays for colors to enable per-bar highlighting
-      const dataLength = dailyData.length;
-      const borderColor = color.replace('0.7', '1').replace('0.5', '0.8');
-      
-      return {
+      const dataset = {
         type: 'bar',
-        label: domain,
-        data: dailyData.map(day => day[domain] || 0),
-        backgroundColor: new Array(dataLength).fill(color),
-        borderColor: new Array(dataLength).fill(borderColor),
-        borderWidth: new Array(dataLength).fill(1),
-        order: 1
+        label: isOthers ? 'Others' : `Rank ${rankIndex + 1}`,
+        data: [],
+        domainNames: [], // Store which domain is in this position each day
+        backgroundColor: [],
+        borderColor: [],
+        borderWidth: [],
+        order: rankIndex // Lower rank number = drawn first (at bottom)
       };
-    });
+      
+      // Fill data for each day
+      dailyData.forEach(dayData => {
+        const rankData = dayData.ranks[rankIndex];
+        dataset.data.push(rankData ? rankData.hours : 0);
+        dataset.domainNames.push(rankData ? rankData.domain : null);
+        dataset.backgroundColor.push(color);
+        dataset.borderColor.push(borderColor);
+        dataset.borderWidth.push(1);
+      });
+      
+      datasets.push(dataset);
+    }
+    
+    return datasets;
   },
 
   createSingleDomainDataset(dailyData, label = 'This Day') {
@@ -107,11 +124,8 @@ const ChartBuilder = {
       datasets.push(avgDataset);
     }
     
-    const domainDatasets = this.createDomainDatasets(
-      totalTimeData.domains, 
-      totalTimeData.dailyData
-    );
-    datasets.push(...domainDatasets);
+    const rankDatasets = this.createRankBasedDatasets(totalTimeData.dailyData);
+    datasets.push(...rankDatasets);
     
     const totalDays = totalTimeData.dailyData.length;
     const windowSize = CONFIG.daysToDisplay;
@@ -276,15 +290,18 @@ const ChartBuilder = {
         },
         label: (context) => {
           const dataIndex = context.dataIndex;
-          const dayData = totalTimeData.dailyData[dataIndex];
+          const dataset = context.dataset;
           
-          if (context.dataset.label.includes('Average')) {
-            const time = context.dataset.formattedTimes[dataIndex];
-            return `${context.dataset.label}: ${time}`;
+          // Only show average line
+          if (dataset.label && dataset.label.includes('Average')) {
+            const time = dataset.formattedTimes[dataIndex];
+            return `${dataset.label}: ${time}`;
           }
+          
           return null;
         },
         afterLabel: (context) => {
+          // Show total on first dataset only
           if (context.datasetIndex === 0) {
             const dataIndex = context.dataIndex;
             const dayData = totalTimeData.dailyData[dataIndex];
