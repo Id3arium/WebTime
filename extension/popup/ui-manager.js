@@ -254,13 +254,20 @@ const UIManager = {
     
     breakdownTitle.style.display = 'none';
     
-    // Get ALL domains for this specific day from the raw time history
-    const allDomainsForDay = totalTimeData.allDomains || [];
-    const domainData = this.calculateDomainBreakdown(dayData, allDomainsForDay);
+    // Get RAW day data from timeHistory, not the transformed chart data
+    const dateString = dayData.date;
+    const rawDayData = AppState.allTimeHistory[dateString];
+    
+    if (!rawDayData) {
+      breakdownBars.innerHTML = '<div style="color: #888; font-style: italic;">No data for this day</div>';
+      return;
+    }
+    
+    const domainData = this.calculateDomainBreakdown(rawDayData);
     this.renderBreakdownBars(breakdownBars, domainData);
     
     // Update the header to show which day we're viewing
-    this.updateGeneralViewHeader(dayData.date);
+    this.updateGeneralViewHeader(dateString);
   },
   
   updateGeneralViewHeader(dateString) {
@@ -278,36 +285,42 @@ const UIManager = {
     }
   },
 
-  calculateDomainBreakdown(dayData, allDomains) {
+  calculateDomainBreakdown(rawDayData) {
+    // rawDayData is like: {"youtube.com": 3600, "reddit.com": 1800, ...}
     const domainData = [];
+    let totalSeconds = 0;
     
-    // Get all domains that actually have data for this day
-    Object.keys(dayData).forEach(domain => {
-      // Skip metadata fields
-      if (domain.startsWith('_') || domain === 'date' || domain === 'totalSeconds' || 
-          domain === 'totalHours' || domain === 'formattedTime' || domain === 'Others') {
-        return;
-      }
-      
-      const hours = dayData[domain] || 0;
-      const seconds = Math.round(hours * 3600);
+    // Calculate total first
+    Object.keys(rawDayData).forEach(domain => {
+      totalSeconds += rawDayData[domain] || 0;
+    });
+    
+    // Build domain list with all info
+    Object.keys(rawDayData).forEach(domain => {
+      const seconds = rawDayData[domain] || 0;
       
       if (seconds > 0) {
-        // Find the color for this domain
-        const domainIndex = allDomains.indexOf(domain);
-        const color = COLORS.domains[domainIndex % COLORS.domains.length];
-        
         domainData.push({
           domain,
           seconds,
-          hours,
-          color,
-          percentage: Math.round((seconds / dayData.totalSeconds) * 100)
+          percentage: Math.round((seconds / totalSeconds) * 100)
         });
       }
     });
     
-    return domainData.sort((a, b) => b.seconds - a.seconds);
+    // Sort by seconds (descending)
+    const sorted = domainData.sort((a, b) => b.seconds - a.seconds);
+    
+    // Assign colors: first 5 get individual colors, rest get grey
+    sorted.forEach((item, index) => {
+      if (index < CONFIG.topDomainsLimit) {
+        item.color = COLORS.domains[index % COLORS.domains.length];
+      } else {
+        item.color = COLORS.others;
+      }
+    });
+    
+    return sorted;
   },
 
   renderBreakdownBars(container, domainData) {
@@ -323,7 +336,7 @@ const UIManager = {
       const formattedTime = PopUpUtils.formatTime(item.seconds);
 
       return `
-        <div class="breakdown-bar">
+        <div class="breakdown-bar" data-domain="${item.domain}">
           <div class="breakdown-color" style="background: ${item.color};"></div>
           <div class="breakdown-label" title="${item.domain}">${item.domain}</div>
           <div class="breakdown-fill">
@@ -337,8 +350,8 @@ const UIManager = {
     container.onclick = (e) => {
       const bar = e.target.closest('.breakdown-bar');
       if (bar) {
-        const domain = bar.querySelector('.breakdown-label').textContent;
-        AppState.setSelectedDomain(domain);  // Update which domain is selected
+        const domain = bar.dataset.domain;
+        AppState.setSelectedDomain(domain);
         this.renderDetailView(domain);
         this.showDetailView();
       }

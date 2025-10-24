@@ -13,9 +13,9 @@ const COLORS = {
     'rgba(75, 192, 192, 0.7)',   // Teal
     'rgba(153, 102, 255, 0.7)',  // Purple
     'rgba(255, 159, 64, 0.7)',   // Orange
-    'rgba(199, 199, 199, 0.7)',  // Grey
+    'rgba(100, 220, 255, 0.7)',  // Cyan
   ],
-  others: 'rgba(150, 150, 150, 0.5)',
+  others: 'rgba(199, 199, 199, 0.7)',  // Light Grey
   movingAverage: {
     background: 'rgba(50, 100, 255, 0.7)',
     border: 'rgba(75, 150, 255, 0.7)',
