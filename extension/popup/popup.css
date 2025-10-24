@@ -83,7 +83,7 @@ body {
   border: 1px solid var(--border-line);
   color: var(--light-text);
   font-size: 14px;
-  padding: 8px;
+  padding: 8px 10px;
   border-radius: 4px;
   cursor: pointer;
   transition: background-color 0.2s;
