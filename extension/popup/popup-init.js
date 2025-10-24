@@ -12,24 +12,29 @@ const App = {
   },
 
   setupEventListeners() {
-    // General -> Detail
-    document.getElementById('forward-btn').addEventListener('click', () => {
+    // Navigation between views
+    document.getElementById('general-detail-btn').addEventListener('click', () => {
       UIManager.showDetailView();
     });
     
-    // Detail -> General
-    document.getElementById('back-btn').addEventListener('click', () => {
-      UIManager.showGeneralView();
-    });
-    
-    // Detail -> Settings
-    document.getElementById('settings-btn').addEventListener('click', () => {
+    document.getElementById('general-settings-btn').addEventListener('click', () => {
       UIManager.showSettingsView();
     });
     
-    // Settings -> Detail
+    document.getElementById('detail-general-btn').addEventListener('click', () => {
+      UIManager.showGeneralView();
+    });
+    
+    document.getElementById('detail-settings-btn').addEventListener('click', () => {
+      UIManager.showSettingsView();
+    });
+    
     document.getElementById('settings-back-btn').addEventListener('click', () => {
-      UIManager.showDetailView();
+      // Return to the view before settings
+      if (AppState.currentView === ViewState.SETTINGS) {
+        // Default to detail view
+        UIManager.showDetailView();
+      }
     });
     
     // Save settings button
