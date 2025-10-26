@@ -6,7 +6,7 @@
   color: #f7f7f7 !important;
 
   font-family: Arial, sans-serif;
-  font-size: clamp(0.75rem, 4.20vw, 1.5rem); /* ~12px */;
+  font-size: clamp(0.75rem, 0.625vw, 1.5rem); /* ~12px on a 1080p */;
   padding: 0.25rem;   /* ~4px */;
   border-radius: 0.25rem;   /* ~4px */;
   z-index: 1000002; /* Above overlay (1000000) and popup (1000001) */
