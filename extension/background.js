@@ -11,7 +11,7 @@ const ACTIVITY_CHECK_INTERVAL_MS = Constants.ACTIVITY_CHECK_INTERVAL_MS;
 
 let currentDateStr = Utils.getLocalDateStr(); 
 let timeHistory = {};
-let dayResetTime = 0; // Hour when day resets (0-4)
+let dayResetTime = 0; // Hour when day resets
 let isSaving = false; // Lock to prevent race conditions during simultaneous saves
 
 // Nudge and reminder system state
