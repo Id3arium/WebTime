@@ -4,10 +4,11 @@
   right: 0px;
   background-color: #17171780;
   color: #f7f7f7 !important;
-  padding: 4px;
-  border-radius: 4px;
+
   font-family: Arial, sans-serif;
-  font-size: 13px;
+  font-size: clamp(0.75rem, 4.20vw, 1.5rem); /* ~12px */;
+  padding: 0.25rem;   /* ~4px */;
+  border-radius: 0.25rem;   /* ~4px */;
   z-index: 1000002; /* Above overlay (1000000) and popup (1000001) */
   border: 1px solid grey;
   line-height: 1; /* Adjust this value as needed */
