@@ -397,45 +397,6 @@ async function loadInterventionSettings() {
 }
 
 /**
- * Calculate nudge times using φ-based exponential decay
- * @param {number} timeLimitMinutes - When reminders start (in minutes)
- * @param {number} reminderIntervalMinutes - How often reminders repeat (in minutes)
- * @returns {Array<number>} Array of nudge times in seconds, sorted ascending
- */
-function calculatePhiNudgeTimes(timeLimitMinutes, reminderIntervalMinutes) {
-    const φ = Constants.PHI;
-    const timeLimitSeconds = timeLimitMinutes * 60;
-    
-    // Calculate number of nudges: round(φ × sqrt(timeLimit / reminderInterval))
-    const numNudges = Math.round(φ * Math.sqrt(timeLimitMinutes / reminderIntervalMinutes));
-    
-    if (numNudges === 0) return [];
-    
-    const nudgeTimes = [];
-    
-    for (let i = 1; i <= numNudges; i++) {
-        // Calculate time remaining before limit using φ^i decay
-        const timeBeforeLimit = timeLimitSeconds / Math.pow(φ, i);
-        
-        // Convert to time from start (invert: limit - timeBeforeLimit)
-        const baseTimeSeconds = timeLimitSeconds - timeBeforeLimit;
-        
-        // Add ±2 minute jitter for unpredictability
-        const jitterSeconds = (Math.floor(Math.random() * 5) - 2) * 60;
-        
-        // Ensure nudge is at least 1 minute in and before time limit
-        const nudgeTime = Math.max(60, Math.min(timeLimitSeconds - 60, Math.round(baseTimeSeconds + jitterSeconds)));
-        
-        nudgeTimes.push(nudgeTime);
-    }
-    
-    // Sort ascending (earliest first)
-    nudgeTimes.sort((a, b) => a - b);
-    
-    return nudgeTimes;
-}
-
-/**
  * Check if it's time to show a φ-based nudge
  * Uses exponential decay spacing that accelerates as time passes
  */
@@ -451,8 +412,8 @@ function checkPhiBasedNudges(settings) {
     const timeLimitMinutes = reminderThreshold / 60;
     const reminderIntervalMinutes = reminderInterval;
     
-    // Calculate nudge times fresh every time (cheap operation, ensures settings changes take effect)
-    const nudgeTimes = calculatePhiNudgeTimes(timeLimitMinutes, reminderIntervalMinutes);
+    // Calculate nudge times using shared utility function
+    const nudgeTimes = Utils.calculatePhiNudgeTimes(timeLimitMinutes, reminderIntervalMinutes);
     
     // Check if current time matches any nudge time
     for (const nudgeTime of nudgeTimes) {
