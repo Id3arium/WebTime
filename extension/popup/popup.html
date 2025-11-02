@@ -80,6 +80,13 @@
               <label>Interventions for <span id="settings-domain-inline"></span>:</label>
               
               <div class="intervention-option">
+                <input type="checkbox" id="use-phi-nudges">
+                <label for="use-phi-nudges" class="intervention-label">
+                  <span id="phi-nudge-label">Use adaptive nudges</span>
+                </label>
+              </div>
+              
+              <div class="intervention-option" id="old-nudge-settings">
                 <input type="checkbox" id="nudge-enabled">
                 <label for="nudge-enabled" class="intervention-label">
                   <span>After</span>
@@ -106,7 +113,7 @@
               </div>
               
               <div class="intervention-helper">
-                ℹ️ Reminders override nudges once they begin
+                ℹ️ Nudges happen more frequently as the time limit gets closer. The number of nudges adapt to time limit and reminder frequency.
               </div>
             </div>
             
