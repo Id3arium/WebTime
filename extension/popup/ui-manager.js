@@ -38,22 +38,14 @@ const UIManager = {
     this.loadSettings();
   },
 
-  toggleOldNudgeSettings(usePhiNudges) {
-    const oldNudgeSettings = document.getElementById('old-nudge-settings');
-    if (oldNudgeSettings) {
-      oldNudgeSettings.style.display = usePhiNudges ? 'none' : 'block';
-    }
-  },
-
-  updatePhiNudgeLabel() {
-    const usePhiNudges = document.getElementById('use-phi-nudges').checked;
+  updateNudgeSchedule() {
     const reminderEnabled = document.getElementById('reminder-enabled').checked;
-    const label = document.getElementById('phi-nudge-label');
+    const nudgeTimesSpan = document.getElementById('nudge-times');
     
-    if (!label) return;
+    if (!nudgeTimesSpan) return;
     
-    // Only show details if φ-nudges are enabled AND reminders are enabled
-    if (usePhiNudges && reminderEnabled) {
+    // Only show nudge schedule if reminders are enabled
+    if (reminderEnabled) {
       const reminderHours = parseInt(document.getElementById('reminder-hours').value) || 0;
       const reminderMinutes = parseInt(document.getElementById('reminder-minutes').value) || 0;
       const reminderInterval = parseInt(document.getElementById('reminder-interval').value) || 15;
@@ -67,15 +59,19 @@ const UIManager = {
         if (nudgeTimes.length > 0) {
           // Format times as "15m, 25m, 35m"
           const timesStr = nudgeTimes.map(t => Utils.formatNudgeTime(t)).join(', ');
-          label.textContent = `Use adaptive nudges (at ${timesStr})`;
+          nudgeTimesSpan.textContent = timesStr;
+          nudgeTimesSpan.style.fontWeight = '600';
         } else {
-          label.textContent = 'Use adaptive nudges';
+          nudgeTimesSpan.textContent = '—';
+          nudgeTimesSpan.style.fontWeight = 'normal';
         }
       } else {
-        label.textContent = 'Use adaptive nudges';
+        nudgeTimesSpan.textContent = '—';
+        nudgeTimesSpan.style.fontWeight = 'normal';
       }
     } else {
-      label.textContent = 'Use adaptive nudges';
+      nudgeTimesSpan.textContent = '—';
+      nudgeTimesSpan.style.fontWeight = 'normal';
     }
   },
 
@@ -92,21 +88,7 @@ const UIManager = {
       // Load domain-specific settings
       const domainSettings = settings.domains?.[AppState.selectedDomain] || {};
       
-      // φ-nudge setting
-      const usePhiNudges = domainSettings.usePhiNudges || false;
-      document.getElementById('use-phi-nudges').checked = usePhiNudges;
-      
-      // Nudge settings (old system)
-      const nudgeEnabled = domainSettings.nudgeEnabled || false;
-      const nudgeThreshold = domainSettings.nudgeThreshold || 150; // default 2h30m
-      const nudgeInterval = domainSettings.nudgeInterval || 5;
-      
-      document.getElementById('nudge-enabled').checked = nudgeEnabled;
-      document.getElementById('nudge-hours').value = Math.floor(nudgeThreshold / 60);
-      document.getElementById('nudge-minutes').value = nudgeThreshold % 60;
-      document.getElementById('nudge-interval').value = nudgeInterval;
-      
-      // Reminder settings - load BEFORE updating phi label
+      // Reminder settings (φ-nudges are automatic when reminders are enabled)
       const reminderEnabled = domainSettings.reminderEnabled || false;
       const reminderThreshold = domainSettings.reminderThreshold || 180; // default 3h
       const reminderInterval = domainSettings.reminderInterval || 15;
@@ -116,24 +98,15 @@ const UIManager = {
       document.getElementById('reminder-minutes').value = reminderThreshold % 60;
       document.getElementById('reminder-interval').value = reminderInterval;
       
-      // Hide/show old nudge settings based on φ-nudge toggle
-      this.toggleOldNudgeSettings(usePhiNudges);
+      // Update nudge schedule display (must happen AFTER reminder inputs are set)
+      this.updateNudgeSchedule();
       
-      // Update φ-nudge label with times (must happen AFTER reminder inputs are set)
-      this.updatePhiNudgeLabel();
-      
-      // Add event listener for φ-nudge checkbox
-      document.getElementById('use-phi-nudges').addEventListener('change', (e) => {
-        this.toggleOldNudgeSettings(e.target.checked);
-        this.updatePhiNudgeLabel();
-      });
-      
-      // Add event listeners for reminder settings to update nudge times dynamically
+      // Add event listeners for reminder settings to update nudge schedule dynamically
       ['reminder-enabled', 'reminder-hours', 'reminder-minutes', 'reminder-interval'].forEach(id => {
         const element = document.getElementById(id);
         if (element) {
-          element.addEventListener('change', () => this.updatePhiNudgeLabel());
-          element.addEventListener('input', () => this.updatePhiNudgeLabel());
+          element.addEventListener('change', () => this.updateNudgeSchedule());
+          element.addEventListener('input', () => this.updateNudgeSchedule());
         }
       });
       
@@ -157,36 +130,22 @@ const UIManager = {
       // Update domain-specific settings
       if (!settings.domains) settings.domains = {};
       
-      // φ-nudge setting
-      const usePhiNudges = document.getElementById('use-phi-nudges').checked;
-      
-      // Nudge settings (old system)
-      const nudgeEnabled = document.getElementById('nudge-enabled').checked;
-      const nudgeHours = parseInt(document.getElementById('nudge-hours').value) || 0;
-      const nudgeMinutes = parseInt(document.getElementById('nudge-minutes').value) || 0;
-      const nudgeThreshold = (nudgeHours * 60) + nudgeMinutes;
-      const nudgeInterval = parseInt(document.getElementById('nudge-interval').value) || 5;
-      
-      // Reminder settings
+      // Reminder settings (φ-nudges are automatic when reminders are enabled)
       const reminderEnabled = document.getElementById('reminder-enabled').checked;
       const reminderHours = parseInt(document.getElementById('reminder-hours').value) || 0;
       const reminderMinutes = parseInt(document.getElementById('reminder-minutes').value) || 0;
       const reminderThreshold = (reminderHours * 60) + reminderMinutes;
       const reminderInterval = parseInt(document.getElementById('reminder-interval').value) || 15;
       
-      // Save domain settings if any intervention is enabled
-      if (usePhiNudges || nudgeEnabled || reminderEnabled) {
+      // Save domain settings if reminders are enabled
+      if (reminderEnabled) {
         settings.domains[AppState.selectedDomain] = {
-          usePhiNudges: usePhiNudges,
-          nudgeEnabled: nudgeEnabled,
-          nudgeThreshold: nudgeThreshold,
-          nudgeInterval: nudgeInterval,
           reminderEnabled: reminderEnabled,
           reminderThreshold: reminderThreshold,
           reminderInterval: reminderInterval
         };
       } else {
-        // Remove domain if all are disabled
+        // Remove domain if reminders are disabled
         if (settings.domains[AppState.selectedDomain]) {
           delete settings.domains[AppState.selectedDomain];
         }

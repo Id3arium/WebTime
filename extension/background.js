@@ -347,13 +347,8 @@ async function checkForInterventions() {
     const settings = await loadInterventionSettings();
     if (!settings) return;
     
-    // Check which nudge system to use
-    if (settings.domainSettings.usePhiNudges) {
-        checkPhiBasedNudges(settings);
-    } else {
-        checkTier1Nudges(settings);
-    }
-    
+    // φ-nudges are automatic when reminders are enabled
+    checkPhiBasedNudges(settings);
     checkTier2Reminders(settings);
 }
 
@@ -378,17 +373,13 @@ async function loadInterventionSettings() {
     const global = settings.global || {};
     const domainSettings = settings.domains?.[trackedTabDomain] || {};
     
-    const nudgeEnabled = domainSettings.nudgeEnabled || false;
     const reminderEnabled = domainSettings.reminderEnabled || false;
     
-    if (!nudgeEnabled && !reminderEnabled) return null;
+    if (!reminderEnabled) return null;
     
     return {
         global,
         domainSettings,
-        nudgeEnabled,
-        nudgeThreshold: domainSettings.nudgeThreshold * 60, // convert to seconds
-        nudgeInterval: domainSettings.nudgeInterval,
         reminderEnabled,
         reminderThreshold: domainSettings.reminderThreshold * 60, // convert to seconds
         reminderInterval: domainSettings.reminderInterval,
@@ -401,10 +392,7 @@ async function loadInterventionSettings() {
  * Uses exponential decay spacing that accelerates as time passes
  */
 function checkPhiBasedNudges(settings) {
-    const { reminderEnabled, reminderThreshold, reminderInterval, timeInSeconds } = settings;
-    
-    // Phi nudges require reminders to be enabled (they lead up to reminders)
-    if (!reminderEnabled) return;
+    const { reminderThreshold, reminderInterval, timeInSeconds } = settings;
     
     // Don't nudge after hitting reminder threshold
     if (timeInSeconds >= reminderThreshold) return;
@@ -429,30 +417,6 @@ function checkPhiBasedNudges(settings) {
             }
         }
     }
-}
-
-function checkTier1Nudges(settings) {
-    const { nudgeEnabled, nudgeThreshold, nudgeInterval, reminderEnabled, reminderThreshold, timeInSeconds } = settings;
-    
-    if (!nudgeEnabled) return;
-    
-    const hasReachedNudgeThreshold = timeInSeconds >= nudgeThreshold;
-    if (!hasReachedNudgeThreshold) return;
-    
-    // If reminders are enabled and we've hit reminder threshold, stop nudging
-    if (reminderEnabled && timeInSeconds >= reminderThreshold) return;
-    
-    const timeOverThreshold = timeInSeconds - nudgeThreshold;
-    const nudgeIntervalSeconds = nudgeInterval * 60;
-    const isOnNudgeInterval = timeOverThreshold % nudgeIntervalSeconds === 0;
-    if (!isOnNudgeInterval) return;
-    
-    const lastNudge = interventionState.lastNudgeTime[trackedTabDomain] || -1;
-    const alreadyNudgedAtThisTime = timeInSeconds === lastNudge;
-    if (alreadyNudgedAtThisTime) return;
-    
-    sendNudge();
-    interventionState.lastNudgeTime[trackedTabDomain] = timeInSeconds;
 }
 
 function checkTier2Reminders(settings) {
