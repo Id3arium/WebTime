@@ -80,26 +80,6 @@
               <label>Interventions for <span id="settings-domain-inline"></span>:</label>
               
               <div class="intervention-option">
-                <input type="checkbox" id="use-phi-nudges">
-                <label for="use-phi-nudges" class="intervention-label">
-                  <span id="phi-nudge-label">Use adaptive nudges</span>
-                </label>
-              </div>
-              
-              <div class="intervention-option" id="old-nudge-settings">
-                <input type="checkbox" id="nudge-enabled">
-                <label for="nudge-enabled" class="intervention-label">
-                  <span>After</span>
-                  <input type="number" id="nudge-hours" min="0" max="23" placeholder="2" class="inline-input">
-                  <span>h</span>
-                  <input type="number" id="nudge-minutes" min="0" max="59" placeholder="30" class="inline-input">
-                  <span>m, nudge every</span>
-                  <input type="number" id="nudge-interval" min="1" placeholder="5" class="inline-input">
-                  <span>m</span>
-                </label>
-              </div>
-              
-              <div class="intervention-option">
                 <input type="checkbox" id="reminder-enabled">
                 <label for="reminder-enabled" class="intervention-label">
                   <span>After</span>
@@ -112,8 +92,8 @@
                 </label>
               </div>
               
-              <div class="intervention-helper">
-                ℹ️ Nudges happen more frequently as the time limit gets closer. The number of nudges adapt to time limit and reminder frequency.
+              <div class="intervention-helper" id="nudge-schedule">
+                ℹ️ Adaptive nudges will appear at: <span id="nudge-times">—</span>
               </div>
             </div>
             
