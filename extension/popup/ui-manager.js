@@ -101,8 +101,27 @@ const UIManager = {
       // Update nudge schedule display (must happen AFTER reminder inputs are set)
       this.updateNudgeSchedule();
       
+      // Add rollover behavior for time inputs
+      const reminderHours = document.getElementById('reminder-hours');
+      const reminderMinutes = document.getElementById('reminder-minutes');
+      
+      reminderMinutes.addEventListener('input', () => {
+        let mins = parseInt(reminderMinutes.value) || 0;
+        let hrs = parseInt(reminderHours.value) || 0;
+        
+        if (mins >= 60) {
+          reminderHours.value = hrs + Math.floor(mins / 60);
+          reminderMinutes.value = mins % 60;
+        } else if (mins < 0 && hrs > 0) {
+          reminderHours.value = hrs - 1;
+          reminderMinutes.value = 60 + mins;
+        }
+        
+        this.updateNudgeSchedule();
+      });
+      
       // Add event listeners for reminder settings to update nudge schedule dynamically
-      ['reminder-enabled', 'reminder-hours', 'reminder-minutes', 'reminder-interval'].forEach(id => {
+      ['reminder-enabled', 'reminder-hours', 'reminder-interval'].forEach(id => {
         const element = document.getElementById(id);
         if (element) {
           element.addEventListener('change', () => this.updateNudgeSchedule());
