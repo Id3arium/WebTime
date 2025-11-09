@@ -3,7 +3,7 @@ const Constants = {
   PHI: (1 + Math.sqrt(5)) / 2,  // Golden ratio ≈ 1.618
 
   // Timing thresholds
-  INACTIVITY_THRESHOLD_MS: 1000,
+  INACTIVITY_THRESHOLD_MS: 10000,
   ACTIVITY_CHECK_INTERVAL_MS: 1000,
   SAVE_INTERVAL_SECONDS: 30,
 

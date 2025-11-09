@@ -119,16 +119,9 @@ const Utils = {
       // Calculate time remaining before limit using φ^i decay
       const timeBeforeLimit = timeLimitSeconds / Math.pow(φ, i);
       
-      // Convert to time from start (invert: limit - timeBeforeLimit)
-      const baseTimeSeconds = timeLimitSeconds - timeBeforeLimit;
-      
-      // Add ±2 minute jitter for unpredictability
-      const jitterSeconds = (Math.floor(Math.random() * 5) - 2) * 60;
-      
-      // Ensure nudge is at least 1 minute in and before time limit
-      const nudgeTime = Math.max(60, Math.min(timeLimitSeconds - 60, Math.round(baseTimeSeconds + jitterSeconds)));
-      
-      nudgeTimes.push(nudgeTime);
+      const nudgeTime = timeLimitSeconds - timeBeforeLimit;
+      const clampedTime = Math.max(60, Math.min(timeLimitSeconds - 60, Math.round(nudgeTime)));
+      nudgeTimes.push(clampedTime);
     }
     
     // Sort ascending (earliest first)
