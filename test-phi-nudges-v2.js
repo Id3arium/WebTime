@@ -16,8 +16,7 @@ function calculatePhiNudgeTimes(timeLimitMinutes, reminderIntervalMinutes) {
     for (let i = 1; i <= numNudges; i++) {
         const timeBeforeLimit = timeLimitSeconds / Math.pow(φ, i);
         const baseTimeSeconds = timeLimitSeconds - timeBeforeLimit;
-        const jitterSeconds = (Math.floor(Math.random() * 5) - 2) * 60;
-        const nudgeTime = Math.max(60, Math.min(timeLimitSeconds - 60, Math.round(baseTimeSeconds + jitterSeconds)));
+        const nudgeTime = Math.max(60, Math.min(timeLimitSeconds - 60, Math.round(baseTimeSeconds)));
         nudgeTimes.push(nudgeTime);
     }
     
