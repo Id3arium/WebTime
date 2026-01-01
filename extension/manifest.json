@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Web Time",
-  "version": "1.1",
+  "version": "1.4",
   "description": "Track and take control of your time.",
   
   "permissions": [
