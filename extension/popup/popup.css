@@ -8,7 +8,7 @@
 }
 
 body {
-  width: 870px;
+  width: 800px;
   height: 600px;
   font-family: Arial, sans-serif;
   margin: 0;
@@ -138,7 +138,8 @@ body {
 }
 
 .left-panel {
-  flex: 1;
+  width: 400px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -148,7 +149,8 @@ body {
 }
 
 .right-panel {
-  flex: 1;
+  width: 350px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -160,8 +162,8 @@ body {
 
 #total-time-chart,
 #time-chart {
-  width: 100% !important;
-  height: 100% !important;
+  width: 400px;
+  height: 484px;
 }
 
 .pie-chart-wrapper {
@@ -179,7 +181,7 @@ body {
 
 .breakdown-bars {
   height: 278px;
-  overflow-y: auto;
+  overflow-y: scroll;
   overflow-x: hidden;
   padding-right: 4px;
   display: flex;
@@ -187,6 +189,24 @@ body {
   justify-content: flex-start;
   gap: 6px;
   flex-shrink: 0;
+}
+
+.breakdown-bars::-webkit-scrollbar {
+  width: 10px;
+}
+
+.breakdown-bars::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+}
+
+.breakdown-bars::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 5px;
+}
+
+.breakdown-bars::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.6);
 }
 
 .breakdown-title {
@@ -233,19 +253,11 @@ body {
 }
 
 .breakdown-fill {
-  height: 8px;
-  border-radius: 4px;
-  margin-right: 8px;
-  flex: 0 0 80px;
-  position: relative;
-  background: rgba(255, 255, 255, 0.1);
-  align-self: center;
+  display: none;
 }
 
 .breakdown-fill-inner {
-  height: 100%;
-  border-radius: 4px;
-  transition: width 0.3s ease;
+  display: none;
 }
 
 .breakdown-time {
@@ -396,6 +408,17 @@ body {
 
 .intervention-label {
   display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--light-text);
+  cursor: pointer;
+  line-height: 1.4;
+  flex: 1;
+}
+
+.intervention-label-single {
+  display: flex;
   flex-wrap: nowrap;
   align-items: center;
   gap: 4px;
@@ -403,11 +426,21 @@ body {
   color: var(--light-text);
   cursor: pointer;
   line-height: 1.4;
-  white-space: nowrap;
-  overflow: hidden;
+  flex: 1;
 }
 
-.intervention-label span {
+.intervention-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.intervention-row span {
+  flex-shrink: 0;
+}
+
+.intervention-label-single span {
   flex-shrink: 0;
 }
 

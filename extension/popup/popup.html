@@ -74,18 +74,23 @@
                 <div class="intervention-option">
                   <input type="checkbox" id="reminder-enabled">
                   <label for="reminder-enabled" class="intervention-label">
-                    <span>After</span>
-                    <input type="number" id="reminder-hours" min="0" max="23" placeholder="3" class="inline-input">
-                    <span>h</span>
-                    <input type="number" id="reminder-minutes" min="0" placeholder="0" class="inline-input">
-                    <span>m, remind every</span>
-                    <input type="number" id="reminder-interval" min="1" placeholder="15" class="inline-input">
-                    <span>m</span>
+                    <div class="intervention-row">
+                      <span>After</span>
+                      <input type="number" id="reminder-hours" min="0" max="23" placeholder="3" class="inline-input">
+                      <span>h</span>
+                      <input type="number" id="reminder-minutes" min="0" placeholder="0" class="inline-input">
+                      <span>m</span>
+                    </div>
+                    <div class="intervention-row">
+                      <span>remind me every </span>
+                      <input type="number" id="reminder-interval" min="1" placeholder="15" class="inline-input">
+                      <span>m</span>
+                    </div>
                   </label>
                 </div>
 
                 <div class="intervention-option" id="nudge-count-option" style="display: none;">
-                  <label class="intervention-label">
+                  <label class="intervention-label-single">
                     <span>Smart nudges:</span>
                     <input type="number" id="nudge-count" min="0" max="15" placeholder="6" class="inline-input" style="width: 50px;">
                     <span id="nudge-recommendation">(recommended: 6)</span>
