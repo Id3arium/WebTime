@@ -8,7 +8,7 @@
 <body>
   <div class="content">
     <div class="pages-container show-detail">
-      <!-- General View Half-Page -->
+      <!-- General View Page -->
       <div class="half-page" id="general-page">
         <div class="page-header">
           <div class="header-row-buttons">
@@ -20,84 +20,83 @@
             <div class="header-text">All Sites</div>
           </div>
         </div>
-        <div class="page-content">
-          <canvas id="total-time-chart"></canvas>
-          <div id="daily-breakdown" class="daily-breakdown">
+        <div class="page-content split-view">
+          <div class="left-panel">
+            <canvas id="total-time-chart"></canvas>
+          </div>
+          <div class="right-panel">
             <div class="breakdown-title">Hover over a day to see breakdown</div>
+            <canvas id="breakdown-pie-chart"></canvas>
             <div class="breakdown-bars"></div>
           </div>
         </div>
       </div>
-      
-      <!-- Detail View Half-Page -->
+
+      <!-- Detail View Page -->
       <div class="half-page" id="detail-page">
         <div class="page-header">
           <div class="header-row-buttons">
             <button id="detail-general-btn" class="nav-btn-text">◀ All Sites</button>
             <div class="time-summary">0:00 / 0:00</div>
-            <button id="detail-settings-btn" class="nav-btn-text">Settings ⚙️</button>
+            <div style="width: 80px;"></div>
           </div>
           <div class="header-row-context">
             <div class="header-text">WebTime</div>
           </div>
         </div>
-        <div class="page-content">
-          <canvas id="time-chart"></canvas>
-        </div>
-      </div>
-      
-      <!-- Settings View Half-Page -->
-      <div class="half-page" id="settings-page">
-        <div class="page-header">
-          <div class="header-row-buttons">
-            <button id="settings-back-btn" class="nav-btn-text">◀ Back</button>
-            <div class="time-summary">Settings</div>
-            <div style="width: 80px;"></div>
+        <div class="page-content split-view">
+          <div class="left-panel">
+            <canvas id="time-chart"></canvas>
           </div>
-          <div class="header-row-context">
-            <div class="header-text" id="settings-domain"></div>
-          </div>
-        </div>
-        <div class="page-content">
-          <div class="settings-container">
-            <div class="settings-section">
-              <label>Day resets at:</label>
-              <select id="day-reset-time">
-                <option value="0">Midnight</option>
-                <option value="1">1:00 AM</option>
-                <option value="2">2:00 AM</option>
-                <option value="3">3:00 AM</option>
-                <option value="4">4:00 AM</option>
-                <option value="5">5:00 AM</option>
-                <option value="6">6:00 AM</option>
-              </select>
-              
-              <label>Reminders message:</label>
-              <input type="text" id="custom-message" placeholder="Was this time mindful?">
-            </div>
-            
-            <div class="settings-section">
-              <label>Interventions for <span id="settings-domain-inline"></span>:</label>
-              
-              <div class="intervention-option">
-                <input type="checkbox" id="reminder-enabled">
-                <label for="reminder-enabled" class="intervention-label">
-                  <span>After</span>
-                  <input type="number" id="reminder-hours" min="0" max="23" placeholder="3" class="inline-input">
-                  <span>h</span>
-                  <input type="number" id="reminder-minutes" min="-1" max="60" placeholder="0" class="inline-input">
-                  <span>m, remind every</span>
-                  <input type="number" id="reminder-interval" min="1" placeholder="15" class="inline-input">
-                  <span>m</span>
-                </label>
+          <div class="right-panel">
+            <div class="settings-container">
+              <div class="settings-section">
+                <label>Day resets at:</label>
+                <select id="day-reset-time">
+                  <option value="0">Midnight</option>
+                  <option value="1">1:00 AM</option>
+                  <option value="2">2:00 AM</option>
+                  <option value="3">3:00 AM</option>
+                  <option value="4">4:00 AM</option>
+                  <option value="5">5:00 AM</option>
+                  <option value="6">6:00 AM</option>
+                </select>
+
+                <label>Reminders message:</label>
+                <input type="text" id="custom-message" placeholder="Was this time mindful?">
               </div>
-              
-              <div class="intervention-helper" id="nudge-schedule">
-                ℹ️ Adaptive nudges will appear at: <span id="nudge-times">—</span>
+
+              <div class="settings-section">
+                <label>Interventions for <span id="settings-domain-inline"></span>:</label>
+
+                <div class="intervention-option">
+                  <input type="checkbox" id="reminder-enabled">
+                  <label for="reminder-enabled" class="intervention-label">
+                    <span>After</span>
+                    <input type="number" id="reminder-hours" min="0" max="23" placeholder="3" class="inline-input">
+                    <span>h</span>
+                    <input type="number" id="reminder-minutes" min="0" placeholder="0" class="inline-input">
+                    <span>m, remind every</span>
+                    <input type="number" id="reminder-interval" min="1" placeholder="15" class="inline-input">
+                    <span>m</span>
+                  </label>
+                </div>
+
+                <div class="intervention-option" id="nudge-count-option" style="display: none;">
+                  <label class="intervention-label">
+                    <span>Smart nudges:</span>
+                    <input type="number" id="nudge-count" min="0" max="15" placeholder="6" class="inline-input" style="width: 50px;">
+                    <span id="nudge-recommendation">(recommended: 6)</span>
+                  </label>
+                </div>
+
+                <div class="intervention-helper">
+                  ℹ️ Nudges get more frequent as you approach the time limit
+                </div>
               </div>
+
+              <button id="save-settings-btn" class="save-btn">Save Changes</button>
             </div>
-            
-            <button id="save-settings-btn" class="save-btn">Save Changes</button>
           </div>
         </div>
       </div>

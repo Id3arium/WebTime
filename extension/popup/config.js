@@ -29,6 +29,5 @@ const COLORS = {
 
 const ViewState = {
   GENERAL: 'general',
-  DETAIL: 'detail',
-  SETTINGS: 'settings'
+  DETAIL: 'detail'
 };

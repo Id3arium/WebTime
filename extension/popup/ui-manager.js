@@ -14,38 +14,28 @@ const UIManager = {
     AppState.setView(ViewState.DETAIL);
     const container = document.querySelector('.pages-container');
     container.className = 'pages-container show-detail';
-  },
 
-  showSettingsView() {
-    AppState.setView(ViewState.SETTINGS);
-    const container = document.querySelector('.pages-container');
-    container.className = 'pages-container show-settings';
-    
-    // Update the domain name in settings header and inline
+    // Update the domain name in settings inline
     if (AppState.selectedDomain) {
-      const settingsDomain = document.getElementById('settings-domain');
       const settingsDomainInline = document.getElementById('settings-domain-inline');
-      
-      if (settingsDomain) {
-        settingsDomain.textContent = AppState.selectedDomain;
-      }
       if (settingsDomainInline) {
         settingsDomainInline.textContent = AppState.selectedDomain;
       }
     }
-    
+
     // Load settings for selected domain
     this.loadSettings();
   },
 
-  updateNudgeSchedule() {
+  updateNudgeRecommendation() {
     const reminderEnabled = document.getElementById('reminder-enabled').checked;
-    const nudgeTimesSpan = document.getElementById('nudge-times');
+    const nudgeCountOption = document.getElementById('nudge-count-option');
+    const nudgeRecommendation = document.getElementById('nudge-recommendation');
     
-    if (!nudgeTimesSpan) return;
-    
-    // Only show nudge schedule if reminders are enabled
+    // Show/hide nudge count input based on reminder checkbox
     if (reminderEnabled) {
+      nudgeCountOption.style.display = 'block';
+      
       const reminderHours = parseInt(document.getElementById('reminder-hours').value) || 0;
       const reminderMinutes = parseInt(document.getElementById('reminder-minutes').value) || 0;
       const reminderInterval = parseInt(document.getElementById('reminder-interval').value) || 15;
@@ -53,25 +43,18 @@ const UIManager = {
       const timeLimitMinutes = (reminderHours * 60) + reminderMinutes;
       
       if (timeLimitMinutes > 0 && reminderInterval > 0) {
-        // Use shared utility to calculate nudge times
-        const nudgeTimes = Utils.calculatePhiNudgeTimes(timeLimitMinutes, reminderInterval);
+        // Calculate recommended nudge count using φ formula
+        const recommended = Math.round(Constants.PHI * Math.sqrt(timeLimitMinutes / reminderInterval));
+        nudgeRecommendation.textContent = `(recommended: ${recommended})`;
         
-        if (nudgeTimes.length > 0) {
-          // Format times as "15m, 25m, 35m"
-          const timesStr = nudgeTimes.map(t => Utils.formatNudgeTime(t)).join(', ');
-          nudgeTimesSpan.textContent = timesStr;
-          nudgeTimesSpan.style.fontWeight = '600';
-        } else {
-          nudgeTimesSpan.textContent = '—';
-          nudgeTimesSpan.style.fontWeight = 'normal';
-        }
+        // Update placeholder
+        document.getElementById('nudge-count').placeholder = recommended.toString();
       } else {
-        nudgeTimesSpan.textContent = '—';
-        nudgeTimesSpan.style.fontWeight = 'normal';
+        nudgeRecommendation.textContent = '(recommended: 6)';
+        document.getElementById('nudge-count').placeholder = '6';
       }
     } else {
-      nudgeTimesSpan.textContent = '—';
-      nudgeTimesSpan.style.fontWeight = 'normal';
+      nudgeCountOption.style.display = 'none';
     }
   },
 
@@ -92,14 +75,22 @@ const UIManager = {
       const reminderEnabled = domainSettings.reminderEnabled || false;
       const reminderThreshold = domainSettings.reminderThreshold || 180; // default 3h
       const reminderInterval = domainSettings.reminderInterval || 15;
+      const nudgeCount = domainSettings.nudgeCount; // undefined means use recommended
       
       document.getElementById('reminder-enabled').checked = reminderEnabled;
       document.getElementById('reminder-hours').value = Math.floor(reminderThreshold / 60);
       document.getElementById('reminder-minutes').value = reminderThreshold % 60;
       document.getElementById('reminder-interval').value = reminderInterval;
       
-      // Update nudge schedule display (must happen AFTER reminder inputs are set)
-      this.updateNudgeSchedule();
+      // Set nudge count (empty = use recommended)
+      if (nudgeCount !== undefined) {
+        document.getElementById('nudge-count').value = nudgeCount;
+      } else {
+        document.getElementById('nudge-count').value = '';
+      }
+      
+      // Update nudge recommendation display (must happen AFTER reminder inputs are set)
+      this.updateNudgeRecommendation();
       
       // Add rollover behavior for time inputs
       const reminderHours = document.getElementById('reminder-hours');
@@ -117,15 +108,15 @@ const UIManager = {
           reminderMinutes.value = 60 + mins;
         }
         
-        this.updateNudgeSchedule();
+        this.updateNudgeRecommendation();
       });
       
-      // Add event listeners for reminder settings to update nudge schedule dynamically
+      // Add event listeners for reminder settings to update nudge recommendation dynamically
       ['reminder-enabled', 'reminder-hours', 'reminder-interval'].forEach(id => {
         const element = document.getElementById(id);
         if (element) {
-          element.addEventListener('change', () => this.updateNudgeSchedule());
-          element.addEventListener('input', () => this.updateNudgeSchedule());
+          element.addEventListener('change', () => this.updateNudgeRecommendation());
+          element.addEventListener('input', () => this.updateNudgeRecommendation());
         }
       });
       
@@ -156,6 +147,10 @@ const UIManager = {
       const reminderThreshold = (reminderHours * 60) + reminderMinutes;
       const reminderInterval = parseInt(document.getElementById('reminder-interval').value) || 15;
       
+      // Get nudge count (undefined/empty means use recommended)
+      const nudgeCountInput = document.getElementById('nudge-count').value;
+      const nudgeCount = nudgeCountInput === '' ? undefined : parseInt(nudgeCountInput);
+      
       // Save domain settings if reminders are enabled
       if (reminderEnabled) {
         settings.domains[AppState.selectedDomain] = {
@@ -163,6 +158,11 @@ const UIManager = {
           reminderThreshold: reminderThreshold,
           reminderInterval: reminderInterval
         };
+        
+        // Only save nudgeCount if user explicitly set it (not using recommended)
+        if (nudgeCount !== undefined) {
+          settings.domains[AppState.selectedDomain].nudgeCount = nudgeCount;
+        }
       } else {
         // Remove domain if reminders are disabled
         if (settings.domains[AppState.selectedDomain]) {
@@ -195,79 +195,82 @@ const UIManager = {
   renderGeneralView() {
     try {
       const totalTimeData = DataProcessor.processGeneralViewData(AppState.allTimeHistory);
-      
+
       if (totalTimeData.dailyData.length === 0) {
         this.displayMessage('#general-page .page-content', 'No time data available.');
         return;
       }
-      
+
       const chartConfig = ChartBuilder.buildGeneralViewChart(totalTimeData);
       const canvasElement = document.getElementById('total-time-chart');
-      
+
       if (!canvasElement) {
         console.error('Canvas element not found!');
         return;
       }
-      
+
       const chart = new Chart(canvasElement.getContext('2d'), chartConfig);
       chart.totalTimeData = totalTimeData;
-      
+
       // Store chart instance for scroll updates
       AppState.setChartInstance(chart);
-      
+
       // Highlight today by default (but not locked)
       const todayIndex = totalTimeData.dailyData.length - 1;
       ChartBuilder.highlightBar(chart, todayIndex);
       UIManager.updateDailyBreakdown(totalTimeData, todayIndex);
-      
+      UIManager.updatePieChart(totalTimeData, todayIndex);
+
       // Add scroll event handling to the chart container
       this.setupScrollHandling(canvasElement, totalTimeData);
-      
+
       // Add invisible hitbox over x-axis labels to handle dead zone
       this.createDeadZoneHitbox(canvasElement, chart);
-      
+
       // Add explicit mouse leave handler for more reliable behavior
       canvasElement.addEventListener('mouseleave', () => {
         if (AppState.isLocked()) {
           // Return to locked day
           ChartBuilder.highlightBar(chart, AppState.lockedDayIndex);
           UIManager.updateDailyBreakdown(chart.totalTimeData, AppState.lockedDayIndex);
+          UIManager.updatePieChart(chart.totalTimeData, AppState.lockedDayIndex);
         } else {
           // Return to today if not locked
           const todayIndex = chart.totalTimeData.dailyData.length - 1;
           ChartBuilder.highlightBar(chart, todayIndex);
           UIManager.updateDailyBreakdown(chart.totalTimeData, todayIndex);
+          UIManager.updatePieChart(chart.totalTimeData, todayIndex);
         }
       });
-      
+
     } catch (error) {
       console.error('Error creating general view chart:', error);
-      this.displayMessage('#general-page .page-content', 
+      this.displayMessage('#general-page .page-content',
         `Error creating chart: ${error.message}`, 'error');
     }
   },
 
   renderDetailView(domain) {
     if (!domain) {
-      this.displayMessage('#detail-page .page-content', 
+      this.displayMessage('#detail-page .left-panel',
         "Cannot detect current domain. Make sure you're on a web page.", 'error');
       return;
     }
-    
+
     // Update header
     this.updateDetailHeader(domain);
-    
-    // Update content
-    const detailContent = document.querySelector('#detail-page .page-content');
-    detailContent.innerHTML = '<canvas id="time-chart"></canvas>';
-    
+
+    // Update only the left panel (chart area), leave right panel (settings) intact
+    const leftPanel = document.querySelector('#detail-page .left-panel');
+    leftPanel.innerHTML = '<canvas id="time-chart"></canvas>';
+
     // Build and display chart
     const processedData = DataProcessor.processDetailViewData(AppState.allTimeHistory, domain);
     const chartConfig = ChartBuilder.buildDetailViewChart(processedData);
-    
+
     const canvasElement = document.getElementById('time-chart');
     const chart = new Chart(canvasElement.getContext('2d'), chartConfig);
-    
+
     // Add scrolling support if there's enough data
     if (processedData.dailyData.length > CONFIG.daysToDisplay) {
       this.setupDetailViewScrolling(canvasElement, chart, processedData);
@@ -293,27 +296,62 @@ const UIManager = {
     element.innerHTML = `<p class="${cssClass}">${message}</p>`;
   },
 
+  updatePieChart(totalTimeData, dataIndex) {
+    const dayData = totalTimeData.dailyData[dataIndex];
+    const pieCanvas = document.getElementById('breakdown-pie-chart');
+
+    if (!pieCanvas) return;
+
+    // Get RAW day data from timeHistory
+    const dateString = dayData.date;
+    const rawDayData = AppState.allTimeHistory[dateString];
+
+    if (!rawDayData) {
+      // Destroy existing chart if no data
+      if (AppState.pieChartInstance) {
+        AppState.pieChartInstance.destroy();
+        AppState.pieChartInstance = null;
+      }
+      return;
+    }
+
+    const domainData = this.calculateDomainBreakdown(rawDayData);
+
+    // Create or update pie chart
+    if (AppState.pieChartInstance) {
+      // Update existing chart
+      const pieConfig = ChartBuilder.buildPieChart(domainData);
+      AppState.pieChartInstance.data = pieConfig.data;
+      AppState.pieChartInstance.options = pieConfig.options;
+      AppState.pieChartInstance.update('none'); // Update without animation for smooth transitions
+    } else {
+      // Create new chart
+      const pieConfig = ChartBuilder.buildPieChart(domainData);
+      AppState.pieChartInstance = new Chart(pieCanvas.getContext('2d'), pieConfig);
+    }
+  },
+
   updateDailyBreakdown(totalTimeData, dataIndex) {
     const dayData = totalTimeData.dailyData[dataIndex];
     const breakdownTitle = document.querySelector('.breakdown-title');
     const breakdownBars = document.querySelector('.breakdown-bars');
-    
+
     if (!breakdownTitle || !breakdownBars) return;
-    
+
     breakdownTitle.style.display = 'none';
-    
+
     // Get RAW day data from timeHistory, not the transformed chart data
     const dateString = dayData.date;
     const rawDayData = AppState.allTimeHistory[dateString];
-    
+
     if (!rawDayData) {
       breakdownBars.innerHTML = '<div style="color: #888; font-style: italic;">No data for this day</div>';
       return;
     }
-    
+
     const domainData = this.calculateDomainBreakdown(rawDayData);
     this.renderBreakdownBars(breakdownBars, domainData);
-    
+
     // Update the header to show which day we're viewing
     this.updateGeneralViewHeader(dateString);
   },
@@ -456,26 +494,27 @@ const UIManager = {
   updateChartViewport(totalDays, windowSize, scrollPosition) {
     const chart = AppState.chartInstance;
     if (!chart) return;
-    
+
     // Calculate new min/max indices
     const maxIndex = totalDays - 1 - scrollPosition;
     const minIndex = Math.max(0, maxIndex - windowSize + 1);
-    
+
     // Update chart scales
     chart.options.scales.x.min = minIndex;
     chart.options.scales.x.max = maxIndex;
-    
+
     // Redraw chart with new viewport
     chart.update('none'); // Use 'none' mode for instant update without animation
-    
+
     // Restore highlight if a day is locked and visible
     if (AppState.isLocked() && AppState.lockedDayIndex >= minIndex && AppState.lockedDayIndex <= maxIndex) {
       ChartBuilder.highlightBar(chart, AppState.lockedDayIndex);
     }
-    
+
     // Update breakdown to show the locked day if locked, otherwise the last visible day
     const visibleIndex = AppState.isLocked() ? AppState.lockedDayIndex : maxIndex;
     this.updateDailyBreakdown(chart.totalTimeData, visibleIndex);
+    this.updatePieChart(chart.totalTimeData, visibleIndex);
   },
   
   createDeadZoneHitbox(canvasElement, chart) {
@@ -503,10 +542,12 @@ const UIManager = {
       if (AppState.isLocked()) {
         ChartBuilder.highlightBar(chart, AppState.lockedDayIndex);
         UIManager.updateDailyBreakdown(chart.totalTimeData, AppState.lockedDayIndex);
+        UIManager.updatePieChart(chart.totalTimeData, AppState.lockedDayIndex);
       } else {
         const todayIndex = chart.totalTimeData.dailyData.length - 1;
         ChartBuilder.highlightBar(chart, todayIndex);
         UIManager.updateDailyBreakdown(chart.totalTimeData, todayIndex);
+        UIManager.updatePieChart(chart.totalTimeData, todayIndex);
       }
     });
     

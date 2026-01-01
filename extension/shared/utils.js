@@ -102,14 +102,17 @@ const Utils = {
    * Calculate nudge times using φ-based exponential decay
    * @param {number} timeLimitMinutes - When reminders start (in minutes)
    * @param {number} reminderIntervalMinutes - How often reminders repeat (in minutes)
+   * @param {number|undefined} nudgeCount - Optional user-specified nudge count (undefined = use recommended)
    * @returns {Array<number>} Array of nudge times in seconds, sorted ascending
    */
-  calculatePhiNudgeTimes(timeLimitMinutes, reminderIntervalMinutes) {
+  calculatePhiNudgeTimes(timeLimitMinutes, reminderIntervalMinutes, nudgeCount) {
     const φ = Constants.PHI;
     const timeLimitSeconds = timeLimitMinutes * 60;
     
-    // Calculate number of nudges: round(φ × sqrt(timeLimit / reminderInterval))
-    const numNudges = Math.round(φ * Math.sqrt(timeLimitMinutes / reminderIntervalMinutes));
+    // Use provided nudge count or calculate recommended
+    const numNudges = (nudgeCount !== null && nudgeCount !== undefined)
+      ? nudgeCount
+      : Math.round(φ * Math.sqrt(timeLimitMinutes / reminderIntervalMinutes));
     
     if (numNudges === 0) return [];
     
