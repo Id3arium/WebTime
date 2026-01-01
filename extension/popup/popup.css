@@ -445,7 +445,7 @@ body {
 }
 
 .inline-input {
-  width: 42px;
+  width: 35px;
   background: var(--light-bg);
   border: 1px solid var(--border-line);
   border-radius: 3px;

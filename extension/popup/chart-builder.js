@@ -172,7 +172,16 @@ const ChartBuilder = {
             callback: function(value) {
               // Chart shows sqrt values, but labels show real hours
               const realHours = Math.pow(value, 2);
-              return Math.round(realHours);
+              return realHours.toFixed(1);
+            }
+          },
+          title: {
+            display: true,
+            text: 'Hours (√ scale)',
+            color: '#ccc',
+            font: {
+              size: 12,
+              weight: '600'
             }
           }
         }
@@ -291,7 +300,16 @@ const ChartBuilder = {
             callback: function(value) {
               // Chart shows sqrt values, but labels show real hours
               const realHours = Math.pow(value, 2);
-              return Math.round(realHours);
+              return realHours.toFixed(1);
+            }
+          },
+          title: {
+            display: true,
+            text: 'Hours (√ scale)',
+            color: '#ccc',
+            font: {
+              size: 12,
+              weight: '600'
             }
           }
         }
