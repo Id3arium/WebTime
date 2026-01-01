@@ -116,18 +116,7 @@ const ChartBuilder = {
   buildGeneralViewChart(totalTimeData) {
     const datasets = [];
 
-    // Transform moving average to sqrt scale
-    if (totalTimeData.movingAverageData) {
-      const avgDataset = this.createMovingAverageDataset(
-        totalTimeData.movingAverageData,
-        `${CONFIG.movingAverageDays}-Day Average`
-      );
-      avgDataset.data = avgDataset.data.map(val => Math.sqrt(val));
-      avgDataset.originalData = totalTimeData.movingAverageData.map(day => day.averageHours);
-      datasets.push(avgDataset);
-    }
-
-    // Create bars dataset with sqrt-transformed data
+    // Create bars dataset with sqrt-transformed data (add first for tooltip order)
     const totalBarsDataset = {
       type: 'bar',
       label: 'Total Time',
@@ -140,6 +129,17 @@ const ChartBuilder = {
       order: 1
     };
     datasets.push(totalBarsDataset);
+
+    // Transform moving average to sqrt scale (add second for tooltip order)
+    if (totalTimeData.movingAverageData) {
+      const avgDataset = this.createMovingAverageDataset(
+        totalTimeData.movingAverageData,
+        `${CONFIG.movingAverageDays}-Day Average`
+      );
+      avgDataset.data = avgDataset.data.map(val => Math.sqrt(val));
+      avgDataset.originalData = totalTimeData.movingAverageData.map(day => day.averageHours);
+      datasets.push(avgDataset);
+    }
 
     const totalDays = totalTimeData.dailyData.length;
     const windowSize = CONFIG.daysToDisplay;
@@ -252,7 +252,14 @@ const ChartBuilder = {
   buildDetailViewChart(processedData) {
     const datasets = [];
 
-    // Transform moving average to sqrt scale
+    // Create domain bars dataset first (for tooltip order)
+    const domainDataset = this.createSingleDomainDataset(processedData.dailyData);
+    // Transform domain data to sqrt scale
+    domainDataset.data = domainDataset.data.map(val => Math.sqrt(val));
+    domainDataset.originalData = processedData.dailyData.map(day => day.domainHours);
+    datasets.push(domainDataset);
+
+    // Transform moving average to sqrt scale (add second for tooltip order)
     if (processedData.movingAverageData) {
       const avgDataset = this.createMovingAverageDataset(
         processedData.movingAverageData,
@@ -262,12 +269,6 @@ const ChartBuilder = {
       avgDataset.originalData = processedData.movingAverageData.map(day => day.averageHours);
       datasets.push(avgDataset);
     }
-
-    const domainDataset = this.createSingleDomainDataset(processedData.dailyData);
-    // Transform domain data to sqrt scale
-    domainDataset.data = domainDataset.data.map(val => Math.sqrt(val));
-    domainDataset.originalData = processedData.dailyData.map(day => day.domainHours);
-    datasets.push(domainDataset);
 
     const totalDays = processedData.dailyData.length;
     const windowSize = CONFIG.daysToDisplay;
@@ -336,17 +337,20 @@ const ChartBuilder = {
           const dateString = totalTimeData.dailyData[context[0].dataIndex].date;
           return PopUpUtils.formatDateWithDayOfWeek(dateString);
         },
+        beforeLabel: (context) => {
+          // Always show total first
+          if (context.datasetIndex === 0) {
+            const dataIndex = context.dataIndex;
+            const dayData = totalTimeData.dailyData[dataIndex];
+            return `Total: ${dayData.formattedTime}`;
+          }
+          return null;
+        },
         label: (context) => {
           const dataIndex = context.dataIndex;
           const dataset = context.dataset;
 
-          // Show total first (bar chart)
-          if (dataset.type === 'bar') {
-            const dayData = totalTimeData.dailyData[dataIndex];
-            return `Total: ${dayData.formattedTime}`;
-          }
-
-          // Show average second (line chart)
+          // Show average second (line chart only)
           if (dataset.label && dataset.label.includes('Average')) {
             const time = dataset.formattedTimes[dataIndex];
             return `${dataset.label}: ${time}`;
