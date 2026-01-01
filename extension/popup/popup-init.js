@@ -6,7 +6,7 @@ const App = {
       this.renderInitialView();
     } catch (error) {
       console.error("Error initializing popup:", error);
-      UIManager.displayMessage('#detail-page .page-content', 
+      UIManager.displayMessage('#detail-page .left-panel',
         "Could not load your time data.", 'error');
     }
   },
@@ -14,25 +14,14 @@ const App = {
   setupEventListeners() {
     // Navigation between views
     document.getElementById('general-detail-btn').addEventListener('click', () => {
+      UIManager.renderDetailView(AppState.selectedDomain);
       UIManager.showDetailView();
     });
-    
+
     document.getElementById('detail-general-btn').addEventListener('click', () => {
       UIManager.showGeneralView();
     });
-    
-    document.getElementById('detail-settings-btn').addEventListener('click', () => {
-      UIManager.showSettingsView();
-    });
-    
-    document.getElementById('settings-back-btn').addEventListener('click', () => {
-      // Return to the view before settings
-      if (AppState.currentView === ViewState.SETTINGS) {
-        // Default to detail view
-        UIManager.showDetailView();
-      }
-    });
-    
+
     // Save settings button
     document.getElementById('save-settings-btn').addEventListener('click', () => {
       UIManager.saveSettings();
@@ -53,11 +42,11 @@ const App = {
 
   renderInitialView() {
     if (Object.keys(AppState.allTimeHistory).length === 0) {
-      UIManager.displayMessage('#detail-page .page-content', 
+      UIManager.displayMessage('#detail-page .left-panel',
         `No tracking data available yet for ${AppState.activeTabDomain || "any site"}. Start browsing to collect data.`);
       return;
     }
-    
+
     UIManager.renderDetailView(AppState.selectedDomain);
     UIManager.showDetailView();
   }

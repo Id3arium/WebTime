@@ -115,25 +115,35 @@ const ChartBuilder = {
 
   buildGeneralViewChart(totalTimeData) {
     const datasets = [];
-    
+
     if (totalTimeData.movingAverageData) {
       const avgDataset = this.createMovingAverageDataset(
-        totalTimeData.movingAverageData, 
+        totalTimeData.movingAverageData,
         `${CONFIG.movingAverageDays}-Day Average`
       );
       datasets.push(avgDataset);
     }
-    
-    const rankDatasets = this.createRankBasedDatasets(totalTimeData.dailyData);
-    datasets.push(...rankDatasets);
-    
+
+    // Create simple total bars dataset (not stacked)
+    const totalBarsDataset = {
+      type: 'bar',
+      label: 'Total Time',
+      data: totalTimeData.dailyData.map(day => day.totalHours),
+      formattedTimes: totalTimeData.dailyData.map(day => day.formattedTime),
+      backgroundColor: COLORS.currentDomain.background,
+      borderColor: COLORS.currentDomain.border,
+      borderWidth: 1,
+      order: 1
+    };
+    datasets.push(totalBarsDataset);
+
     const totalDays = totalTimeData.dailyData.length;
     const windowSize = CONFIG.daysToDisplay;
-    
+
     // Calculate initial viewport - show most recent days
     const maxIndex = totalDays - 1;
     const minIndex = Math.max(0, totalDays - windowSize);
-    
+
     // Calculate y-axis max with 2 SD cap (95% of data)
     const allTotalHours = totalTimeData.dailyData.map(day => day.totalHours);
     const mean = allTotalHours.reduce((sum, val) => sum + val, 0) / allTotalHours.length;
@@ -141,23 +151,21 @@ const ChartBuilder = {
     const stdDev = Math.sqrt(variance);
     const cappedMax = mean + (2 * stdDev);
     const yAxisMax = Math.ceil(cappedMax);
-    
+
     // Store yAxisMax for tooltip
     totalTimeData._yAxisMax = yAxisMax;
-    
+
     const options = {
       ...this.getBaseChartOptions(),
       scales: {
         ...this.getBaseChartOptions().scales,
-        x: { 
-          stacked: true,
+        x: {
           min: minIndex,
           max: maxIndex,
           display: true
         },
-        y: { 
-          ...this.getBaseChartOptions().scales.y, 
-          stacked: true,
+        y: {
+          ...this.getBaseChartOptions().scales.y,
           max: yAxisMax // Lock y-axis to global max
         }
       },
@@ -168,10 +176,11 @@ const ChartBuilder = {
       onHover: (event, elements, chart) => {
         if (elements.length > 0) {
           const dataIndex = elements[0].index;
-          
+
           // Always update breakdown on hover
           UIManager.updateDailyBreakdown(chart.totalTimeData, dataIndex);
-          
+          UIManager.updatePieChart(chart.totalTimeData, dataIndex);
+
           // Always show hover preview (even when locked)
           ChartBuilder.showHoverPreview(chart, dataIndex);
         } else {
@@ -180,18 +189,20 @@ const ChartBuilder = {
             // Return to locked day
             ChartBuilder.highlightBar(chart, AppState.lockedDayIndex);
             UIManager.updateDailyBreakdown(chart.totalTimeData, AppState.lockedDayIndex);
+            UIManager.updatePieChart(chart.totalTimeData, AppState.lockedDayIndex);
           } else {
             // Return to today if not locked
             const todayIndex = chart.totalTimeData.dailyData.length - 1;
             ChartBuilder.highlightBar(chart, todayIndex);
             UIManager.updateDailyBreakdown(chart.totalTimeData, todayIndex);
+            UIManager.updatePieChart(chart.totalTimeData, todayIndex);
           }
         }
       },
       onClick: (event, elements, chart) => {
         if (elements.length > 0) {
           const clickedIndex = elements[0].index;
-          
+
           if (AppState.lockedDayIndex === clickedIndex) {
             // Clicking the same day unlocks it
             AppState.unlockDay();
@@ -200,6 +211,7 @@ const ChartBuilder = {
             // Lock to new day
             AppState.lockDay(clickedIndex);
             UIManager.updateDailyBreakdown(chart.totalTimeData, clickedIndex);
+            UIManager.updatePieChart(chart.totalTimeData, clickedIndex);
             ChartBuilder.highlightBar(chart, clickedIndex);
           }
         } else {
@@ -209,7 +221,7 @@ const ChartBuilder = {
         }
       }
     };
-    
+
     return {
       type: 'bar',
       data: {
@@ -327,24 +339,44 @@ const ChartBuilder = {
       if (dataset.type === 'bar') {
         // Store original colors if not already stored
         if (!dataset._originalBackgroundColor) {
-          dataset._originalBackgroundColor = [...dataset.backgroundColor];
-          dataset._originalBorderColor = [...dataset.borderColor];
-          dataset._originalBorderWidth = [...dataset.borderWidth];
+          dataset._originalBackgroundColor = Array.isArray(dataset.backgroundColor)
+            ? [...dataset.backgroundColor]
+            : dataset.backgroundColor;
+          dataset._originalBorderColor = Array.isArray(dataset.borderColor)
+            ? [...dataset.borderColor]
+            : dataset.borderColor;
+          dataset._originalBorderWidth = Array.isArray(dataset.borderWidth)
+            ? [...dataset.borderWidth]
+            : dataset.borderWidth;
         }
-        
+
+        // Convert to arrays if needed for per-bar styling
+        const numBars = dataset.data.length;
+        if (!Array.isArray(dataset.backgroundColor)) {
+          dataset.backgroundColor = Array(numBars).fill(dataset.backgroundColor);
+        }
+        if (!Array.isArray(dataset.borderColor)) {
+          dataset.borderColor = Array(numBars).fill(dataset.borderColor);
+        }
+        if (!Array.isArray(dataset.borderWidth)) {
+          dataset.borderWidth = Array(numBars).fill(dataset.borderWidth);
+        }
+
         // Reset all bars to original colors first
-        dataset.backgroundColor = [...dataset._originalBackgroundColor];
-        dataset.borderColor = [...dataset._originalBorderColor];
-        dataset.borderWidth = [...dataset._originalBorderWidth];
-        
+        const origBg = dataset._originalBackgroundColor;
+        const origBorder = dataset._originalBorderColor;
+        const origWidth = dataset._originalBorderWidth;
+
+        dataset.backgroundColor = Array.isArray(origBg) ? [...origBg] : Array(numBars).fill(origBg);
+        dataset.borderColor = Array.isArray(origBorder) ? [...origBorder] : Array(numBars).fill(origBorder);
+        dataset.borderWidth = Array.isArray(origWidth) ? [...origWidth] : Array(numBars).fill(origWidth);
+
         // Highlight the selected bar
-        if (Array.isArray(dataset.borderColor)) {
-          dataset.borderColor[barIndex] = 'white'; // White border
-          dataset.borderWidth[barIndex] = 1;
-        }
+        dataset.borderColor[barIndex] = 'white'; // White border
+        dataset.borderWidth[barIndex] = 2;
       }
     });
-    
+
     chart.update('none'); // Update without animation
   },
   
@@ -352,12 +384,17 @@ const ChartBuilder = {
     // Remove highlight from all bars
     chart.data.datasets.forEach((dataset) => {
       if (dataset.type === 'bar' && dataset._originalBackgroundColor) {
-        dataset.backgroundColor = [...dataset._originalBackgroundColor];
-        dataset.borderColor = [...dataset._originalBorderColor];
-        dataset.borderWidth = [...dataset._originalBorderWidth];
+        const numBars = dataset.data.length;
+        const origBg = dataset._originalBackgroundColor;
+        const origBorder = dataset._originalBorderColor;
+        const origWidth = dataset._originalBorderWidth;
+
+        dataset.backgroundColor = Array.isArray(origBg) ? [...origBg] : Array(numBars).fill(origBg);
+        dataset.borderColor = Array.isArray(origBorder) ? [...origBorder] : Array(numBars).fill(origBorder);
+        dataset.borderWidth = Array.isArray(origWidth) ? [...origWidth] : Array(numBars).fill(origWidth);
       }
     });
-    
+
     chart.update('none'); // Update without animation
   },
   
@@ -367,30 +404,52 @@ const ChartBuilder = {
       if (dataset.type === 'bar') {
         // Store original colors if not already stored
         if (!dataset._originalBackgroundColor) {
-          dataset._originalBackgroundColor = [...dataset.backgroundColor];
-          dataset._originalBorderColor = [...dataset.borderColor];
-          dataset._originalBorderWidth = [...dataset.borderWidth];
+          dataset._originalBackgroundColor = Array.isArray(dataset.backgroundColor)
+            ? [...dataset.backgroundColor]
+            : dataset.backgroundColor;
+          dataset._originalBorderColor = Array.isArray(dataset.borderColor)
+            ? [...dataset.borderColor]
+            : dataset.borderColor;
+          dataset._originalBorderWidth = Array.isArray(dataset.borderWidth)
+            ? [...dataset.borderWidth]
+            : dataset.borderWidth;
         }
-        
+
+        // Convert to arrays if needed for per-bar styling
+        const numBars = dataset.data.length;
+        if (!Array.isArray(dataset.backgroundColor)) {
+          dataset.backgroundColor = Array(numBars).fill(dataset.backgroundColor);
+        }
+        if (!Array.isArray(dataset.borderColor)) {
+          dataset.borderColor = Array(numBars).fill(dataset.borderColor);
+        }
+        if (!Array.isArray(dataset.borderWidth)) {
+          dataset.borderWidth = Array(numBars).fill(dataset.borderWidth);
+        }
+
         // Reset all bars to original colors first
-        dataset.backgroundColor = [...dataset._originalBackgroundColor];
-        dataset.borderColor = [...dataset._originalBorderColor];
-        dataset.borderWidth = [...dataset._originalBorderWidth];
-        
+        const origBg = dataset._originalBackgroundColor;
+        const origBorder = dataset._originalBorderColor;
+        const origWidth = dataset._originalBorderWidth;
+
+        dataset.backgroundColor = Array.isArray(origBg) ? [...origBg] : Array(numBars).fill(origBg);
+        dataset.borderColor = Array.isArray(origBorder) ? [...origBorder] : Array(numBars).fill(origBorder);
+        dataset.borderWidth = Array.isArray(origWidth) ? [...origWidth] : Array(numBars).fill(origWidth);
+
         // Restore locked highlight if there is one
-        if (AppState.isLocked() && Array.isArray(dataset.borderColor)) {
+        if (AppState.isLocked()) {
           dataset.borderColor[AppState.lockedDayIndex] = 'white'; // Solid white for locked
-          dataset.borderWidth[AppState.lockedDayIndex] = 1;
+          dataset.borderWidth[AppState.lockedDayIndex] = 2;
         }
-        
+
         // Show preview highlight (only if different from locked bar)
-        if (Array.isArray(dataset.borderColor) && barIndex !== AppState.lockedDayIndex) {
+        if (barIndex !== AppState.lockedDayIndex) {
           dataset.borderColor[barIndex] = 'rgba(255, 255, 255, 0.8)'; // Semi-transparent white for preview
-          dataset.borderWidth[barIndex] = 1;
+          dataset.borderWidth[barIndex] = 2;
         }
       }
     });
-    
+
     chart.update('none'); // Update without animation
   },
 
@@ -408,15 +467,64 @@ const ChartBuilder = {
           const dataIndex = context.dataIndex;
           const dayData = processedData.dailyData[dataIndex];
           const time = dataset.formattedTimes[dataIndex];
-          
+
           // Check if this bar is capped
           if (dataset.type === 'bar' && dayData.domainHours > processedData._yAxisMax) {
             const actualTime = dayData.domainFormattedTime;
             const cappedTime = PopUpUtils.formatTime(processedData._yAxisMax * 3600);
             return `${dataset.label}: ${actualTime} (capped at ${cappedTime} for scale)`;
           }
-          
+
           return `${dataset.label}: ${time}`;
+        }
+      }
+    };
+  },
+
+  buildPieChart(domainData) {
+    const labels = domainData.map(item => item.domain);
+    const data = domainData.map(item => item.seconds / 3600); // Convert to hours
+    const colors = domainData.map(item => item.color);
+
+    return {
+      type: 'pie',
+      data: {
+        labels: labels,
+        datasets: [{
+          data: data,
+          backgroundColor: colors,
+          borderColor: colors.map(c => c.replace('0.7', '1')),
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: false
+          },
+          tooltip: {
+            backgroundColor: COLORS.tooltipBackground,
+            callbacks: {
+              label: (context) => {
+                const domain = context.label;
+                const seconds = domainData[context.dataIndex].seconds;
+                const percentage = domainData[context.dataIndex].percentage;
+                const formattedTime = PopUpUtils.formatTime(seconds);
+                return `${domain}: ${formattedTime} (${percentage}%)`;
+              }
+            }
+          }
+        },
+        onClick: (event, elements, chart) => {
+          if (elements.length > 0) {
+            const index = elements[0].index;
+            const domain = chart.data.labels[index];
+            AppState.setSelectedDomain(domain);
+            UIManager.renderDetailView(domain);
+            UIManager.showDetailView();
+          }
         }
       }
     };

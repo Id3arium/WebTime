@@ -16,10 +16,9 @@ let isSaving = false; // Lock to prevent race conditions during simultaneous sav
 
 // Nudge and reminder system state
 let interventionState = {
-    lastNudgeTime: {},         // domain -> timestamp (Tier 1: visual nudges)
-    lastReminderTime: {},      // domain -> timestamp (Tier 2: popup reminders)
-    snoozedUntil: {},          // domain -> timestamp or 'tomorrow'
-    reminderPhaseReached: {}   // domain -> boolean
+    lastNudgeTime: {},         // domain -> timestamp (φ-nudges)
+    lastReminderTime: {},      // domain -> timestamp (reminders)
+    snoozedUntil: {}           // domain -> timestamp or 'tomorrow'
 };
 
 // Use shared utility function
@@ -143,8 +142,7 @@ function incrementTimer() {
         interventionState = {
             lastNudgeTime: {},
             lastReminderTime: {},
-            snoozedUntil: {},
-            reminderPhaseReached: {}
+            snoozedUntil: {}
         };
         console.log("New day, reset timer.");
     }
@@ -392,7 +390,7 @@ async function loadInterventionSettings() {
  * Uses exponential decay spacing that accelerates as time passes
  */
 function checkPhiBasedNudges(settings) {
-    const { reminderThreshold, reminderInterval, timeInSeconds } = settings;
+    const { reminderThreshold, reminderInterval, timeInSeconds, domainSettings } = settings;
     
     // Don't nudge after hitting reminder threshold
     if (timeInSeconds >= reminderThreshold) return;
@@ -400,8 +398,11 @@ function checkPhiBasedNudges(settings) {
     const timeLimitMinutes = reminderThreshold / 60;
     const reminderIntervalMinutes = reminderInterval;
     
-    // Calculate nudge times using shared utility function
-    const nudgeTimes = Utils.calculatePhiNudgeTimes(timeLimitMinutes, reminderIntervalMinutes);
+    // Get user's nudge count preference (undefined = use recommended)
+    const userNudgeCount = domainSettings.nudgeCount;
+    
+    // Calculate nudge times - use user count if set, otherwise calculate recommended
+    const nudgeTimes = Utils.calculatePhiNudgeTimes(timeLimitMinutes, reminderIntervalMinutes, userNudgeCount);
     
     // Check if current time matches any nudge time
     for (const nudgeTime of nudgeTimes) {
@@ -438,7 +439,6 @@ function checkTier2Reminders(settings) {
     
     showReminder(global.customMessage);
     interventionState.lastReminderTime[trackedTabDomain] = timeInSeconds;
-    interventionState.reminderPhaseReached[trackedTabDomain] = true;
 }
 
 function sendNudge() {

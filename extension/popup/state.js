@@ -13,7 +13,8 @@ const AppState = {
   scrollPosition: 0,  // 0 = most recent days, positive = scroll back in time
   totalDays: 0,       // Total number of days available
   chartInstance: null, // Reference to the Chart.js instance
-  
+  pieChartInstance: null, // Reference to the pie chart instance
+
   // Click-to-lock state
   lockedDayIndex: null,  // null = hover mode, number = locked to specific day
 
