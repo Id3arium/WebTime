@@ -71,10 +71,10 @@ const ChartBuilder = {
     };
   },
 
-  getBaseChartOptions() {
+  getBaseChartOptions(isGeneralView = false) {
     return {
       animation: { duration: CONFIG.initAnimationDuration },
-      responsive: true,
+      responsive: true, // General view is NOT responsive
       maintainAspectRatio: false,
       scales: {
         y: {
@@ -156,9 +156,9 @@ const ChartBuilder = {
     totalTimeData._yAxisMax = yAxisMax;
 
     const options = {
-      ...this.getBaseChartOptions(),
+      ...this.getBaseChartOptions(true),
       scales: {
-        ...this.getBaseChartOptions().scales,
+        ...this.getBaseChartOptions(true).scales,
         x: {
           min: minIndex,
           max: maxIndex,
@@ -498,8 +498,8 @@ const ChartBuilder = {
         }]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
+        responsive: false,
+        maintainAspectRatio: true,
         plugins: {
           legend: {
             display: false

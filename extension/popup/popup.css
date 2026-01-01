@@ -8,11 +8,12 @@
 }
 
 body {
-  width: 800px;
-  height: 570px;
+  width: 870px;
+  height: 600px;
   font-family: Arial, sans-serif;
   margin: 0;
   padding: 0px 16px;
+  overflow: hidden;
 
   background-color: var(--dark-bg);
   backdrop-filter: blur(8px);              /* Blur effect */
@@ -141,6 +142,9 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 .right-panel {
@@ -148,31 +152,41 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  overflow-y: auto;
+  height: 500px;
+  overflow: hidden;
   padding-left: 12px;
   border-left: 1px solid var(--border-line);
 }
 
 #total-time-chart,
 #time-chart {
-  flex: 1;
-  min-height: 0;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.pie-chart-wrapper {
+  height: 192px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 #breakdown-pie-chart {
-  flex: 0 0 200px;
-  max-height: 200px;
-  margin-bottom: 12px;
+  width: 180px;
+  height: 180px;
 }
 
 .breakdown-bars {
-  flex: 1;
+  height: 278px;
   overflow-y: auto;
+  overflow-x: hidden;
   padding-right: 4px;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
   gap: 6px;
+  flex-shrink: 0;
 }
 
 .breakdown-title {
@@ -181,6 +195,8 @@ body {
   color: var(--summary-text);
   font-weight: 500;
   text-align: center;
+  height: 22px;
+  flex-shrink: 0;
 }
 
 .breakdown-bar {
