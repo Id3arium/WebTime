@@ -116,19 +116,23 @@ const ChartBuilder = {
   buildGeneralViewChart(totalTimeData) {
     const datasets = [];
 
+    // Transform moving average to sqrt scale
     if (totalTimeData.movingAverageData) {
       const avgDataset = this.createMovingAverageDataset(
         totalTimeData.movingAverageData,
         `${CONFIG.movingAverageDays}-Day Average`
       );
+      avgDataset.data = avgDataset.data.map(val => Math.sqrt(val));
+      avgDataset.originalData = totalTimeData.movingAverageData.map(day => day.averageHours);
       datasets.push(avgDataset);
     }
 
-    // Create simple total bars dataset (not stacked)
+    // Create bars dataset with sqrt-transformed data
     const totalBarsDataset = {
       type: 'bar',
       label: 'Total Time',
-      data: totalTimeData.dailyData.map(day => day.totalHours),
+      data: totalTimeData.dailyData.map(day => Math.sqrt(day.totalHours)),
+      originalData: totalTimeData.dailyData.map(day => day.totalHours),
       formattedTimes: totalTimeData.dailyData.map(day => day.formattedTime),
       backgroundColor: COLORS.currentDomain.background,
       borderColor: COLORS.currentDomain.border,
@@ -144,16 +148,12 @@ const ChartBuilder = {
     const maxIndex = totalDays - 1;
     const minIndex = Math.max(0, totalDays - windowSize);
 
-    // Calculate y-axis max with 2 SD cap (95% of data)
+    // Calculate y-axis max from sqrt-transformed values
     const allTotalHours = totalTimeData.dailyData.map(day => day.totalHours);
-    const mean = allTotalHours.reduce((sum, val) => sum + val, 0) / allTotalHours.length;
-    const variance = allTotalHours.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / allTotalHours.length;
-    const stdDev = Math.sqrt(variance);
-    const cappedMax = mean + (2 * stdDev);
-    const yAxisMax = Math.ceil(cappedMax);
-
-    // Store yAxisMax for tooltip
-    totalTimeData._yAxisMax = yAxisMax;
+    const allSqrtHours = allTotalHours.map(h => Math.sqrt(h));
+    const maxSqrt = Math.max(...allSqrtHours);
+    // Round up to next nice number for y-axis (e.g., 3.2 -> 3.5, 3.6 -> 4.0)
+    const yAxisMax = Math.ceil(maxSqrt * 2) / 2; // Round to nearest 0.5
 
     const options = {
       ...this.getBaseChartOptions(true),
@@ -166,7 +166,15 @@ const ChartBuilder = {
         },
         y: {
           ...this.getBaseChartOptions().scales.y,
-          max: yAxisMax // Lock y-axis to global max
+          max: yAxisMax,
+          ticks: {
+            ...this.getBaseChartOptions().scales.y.ticks,
+            callback: function(value) {
+              // Chart shows sqrt values, but labels show real hours
+              const realHours = Math.pow(value, 2);
+              return Math.round(realHours);
+            }
+          }
         }
       },
       plugins: {
@@ -234,48 +242,58 @@ const ChartBuilder = {
 
   buildDetailViewChart(processedData) {
     const datasets = [];
-    
+
+    // Transform moving average to sqrt scale
     if (processedData.movingAverageData) {
       const avgDataset = this.createMovingAverageDataset(
         processedData.movingAverageData,
         `${CONFIG.movingAverageDays}-Day Average`
       );
+      avgDataset.data = avgDataset.data.map(val => Math.sqrt(val));
+      avgDataset.originalData = processedData.movingAverageData.map(day => day.averageHours);
       datasets.push(avgDataset);
     }
-    
+
     const domainDataset = this.createSingleDomainDataset(processedData.dailyData);
+    // Transform domain data to sqrt scale
+    domainDataset.data = domainDataset.data.map(val => Math.sqrt(val));
+    domainDataset.originalData = processedData.dailyData.map(day => day.domainHours);
     datasets.push(domainDataset);
-    
+
     const totalDays = processedData.dailyData.length;
     const windowSize = CONFIG.daysToDisplay;
-    
+
     // Calculate initial viewport - show most recent days
     const maxIndex = totalDays - 1;
     const minIndex = Math.max(0, totalDays - windowSize);
-    
-    // Calculate y-axis max with 2 SD cap (95% of data)
+
+    // Calculate y-axis max from sqrt-transformed values
     const allDomainHours = processedData.dailyData.map(day => day.domainHours);
-    const mean = allDomainHours.reduce((sum, val) => sum + val, 0) / allDomainHours.length;
-    const variance = allDomainHours.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / allDomainHours.length;
-    const stdDev = Math.sqrt(variance);
-    const cappedMax = mean + (2 * stdDev);
-    const yAxisMax = Math.ceil(cappedMax);
-    
-    // Store yAxisMax for tooltip
-    processedData._yAxisMax = yAxisMax;
-    
+    const allSqrtHours = allDomainHours.map(h => Math.sqrt(h));
+    const maxSqrt = Math.max(...allSqrtHours);
+    // Round up to next nice number for y-axis (e.g., 3.2 -> 3.5, 3.6 -> 4.0)
+    const yAxisMax = Math.ceil(maxSqrt * 2) / 2; // Round to nearest 0.5
+
     const options = {
       ...this.getBaseChartOptions(),
       scales: {
         ...this.getBaseChartOptions().scales,
-        x: { 
+        x: {
           min: minIndex,
           max: maxIndex,
           display: true
         },
         y: {
           ...this.getBaseChartOptions().scales.y,
-          max: yAxisMax // Lock y-axis to global max
+          max: yAxisMax,
+          ticks: {
+            ...this.getBaseChartOptions().scales.y.ticks,
+            callback: function(value) {
+              // Chart shows sqrt values, but labels show real hours
+              const realHours = Math.pow(value, 2);
+              return Math.round(realHours);
+            }
+          }
         }
       },
       plugins: { tooltip: this.getDetailViewTooltipConfig(processedData) }
@@ -303,30 +321,19 @@ const ChartBuilder = {
         label: (context) => {
           const dataIndex = context.dataIndex;
           const dataset = context.dataset;
-          
-          // Only show average line
+
+          // Show total first (bar chart)
+          if (dataset.type === 'bar') {
+            const dayData = totalTimeData.dailyData[dataIndex];
+            return `Total: ${dayData.formattedTime}`;
+          }
+
+          // Show average second (line chart)
           if (dataset.label && dataset.label.includes('Average')) {
             const time = dataset.formattedTimes[dataIndex];
             return `${dataset.label}: ${time}`;
           }
-          
-          return null;
-        },
-        afterLabel: (context) => {
-          // Show total on first dataset only
-          if (context.datasetIndex === 0) {
-            const dataIndex = context.dataIndex;
-            const dayData = totalTimeData.dailyData[dataIndex];
-            const actualHours = dayData.totalHours;
-            const yMax = totalTimeData._yAxisMax;
-            
-            if (actualHours > yMax) {
-              const actualTime = PopUpUtils.formatTime(actualHours * 3600);
-              const cappedTime = PopUpUtils.formatTime(yMax * 3600);
-              return `Total: ${actualTime} (capped at ${cappedTime} for scale)`;
-            }
-            return `Total: ${dayData.formattedTime}`;
-          }
+
           return null;
         }
       }
