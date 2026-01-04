@@ -332,25 +332,27 @@ const ChartBuilder = {
     return {
       animation: { duration: 200 },
       backgroundColor: COLORS.tooltipBackground,
+      itemSort: (a, b) => {
+        // Sort by dataset index: lower index first
+        // Dataset 0 = bars (Total), Dataset 1 = line (Average)
+        return a.datasetIndex - b.datasetIndex;
+      },
       callbacks: {
         title: (context) => {
           const dateString = totalTimeData.dailyData[context[0].dataIndex].date;
           return PopUpUtils.formatDateWithDayOfWeek(dateString);
         },
-        beforeLabel: (context) => {
-          // Always show total first
-          if (context.datasetIndex === 0) {
-            const dataIndex = context.dataIndex;
-            const dayData = totalTimeData.dailyData[dataIndex];
-            return `Total: ${dayData.formattedTime}`;
-          }
-          return null;
-        },
         label: (context) => {
           const dataIndex = context.dataIndex;
           const dataset = context.dataset;
 
-          // Show average second (line chart only)
+          // Show total (bar chart)
+          if (dataset.type === 'bar') {
+            const dayData = totalTimeData.dailyData[dataIndex];
+            return `Total: ${dayData.formattedTime}`;
+          }
+
+          // Show average (line chart)
           if (dataset.label && dataset.label.includes('Average')) {
             const time = dataset.formattedTimes[dataIndex];
             return `${dataset.label}: ${time}`;
@@ -486,6 +488,11 @@ const ChartBuilder = {
     return {
       animation: { duration: 200 },
       backgroundColor: COLORS.tooltipBackground,
+      itemSort: (a, b) => {
+        // Sort by dataset index: lower index first
+        // Dataset 0 = bars (This Day), Dataset 1 = line (Average)
+        return a.datasetIndex - b.datasetIndex;
+      },
       callbacks: {
         title: (context) => {
           const dateString = processedData.dailyData[context[0].dataIndex].date;
@@ -529,6 +536,7 @@ const ChartBuilder = {
       options: {
         responsive: false,
         maintainAspectRatio: true,
+        animation: false,
         plugins: {
           legend: {
             display: false

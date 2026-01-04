@@ -82,11 +82,18 @@ const UIManager = {
       document.getElementById('reminder-minutes').value = reminderThreshold % 60;
       document.getElementById('reminder-interval').value = reminderInterval;
       
-      // Set nudge count (empty = use recommended)
+      // Set nudge count (default to recommended value if never set)
       if (nudgeCount !== undefined) {
         document.getElementById('nudge-count').value = nudgeCount;
       } else {
-        document.getElementById('nudge-count').value = '';
+        // Calculate recommended value based on current time limit settings
+        const timeLimitMinutes = (reminderHours * 60) + reminderMinutes;
+        if (timeLimitMinutes > 0 && reminderInterval > 0) {
+          const recommended = Math.round(Constants.PHI * Math.sqrt(timeLimitMinutes / reminderInterval));
+          document.getElementById('nudge-count').value = recommended.toString();
+        } else {
+          document.getElementById('nudge-count').value = '6';
+        }
       }
       
       // Update nudge recommendation display (must happen AFTER reminder inputs are set)
@@ -215,8 +222,9 @@ const UIManager = {
       // Store chart instance for scroll updates
       AppState.setChartInstance(chart);
 
-      // Highlight today by default (but not locked)
+      // Lock today by default (highlighted and locked)
       const todayIndex = totalTimeData.dailyData.length - 1;
+      AppState.lockDay(todayIndex);
       ChartBuilder.highlightBar(chart, todayIndex);
       UIManager.updateDailyBreakdown(totalTimeData, todayIndex);
       UIManager.updatePieChart(totalTimeData, todayIndex);
@@ -229,18 +237,8 @@ const UIManager = {
 
       // Add explicit mouse leave handler for more reliable behavior
       canvasElement.addEventListener('mouseleave', () => {
-        if (AppState.isLocked()) {
-          // Return to locked day
-          ChartBuilder.highlightBar(chart, AppState.lockedDayIndex);
-          UIManager.updateDailyBreakdown(chart.totalTimeData, AppState.lockedDayIndex);
-          UIManager.updatePieChart(chart.totalTimeData, AppState.lockedDayIndex);
-        } else {
-          // Return to today if not locked
-          const todayIndex = chart.totalTimeData.dailyData.length - 1;
-          ChartBuilder.highlightBar(chart, todayIndex);
-          UIManager.updateDailyBreakdown(chart.totalTimeData, todayIndex);
-          UIManager.updatePieChart(chart.totalTimeData, todayIndex);
-        }
+        // When locked, do nothing on mouse leave (data stays locked)
+        // This handler is only relevant when not locked
       });
 
     } catch (error) {
@@ -323,7 +321,7 @@ const UIManager = {
       const pieConfig = ChartBuilder.buildPieChart(domainData);
       AppState.pieChartInstance.data = pieConfig.data;
       AppState.pieChartInstance.options = pieConfig.options;
-      AppState.pieChartInstance.update('none'); // Update without animation for smooth transitions
+      AppState.pieChartInstance.update('none');
     } else {
       // Create new chart
       const pieConfig = ChartBuilder.buildPieChart(domainData);
@@ -537,18 +535,9 @@ const UIManager = {
       hitbox.style.height = `${rect.height - chartArea.bottom}px`;
     };
     
-    // Add mouseenter listener to restore locked selection
+    // Add mouseenter listener - only needed when not locked
     hitbox.addEventListener('mouseenter', () => {
-      if (AppState.isLocked()) {
-        ChartBuilder.highlightBar(chart, AppState.lockedDayIndex);
-        UIManager.updateDailyBreakdown(chart.totalTimeData, AppState.lockedDayIndex);
-        UIManager.updatePieChart(chart.totalTimeData, AppState.lockedDayIndex);
-      } else {
-        const todayIndex = chart.totalTimeData.dailyData.length - 1;
-        ChartBuilder.highlightBar(chart, todayIndex);
-        UIManager.updateDailyBreakdown(chart.totalTimeData, todayIndex);
-        UIManager.updatePieChart(chart.totalTimeData, todayIndex);
-      }
+      // When locked, do nothing (data stays locked)
     });
     
     // Position the hitbox initially
