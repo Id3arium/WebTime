@@ -194,20 +194,15 @@ const ChartBuilder = {
         if (elements.length > 0) {
           const dataIndex = elements[0].index;
 
-          // Always update breakdown on hover
-          UIManager.updateDailyBreakdown(chart.totalTimeData, dataIndex);
-          UIManager.updatePieChart(chart.totalTimeData, dataIndex);
-
-          // Always show hover preview (even when locked)
-          ChartBuilder.showHoverPreview(chart, dataIndex);
+          // Only update if no bar is locked
+          if (!AppState.isLocked()) {
+            UIManager.updateDailyBreakdown(chart.totalTimeData, dataIndex);
+            UIManager.updatePieChart(chart.totalTimeData, dataIndex);
+            ChartBuilder.showHoverPreview(chart, dataIndex);
+          }
         } else {
-          // No elements detected - treat as "left bars area" even if still on canvas
-          if (AppState.isLocked()) {
-            // Return to locked day
-            ChartBuilder.highlightBar(chart, AppState.lockedDayIndex);
-            UIManager.updateDailyBreakdown(chart.totalTimeData, AppState.lockedDayIndex);
-            UIManager.updatePieChart(chart.totalTimeData, AppState.lockedDayIndex);
-          } else {
+          // No elements detected - only restore highlight if not locked
+          if (!AppState.isLocked()) {
             // Return to today if not locked
             const todayIndex = chart.totalTimeData.dailyData.length - 1;
             ChartBuilder.highlightBar(chart, todayIndex);
