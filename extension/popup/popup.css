@@ -125,7 +125,7 @@ body {
   color: var(--light-text);
   background-color: var(--dark-bg);
   border-radius: 8px;
-  padding: 8px 0;
+  padding: 8px 0 16px 0;
   margin: 0;
   box-sizing: border-box;
   display: flex;
@@ -172,6 +172,7 @@ body {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: opacity 200ms ease-in-out;
 }
 
 #breakdown-pie-chart {
