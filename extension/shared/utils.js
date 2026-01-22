@@ -141,10 +141,21 @@ const Utils = {
   formatNudgeTime(seconds) {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
-    
+
     if (hours > 0) {
       return minutes > 0 ? `${hours}h${minutes}m` : `${hours}h`;
     }
     return `${minutes}m`;
+  },
+
+  /**
+   * Escape HTML special characters to prevent XSS attacks
+   * @param {string} text - Text to escape
+   * @returns {string} HTML-safe text
+   */
+  escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 };

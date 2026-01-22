@@ -1,8 +1,12 @@
 #!/bin/bash
 # build.sh - Build WebTime extension with automatic testing
 
-set -e  # Exit immediately if tests fail
+set -e  # Exit immediately if a command fails
 
+echo "🔷 Compiling TypeScript..."
+npm run build
+
+echo ""
 echo "🧪 Running φ-nudge tests..."
 echo ""
 node test-phi-nudges-v2.js

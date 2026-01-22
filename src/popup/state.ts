@@ -1,0 +1,94 @@
+import { CONFIG, ViewState, ViewStateType } from './config.js';
+import type { TimeHistory, Domain, ChartInstance } from '../types.js';
+
+export interface AppStateInterface {
+  currentView: ViewStateType;
+  activeTabDomain: Domain | null;
+  selectedDomain: Domain | null;
+  allTimeHistory: TimeHistory | null;
+  generalChartCreated: boolean;
+  scrollPosition: number;
+  totalDays: number;
+  chartInstance: ChartInstance | null;
+  pieChartInstance: ChartInstance | null;
+  lockedDayIndex: number | null;
+
+  setCurrentDomain(domain: Domain | null): void;
+  setSelectedDomain(domain: Domain | null): void;
+  setTimeHistory(history: TimeHistory): void;
+  setView(view: ViewStateType): void;
+  markGeneralChartCreated(): void;
+  setChartInstance(chart: ChartInstance | null): void;
+  lockDay(dayIndex: number): void;
+  unlockDay(): void;
+  isLocked(): boolean;
+  updateScrollPosition(delta: number): number;
+  getVisibleDateRange(): { startIndex: number; endIndex: number };
+}
+
+export const AppState: AppStateInterface = {
+  currentView: ViewState.DETAIL,
+  activeTabDomain: null,
+  selectedDomain: null,
+  allTimeHistory: null,
+  generalChartCreated: false,
+  scrollPosition: 0,
+  totalDays: 0,
+  chartInstance: null,
+  pieChartInstance: null,
+  lockedDayIndex: null,
+
+  setCurrentDomain(domain: Domain | null): void {
+    this.activeTabDomain = domain;
+    this.selectedDomain = domain;
+  },
+
+  setSelectedDomain(domain: Domain | null): void {
+    this.selectedDomain = domain;
+  },
+
+  setTimeHistory(history: TimeHistory): void {
+    this.allTimeHistory = history;
+    this.totalDays = Object.keys(history).length;
+    this.scrollPosition = 0;
+    this.lockedDayIndex = null;
+  },
+
+  setView(view: ViewStateType): void {
+    this.currentView = view;
+  },
+
+  markGeneralChartCreated(): void {
+    this.generalChartCreated = true;
+  },
+
+  setChartInstance(chart: ChartInstance | null): void {
+    this.chartInstance = chart;
+  },
+
+  lockDay(dayIndex: number): void {
+    this.lockedDayIndex = dayIndex;
+  },
+
+  unlockDay(): void {
+    this.lockedDayIndex = null;
+  },
+
+  isLocked(): boolean {
+    return this.lockedDayIndex !== null;
+  },
+
+  updateScrollPosition(delta: number): number {
+    const maxScroll = Math.max(0, this.totalDays - CONFIG.daysToDisplay);
+    this.scrollPosition = Math.max(0, Math.min(maxScroll, this.scrollPosition + delta));
+    return this.scrollPosition;
+  },
+
+  getVisibleDateRange(): { startIndex: number; endIndex: number } {
+    const startIndex = this.totalDays - CONFIG.daysToDisplay - this.scrollPosition;
+    const endIndex = this.totalDays - this.scrollPosition;
+    return { startIndex: Math.max(0, startIndex), endIndex };
+  }
+};
+
+export default AppState;

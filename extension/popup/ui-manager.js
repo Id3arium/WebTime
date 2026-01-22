@@ -291,7 +291,7 @@ const UIManager = {
   displayMessage(selector, message, type = '') {
     const element = document.querySelector(selector);
     const cssClass = type ? `message ${type}` : 'message';
-    element.innerHTML = `<p class="${cssClass}">${message}</p>`;
+    element.innerHTML = `<p class="${cssClass}">${Utils.escapeHtml(message)}</p>`;
   },
 
   updatePieChart(totalTimeData, dataIndex) {
@@ -418,11 +418,12 @@ const UIManager = {
     container.innerHTML = domainData.map(item => {
       const widthPercent = Math.max((item.seconds / maxSeconds) * 100, 2);
       const formattedTime = PopUpUtils.formatTime(item.seconds);
+      const escapedDomain = Utils.escapeHtml(item.domain);
 
       return `
-        <div class="breakdown-bar" data-domain="${item.domain}">
+        <div class="breakdown-bar" data-domain="${escapedDomain}">
           <div class="breakdown-color" style="background: ${item.color};"></div>
-          <div class="breakdown-label" title="${item.domain}">${item.domain}</div>
+          <div class="breakdown-label" title="${escapedDomain}">${escapedDomain}</div>
           <div class="breakdown-fill">
             <div class="breakdown-fill-inner" style="background: ${item.color}; width: ${widthPercent}%;"></div>
           </div>
