@@ -4,6 +4,9 @@ import { UIManager } from './ui-manager.js';
 
 declare const browser: typeof chrome;
 
+// Expose UIManager globally for chart-builder callbacks
+(window as unknown as { UIManager: typeof UIManager }).UIManager = UIManager;
+
 export const App = {
   async initialize(): Promise<void> {
     try {

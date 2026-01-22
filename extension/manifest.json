@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Web Time",
-  "version": "1.7",
+  "version": "1.8",
   "description": "Track and take control of your time.",
   
   "permissions": [
@@ -37,7 +37,10 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "webtime@somedomain.com",
-      "data_collection_permissions": false
+      "data_collection_permissions": {
+        "required": ["none"],
+        "optional": []
+      }
     }
   }
 }
