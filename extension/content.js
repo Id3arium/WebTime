@@ -95,7 +95,7 @@ function createReminderOverlay(message, totalTime) {
             ${totalTime} on this site today
         </div>
         <div style="font-size: 18px; font-weight: 600; margin-bottom: 20px; color: #fff;">
-            ${message}
+            ${Utils.escapeHtml(message)}
         </div>
         <div style="display: flex; gap: 12px; justify-content: center; margin-bottom: 16px;">
             <button class="web-time-snooze-btn" data-duration="3600000" style="

@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Build output
+extension/dist/
+
+# Build artifacts
+artifacts/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# npm debug logs
+npm-debug.log*

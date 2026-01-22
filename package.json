@@ -1,0 +1,17 @@
+{
+  "name": "webtime",
+  "version": "1.7.0",
+  "description": "Track and take control of your time.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && npm run bundle",
+    "bundle": "node build.mjs",
+    "watch": "tsc --watch --noEmit",
+    "clean": "rm -rf extension/dist"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "@types/chrome": "^0.0.260",
+    "esbuild": "^0.20.0"
+  }
+}
