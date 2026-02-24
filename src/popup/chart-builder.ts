@@ -152,7 +152,7 @@ export function buildGeneralViewChart(totalTimeData: GeneralViewData): ChartConf
   const totalBarsDataset: ExtendedDataset = {
     type: 'bar',
     label: 'Total Time',
-    data: totalTimeData.dailyData.map(day => Math.sqrt(day.totalHours)),
+    data: totalTimeData.dailyData.map(day => Math.pow(day.totalHours, CONFIG.scalingPower)),
     originalData: totalTimeData.dailyData.map(day => day.totalHours),
     formattedTimes: totalTimeData.dailyData.map(day => day.formattedTime),
     backgroundColor: COLORS.currentDomain.background,
@@ -167,7 +167,7 @@ export function buildGeneralViewChart(totalTimeData: GeneralViewData): ChartConf
       totalTimeData.movingAverageData,
       `${CONFIG.movingAverageDays}-Day Average`
     );
-    avgDataset.data = avgDataset.data.map(val => Math.sqrt(val));
+    avgDataset.data = avgDataset.data.map(val => Math.pow(val, CONFIG.scalingPower));
     avgDataset.originalData = totalTimeData.movingAverageData.map(day => day.averageHours);
     datasets.push(avgDataset);
   }
@@ -179,9 +179,9 @@ export function buildGeneralViewChart(totalTimeData: GeneralViewData): ChartConf
   const minIndex = Math.max(0, totalDays - windowSize);
 
   const allTotalHours = totalTimeData.dailyData.map(day => day.totalHours);
-  const allSqrtHours = allTotalHours.map(h => Math.sqrt(h));
-  const maxSqrt = Math.max(...allSqrtHours);
-  const yAxisMax = Math.ceil(maxSqrt * 2) / 2;
+  const allScaledHours = allTotalHours.map(h => Math.pow(h, CONFIG.scalingPower));
+  const maxScaled = Math.max(...allScaledHours);
+  const yAxisMax = Math.ceil(maxScaled * 2) / 2;
 
   const baseOptions = getBaseChartOptions(true) as Record<string, unknown>;
   const baseScales = baseOptions.scales as Record<string, unknown>;
@@ -203,13 +203,13 @@ export function buildGeneralViewChart(totalTimeData: GeneralViewData): ChartConf
         ticks: {
           ...baseTicks,
           callback: function(value: number): string {
-            const realHours = Math.pow(value, 2);
+            const realHours = Math.pow(value, 1 / CONFIG.scalingPower);
             return realHours.toFixed(1);
           }
         },
         title: {
           display: true,
-          text: 'Hours (√ scale)',
+          text: 'Hours',
           color: '#ccc',
           font: {
             size: 12,
@@ -274,7 +274,7 @@ export function buildDetailViewChart(processedData: DetailViewData): ChartConfig
   const datasets: ExtendedDataset[] = [];
 
   const domainDataset = createSingleDomainDataset(processedData.dailyData);
-  domainDataset.data = domainDataset.data.map(val => Math.sqrt(val));
+  domainDataset.data = domainDataset.data.map(val => Math.pow(val, CONFIG.scalingPower));
   domainDataset.originalData = processedData.dailyData.map(day => day.domainHours);
   datasets.push(domainDataset);
 
@@ -283,7 +283,7 @@ export function buildDetailViewChart(processedData: DetailViewData): ChartConfig
       processedData.movingAverageData,
       `${CONFIG.movingAverageDays}-Day Average`
     );
-    avgDataset.data = avgDataset.data.map(val => Math.sqrt(val));
+    avgDataset.data = avgDataset.data.map(val => Math.pow(val, CONFIG.scalingPower));
     avgDataset.originalData = processedData.movingAverageData.map(day => day.averageHours);
     datasets.push(avgDataset);
   }
@@ -295,9 +295,9 @@ export function buildDetailViewChart(processedData: DetailViewData): ChartConfig
   const minIndex = Math.max(0, totalDays - windowSize);
 
   const allDomainHours = processedData.dailyData.map(day => day.domainHours);
-  const allSqrtHours = allDomainHours.map(h => Math.sqrt(h));
-  const maxSqrt = Math.max(...allSqrtHours);
-  const yAxisMax = Math.ceil(maxSqrt * 2) / 2;
+  const allScaledHours = allDomainHours.map(h => Math.pow(h, CONFIG.scalingPower));
+  const maxScaled = Math.max(...allScaledHours);
+  const yAxisMax = Math.ceil(maxScaled * 2) / 2;
 
   const baseOptions = getBaseChartOptions() as Record<string, unknown>;
   const baseScales = baseOptions.scales as Record<string, unknown>;
@@ -319,13 +319,13 @@ export function buildDetailViewChart(processedData: DetailViewData): ChartConfig
         ticks: {
           ...baseTicks,
           callback: function(value: number): string {
-            const realHours = Math.pow(value, 2);
+            const realHours = Math.pow(value, 1 / CONFIG.scalingPower);
             return realHours.toFixed(1);
           }
         },
         title: {
           display: true,
-          text: 'Hours (√ scale)',
+          text: 'Hours',
           color: '#ccc',
           font: {
             size: 12,
