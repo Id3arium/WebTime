@@ -3,14 +3,14 @@ const Constants = {
   PHI: (1 + Math.sqrt(5)) / 2,  // Golden ratio ≈ 1.618
 
   // Timing thresholds
-  INACTIVITY_THRESHOLD_MS: 10000,
+  INACTIVITY_THRESHOLD_MS: 30000,
   ACTIVITY_CHECK_INTERVAL_MS: 1000,
   SAVE_INTERVAL_SECONDS: 30,
 
   // Nudge and reminder system
   OVERLAY_DURATIONS: {
     NUDGE_MS: 1000,         // How long the nudge blur lasts
-    REMINDER_DISPLAY_MS: 21000  // How long the reminder stays visible
+    REMINDER_DISPLAY_MS: 7000  // How long the reminder stays visible
   },
 
   // UI Configuration  

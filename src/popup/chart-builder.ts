@@ -508,7 +508,7 @@ export function showHoverPreview(chart: ExtendedChart, barIndex: number): void {
       }
 
       if (barIndex !== AppState.lockedDayIndex) {
-        (dataset.borderColor as string[])[barIndex] = 'rgba(255, 255, 255, 0.8)';
+        (dataset.borderColor as string[])[barIndex] = 'rgba(200, 200, 200, 0.9)';
         (dataset.borderWidth as number[])[barIndex] = 2;
       }
     }

@@ -500,7 +500,7 @@ export function setupScrollHandling(canvasElement: HTMLCanvasElement, totalTimeD
   canvasElement.addEventListener('wheel', (event: WheelEvent) => {
     event.preventDefault();
 
-    const scrollDelta = Math.sign(event.deltaY) * 3;
+    const scrollDelta = Math.sign(event.deltaY) * -3;
     const newPosition = AppState.updateScrollPosition(scrollDelta);
     updateChartViewport(totalDays, windowSize, newPosition);
   });
@@ -602,7 +602,7 @@ export function setupDetailViewScrolling(
   canvasElement.addEventListener('wheel', (event: WheelEvent) => {
     event.preventDefault();
 
-    const scrollDelta = Math.sign(event.deltaY) * 3;
+    const scrollDelta = Math.sign(event.deltaY) * -3;
     const maxScroll = Math.max(0, totalDays - windowSize);
     detailScrollPosition = Math.max(0, Math.min(maxScroll, detailScrollPosition + scrollDelta));
 
