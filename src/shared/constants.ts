@@ -2,7 +2,7 @@ import type { ConstantsType, OverlayDurations, ChartConfig, Colors } from '../ty
 
 const OVERLAY_DURATIONS: OverlayDurations = {
   NUDGE_MS: 1000,
-  REMINDER_DISPLAY_MS: 21000
+  REMINDER_DISPLAY_MS: 10000
 };
 
 const CHART_CONFIG: ChartConfig = {
@@ -36,9 +36,9 @@ const COLORS: Colors = {
 
 export const Constants: ConstantsType = {
   PHI: (1 + Math.sqrt(5)) / 2,
-  INACTIVITY_THRESHOLD_MS: 10000,
+  INACTIVITY_THRESHOLD_MS: 30000,
   ACTIVITY_CHECK_INTERVAL_MS: 1000,
-  SAVE_INTERVAL_SECONDS: 30,
+  SAVE_INTERVAL_SECONDS: 60,
   OVERLAY_DURATIONS,
   CHART_CONFIG,
   COLORS

@@ -170,7 +170,7 @@ function showNudge() {
     if (timer) {
         timer.style.transformOrigin = 'top right';
         timer.style.transition = 'transform 0.3s ease-in-out';
-        timer.style.transform = 'scale(3.5)';
+        timer.style.transform = 'scale(4.20)';
         
         setTimeout(() => {
             timer.style.transform = 'scale(1)';

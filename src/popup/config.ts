@@ -3,7 +3,7 @@ export const CONFIG = {
   daysToDisplay: 30,
   initAnimationDuration: 600,
   topDomainsLimit: 6,
-  scalingPower: 0.7  // x^0.7 — increase toward 1.0 for more linear, decrease toward 0.5 for more compression
+  scalingPower: 0.8  // x^0.8 — increase toward 1.0 for more linear, decrease toward 0.5 for more compression
 } as const;
 
 export const COLORS = {
