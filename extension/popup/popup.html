@@ -51,58 +51,73 @@
             <canvas id="time-chart"></canvas>
           </div>
           <div class="right-panel">
-            <div class="settings-container">
-              <div class="settings-section">
-                <label>Day resets at:</label>
-                <select id="day-reset-time">
-                  <option value="0">Midnight</option>
-                  <option value="1">1:00 AM</option>
-                  <option value="2">2:00 AM</option>
-                  <option value="3">3:00 AM</option>
-                  <option value="4">4:00 AM</option>
-                  <option value="5">5:00 AM</option>
-                  <option value="6">6:00 AM</option>
-                </select>
-
-                <label>Reminders message:</label>
-                <input type="text" id="custom-message" placeholder="Was this time mindful?">
-              </div>
-
-              <div class="settings-section">
-                <label>Interventions for <span id="settings-domain-inline"></span>:</label>
-
-                <div class="intervention-option">
+            <div class="settings-panel">
+              <div class="settings-content">
+                <div class="settings-row">
+                  <label>Day resets</label>
+                  <select id="day-reset-time">
+                    <option value="0">Midnight</option>
+                    <option value="1">1:00 AM</option>
+                    <option value="2">2:00 AM</option>
+                    <option value="3">3:00 AM</option>
+                    <option value="4">4:00 AM</option>
+                    <option value="5">5:00 AM</option>
+                    <option value="6">6:00 AM</option>
+                  </select>
+                </div>
+                <div class="settings-row">
+                  <label>Reminder message</label>
+                  <input type="text" id="custom-message" placeholder="Was this time mindful?">
+                </div>
+                <div class="settings-grid">
+                  <div class="settings-row">
+                    <label>Inactivity timeout (s)</label>
+                    <input type="number" id="inactivity-timeout" value="30" min="1">
+                  </div>
+                  <div class="settings-row">
+                    <label>Popup duration (s)</label>
+                    <input type="number" id="popup-duration" value="10" min="1">
+                  </div>
+                </div>
+                <div class="divider"></div>
+                <div class="interventions-header">
+                  Interventions: <span class="domain" id="settings-domain-inline"></span>
+                </div>
+                <div class="intervention-row">
                   <input type="checkbox" id="reminder-enabled">
-                  <label for="reminder-enabled" class="intervention-label">
-                    <div class="intervention-row">
-                      <span>After</span>
-                      <input type="number" id="reminder-hours" min="0" max="23" placeholder="3" class="inline-input">
-                      <span>h</span>
-                      <input type="number" id="reminder-minutes" min="0" placeholder="0" class="inline-input">
-                      <span>m</span>
+                  <div class="intervention-grid">
+                    <div class="intervention-group">
+                      <label>After</label>
+                      <div class="time-inputs">
+                        <input type="number" id="reminder-hours" min="0" max="23" placeholder="3">
+                        <span>h</span>
+                        <input type="number" id="reminder-minutes" min="0" placeholder="0">
+                        <span>m</span>
+                      </div>
                     </div>
-                    <div class="intervention-row">
-                      <span>Remind me every </span>
-                      <input type="number" id="reminder-interval" min="1" placeholder="15" class="inline-input">
-                      <span>m</span>
+                    <div class="intervention-group">
+                      <label>Every</label>
+                      <div class="time-inputs">
+                        <input type="number" id="reminder-interval" min="1" placeholder="15">
+                        <span>m</span>
+                      </div>
                     </div>
-                  </label>
+                  </div>
                 </div>
-
-                <div class="intervention-option" id="nudge-count-option" style="display: none;">
-                  <label class="intervention-label-single">
-                    <span>Smart nudges:</span>
-                    <input type="number" id="nudge-count" min="0" max="15" placeholder="6" class="inline-input" style="width: 50px;">
+                <div class="nudges-row" id="nudge-count-option" style="display: none;">
+                  <label>Smart nudges</label>
+                  <div class="nudges-input">
+                    <input type="number" id="nudge-count" min="0" max="15" placeholder="6">
                     <span id="nudge-recommendation">(recommended: 6)</span>
-                  </label>
+                  </div>
                 </div>
-
-                <div class="intervention-helper">
-                  ℹ️ Nudges get more frequent as you approach the time limit
+                <div class="info-hint">
+                  Nudges get more frequent as time limit approaches
                 </div>
               </div>
-
-              <button id="save-settings-btn" class="save-btn">Save Changes</button>
+              <div class="settings-footer">
+                <button class="save-btn" id="save-settings-btn">Save</button>
+              </div>
             </div>
           </div>
         </div>

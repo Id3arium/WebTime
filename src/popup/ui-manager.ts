@@ -110,6 +110,11 @@ export async function loadSettings(): Promise<void> {
     if (dayResetTimeEl) dayResetTimeEl.value = String(global.dayResetTime || 0);
     if (customMessageEl) customMessageEl.value = global.customMessage || '';
 
+    const inactivityEl = document.getElementById('inactivity-timeout') as HTMLInputElement | null;
+    const popupDurationEl = document.getElementById('popup-duration') as HTMLInputElement | null;
+    if (inactivityEl) inactivityEl.value = String(global.inactivityTimeoutS ?? 30);
+    if (popupDurationEl) popupDurationEl.value = String(global.popupDurationS ?? 10);
+
     const domainSettings = settings.domains?.[AppState.selectedDomain || ''] || {};
 
     const reminderEnabled = domainSettings.reminderEnabled || false;
@@ -183,10 +188,14 @@ export async function saveSettings(): Promise<void> {
 
     const dayResetTimeEl = document.getElementById('day-reset-time') as HTMLInputElement | null;
     const customMessageEl = document.getElementById('custom-message') as HTMLInputElement | null;
+    const inactivityTimeoutEl = document.getElementById('inactivity-timeout') as HTMLInputElement | null;
+    const popupDurationEl = document.getElementById('popup-duration') as HTMLInputElement | null;
 
     settings.global = {
       dayResetTime: parseInt(dayResetTimeEl?.value || '0'),
-      customMessage: customMessageEl?.value || ''
+      customMessage: customMessageEl?.value || '',
+      inactivityTimeoutS: parseInt(inactivityTimeoutEl?.value || '30') || 30,
+      popupDurationS: parseInt(popupDurationEl?.value || '10') || 10
     };
 
     if (!settings.domains) settings.domains = {};

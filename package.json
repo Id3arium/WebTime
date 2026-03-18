@@ -1,6 +1,6 @@
 {
   "name": "webtime",
-  "version": "1.7.0",
+  "version": "1.10.0",
   "description": "Track and take control of your time.",
   "scripts": {
     "typecheck": "tsc --noEmit",

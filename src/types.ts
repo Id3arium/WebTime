@@ -38,6 +38,8 @@ export interface StorageData {
 export interface GlobalSettings {
   dayResetTime?: number; // Hour when day resets (0-23)
   customMessage?: string; // Custom reminder message
+  inactivityTimeoutS?: number; // Seconds before tab considered inactive (default: 30)
+  popupDurationS?: number; // Seconds reminder popup stays visible (default: 10)
 }
 
 export interface DomainSettings {
