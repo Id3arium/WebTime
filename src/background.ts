@@ -21,7 +21,8 @@ let timerInterval: ReturnType<typeof setInterval> | null = null;
 const SAVE_INTERVAL_SECONDS = Constants.SAVE_INTERVAL_SECONDS;
 const tabLastActivity: Record<number, number> = {};
 let trackedTabDomain: Domain | null = null;
-const INACTIVITY_THRESHOLD_MS = Constants.INACTIVITY_THRESHOLD_MS;
+let inactivityThresholdMs = Constants.INACTIVITY_THRESHOLD_MS;
+let reminderDisplayMs = Constants.OVERLAY_DURATIONS.REMINDER_DISPLAY_MS;
 const ACTIVITY_CHECK_INTERVAL_MS = Constants.ACTIVITY_CHECK_INTERVAL_MS;
 
 let currentDateStr: DateString = getLocalDateStr();
@@ -232,7 +233,7 @@ function handleTimerState(activeTab: chrome.tabs.Tab, tabId: number): void {
   }
 
   const lastActivity = tabLastActivity[tabId] || 0;
-  const isUserActive = (Date.now() - lastActivity) < INACTIVITY_THRESHOLD_MS;
+  const isUserActive = (Date.now() - lastActivity) < inactivityThresholdMs;
 
   if (activeTab.audible || isUserActive) {
     startTimer();
@@ -305,6 +306,11 @@ function handleMessageReceived(
   if (message.type === "SETTINGS_UPDATED") {
     browser.storage.local.get('webTimeSettings').then(data => {
       const settings: WebTimeSettings = data.webTimeSettings || { global: {}, domains: {} };
+
+      inactivityThresholdMs = (settings.global?.inactivityTimeoutS ?? 30) * 1000;
+      reminderDisplayMs = (settings.global?.popupDurationS ?? 10) * 1000;
+      console.log(`Inactivity threshold: ${inactivityThresholdMs}ms, Reminder display: ${reminderDisplayMs}ms`);
+
       const newResetTime = settings.global?.dayResetTime || 0;
       if (newResetTime !== dayResetTime) {
         dayResetTime = newResetTime;
@@ -468,7 +474,7 @@ function showReminder(customMessage?: string): void {
     type: 'SHOW_REMINDER',
     customMessage: customMessage,
     totalTime: totalTime,
-    duration: Constants.OVERLAY_DURATIONS.REMINDER_DISPLAY_MS
+    duration: reminderDisplayMs
   }).catch(err => console.warn('Failed to show reminder:', err));
 }
 
@@ -481,7 +487,10 @@ async function init(): Promise<void> {
   const settingsData = await browser.storage.local.get('webTimeSettings');
   const settings: WebTimeSettings = settingsData.webTimeSettings || { global: {}, domains: {} };
   dayResetTime = settings.global?.dayResetTime || 0;
+  inactivityThresholdMs = (settings.global?.inactivityTimeoutS ?? 30) * 1000;
+  reminderDisplayMs = (settings.global?.popupDurationS ?? 10) * 1000;
   console.log(`Day reset time loaded: ${dayResetTime}:00`);
+  console.log(`Inactivity threshold: ${inactivityThresholdMs}ms, Reminder display: ${reminderDisplayMs}ms`);
 
   currentDateStr = getLocalDateStrWithReset();
 
