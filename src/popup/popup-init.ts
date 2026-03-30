@@ -1,6 +1,7 @@
 import { extractDomain } from './popup-utils.js';
 import { AppState } from './state.js';
 import { UIManager } from './ui-manager.js';
+import { CONFIG } from './config.js';
 
 declare const browser: typeof chrome;
 
@@ -51,8 +52,13 @@ export const App = {
       ? extractDomain(activeTabs[0].url)
       : null;
 
-    const storedData = await browser.storage.local.get("trackedTime");
+    const storedData = await browser.storage.local.get(["trackedTime", "webTimeSettings"]);
     const timeHistory = storedData.trackedTime?.timeHistory || {};
+    const settings = storedData.webTimeSettings || { global: {}, domains: {} };
+
+    if (settings.global?.scalingPower !== undefined) {
+      CONFIG.scalingPower = Math.max(0.3, Math.min(1.0, settings.global.scalingPower));
+    }
 
     AppState.setCurrentDomain(currentDomain);
     AppState.setTimeHistory(timeHistory);

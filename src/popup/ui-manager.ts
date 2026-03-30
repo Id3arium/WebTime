@@ -63,39 +63,13 @@ export function showDetailView(): void {
   loadSettings();
 }
 
-export function updateNudgeRecommendation(): void {
+export function updateNudgeIntervalVisibility(): void {
   const reminderEnabledEl = document.getElementById('reminder-enabled') as HTMLInputElement | null;
-  const nudgeCountOption = document.getElementById('nudge-count-option');
-  const nudgeRecommendation = document.getElementById('nudge-recommendation');
-  const nudgeCountEl = document.getElementById('nudge-count') as HTMLInputElement | null;
-  const reminderHoursEl = document.getElementById('reminder-hours') as HTMLInputElement | null;
-  const reminderMinutesEl = document.getElementById('reminder-minutes') as HTMLInputElement | null;
-  const reminderIntervalEl = document.getElementById('reminder-interval') as HTMLInputElement | null;
+  const nudgeIntervalOption = document.getElementById('nudge-interval-option');
 
-  if (!reminderEnabledEl || !nudgeCountOption || !nudgeRecommendation || !nudgeCountEl) return;
+  if (!reminderEnabledEl || !nudgeIntervalOption) return;
 
-  const reminderEnabled = reminderEnabledEl.checked;
-
-  if (reminderEnabled) {
-    nudgeCountOption.style.display = 'block';
-
-    const reminderHours = parseInt(reminderHoursEl?.value || '0') || 0;
-    const reminderMinutes = parseInt(reminderMinutesEl?.value || '0') || 0;
-    const reminderInterval = parseInt(reminderIntervalEl?.value || '15') || 15;
-
-    const timeLimitMinutes = (reminderHours * 60) + reminderMinutes;
-
-    if (timeLimitMinutes > 0 && reminderInterval > 0) {
-      const recommended = Math.round(Constants.PHI * Math.sqrt(timeLimitMinutes / reminderInterval));
-      nudgeRecommendation.textContent = `(recommended: ${recommended})`;
-      nudgeCountEl.placeholder = recommended.toString();
-    } else {
-      nudgeRecommendation.textContent = '(recommended: 6)';
-      nudgeCountEl.placeholder = '6';
-    }
-  } else {
-    nudgeCountOption.style.display = 'none';
-  }
+  nudgeIntervalOption.style.display = reminderEnabledEl.checked ? 'block' : 'none';
 }
 
 export async function loadSettings(): Promise<void> {
@@ -112,44 +86,31 @@ export async function loadSettings(): Promise<void> {
 
     const inactivityEl = document.getElementById('inactivity-timeout') as HTMLInputElement | null;
     const popupDurationEl = document.getElementById('popup-duration') as HTMLInputElement | null;
+    const chartScalingEl = document.getElementById('chart-scaling') as HTMLInputElement | null;
     if (inactivityEl) inactivityEl.value = String(global.inactivityTimeoutS ?? 30);
     if (popupDurationEl) popupDurationEl.value = String(global.popupDurationS ?? 10);
+    if (chartScalingEl) chartScalingEl.value = String(global.scalingPower ?? 0.8);
 
     const domainSettings = settings.domains?.[AppState.selectedDomain || ''] || {};
 
     const reminderEnabled = domainSettings.reminderEnabled || false;
     const reminderThreshold = domainSettings.reminderThreshold || 180;
     const reminderInterval = domainSettings.reminderInterval || 15;
-    const nudgeCount = domainSettings.nudgeCount;
+    const nudgeIntervalMinutes = domainSettings.nudgeIntervalMinutes ?? Constants.DEFAULT_NUDGE_INTERVAL_MINUTES;
 
     const reminderEnabledEl = document.getElementById('reminder-enabled') as HTMLInputElement | null;
     const reminderHoursEl = document.getElementById('reminder-hours') as HTMLInputElement | null;
     const reminderMinutesEl = document.getElementById('reminder-minutes') as HTMLInputElement | null;
     const reminderIntervalEl = document.getElementById('reminder-interval') as HTMLInputElement | null;
-    const nudgeCountEl = document.getElementById('nudge-count') as HTMLInputElement | null;
+    const nudgeIntervalEl = document.getElementById('nudge-interval-minutes') as HTMLInputElement | null;
 
     if (reminderEnabledEl) reminderEnabledEl.checked = reminderEnabled;
     if (reminderHoursEl) reminderHoursEl.value = String(Math.floor(reminderThreshold / 60));
     if (reminderMinutesEl) reminderMinutesEl.value = String(reminderThreshold % 60);
     if (reminderIntervalEl) reminderIntervalEl.value = String(reminderInterval);
+    if (nudgeIntervalEl) nudgeIntervalEl.value = String(nudgeIntervalMinutes);
 
-    if (nudgeCountEl) {
-      if (nudgeCount !== undefined) {
-        nudgeCountEl.value = String(nudgeCount);
-      } else {
-        const reminderHours = parseInt(reminderHoursEl?.value || '0') || 0;
-        const reminderMinutes = parseInt(reminderMinutesEl?.value || '0') || 0;
-        const timeLimitMinutes = (reminderHours * 60) + reminderMinutes;
-        if (timeLimitMinutes > 0 && reminderInterval > 0) {
-          const recommended = Math.round(Constants.PHI * Math.sqrt(timeLimitMinutes / reminderInterval));
-          nudgeCountEl.value = recommended.toString();
-        } else {
-          nudgeCountEl.value = '6';
-        }
-      }
-    }
-
-    updateNudgeRecommendation();
+    updateNudgeIntervalVisibility();
 
     if (reminderMinutesEl && reminderHoursEl) {
       reminderMinutesEl.addEventListener('input', () => {
@@ -163,18 +124,13 @@ export async function loadSettings(): Promise<void> {
           reminderHoursEl.value = String(hrs - 1);
           reminderMinutesEl.value = String(60 + mins);
         }
-
-        updateNudgeRecommendation();
       });
     }
 
-    ['reminder-enabled', 'reminder-hours', 'reminder-interval'].forEach(id => {
-      const element = document.getElementById(id);
-      if (element) {
-        element.addEventListener('change', () => updateNudgeRecommendation());
-        element.addEventListener('input', () => updateNudgeRecommendation());
-      }
-    });
+    const reminderEnabledElForListener = document.getElementById('reminder-enabled');
+    if (reminderEnabledElForListener) {
+      reminderEnabledElForListener.addEventListener('change', () => updateNudgeIntervalVisibility());
+    }
 
   } catch (error) {
     console.error('Error loading settings:', error);
@@ -190,12 +146,16 @@ export async function saveSettings(): Promise<void> {
     const customMessageEl = document.getElementById('custom-message') as HTMLInputElement | null;
     const inactivityTimeoutEl = document.getElementById('inactivity-timeout') as HTMLInputElement | null;
     const popupDurationEl = document.getElementById('popup-duration') as HTMLInputElement | null;
+    const chartScalingEl = document.getElementById('chart-scaling') as HTMLInputElement | null;
+
+    const scalingPower = parseFloat(chartScalingEl?.value || '0.8') || 0.8;
 
     settings.global = {
       dayResetTime: parseInt(dayResetTimeEl?.value || '0'),
       customMessage: customMessageEl?.value || '',
       inactivityTimeoutS: parseInt(inactivityTimeoutEl?.value || '30') || 30,
-      popupDurationS: parseInt(popupDurationEl?.value || '10') || 10
+      popupDurationS: parseInt(popupDurationEl?.value || '10') || 10,
+      scalingPower: Math.max(0.3, Math.min(1.0, scalingPower))
     };
 
     if (!settings.domains) settings.domains = {};
@@ -204,27 +164,22 @@ export async function saveSettings(): Promise<void> {
     const reminderHoursEl = document.getElementById('reminder-hours') as HTMLInputElement | null;
     const reminderMinutesEl = document.getElementById('reminder-minutes') as HTMLInputElement | null;
     const reminderIntervalEl = document.getElementById('reminder-interval') as HTMLInputElement | null;
-    const nudgeCountInputEl = document.getElementById('nudge-count') as HTMLInputElement | null;
+    const nudgeIntervalEl = document.getElementById('nudge-interval-minutes') as HTMLInputElement | null;
 
     const reminderEnabled = reminderEnabledEl?.checked || false;
     const reminderHours = parseInt(reminderHoursEl?.value || '0') || 0;
     const reminderMinutes = parseInt(reminderMinutesEl?.value || '0') || 0;
     const reminderThreshold = (reminderHours * 60) + reminderMinutes;
     const reminderInterval = parseInt(reminderIntervalEl?.value || '15') || 15;
-
-    const nudgeCountInput = nudgeCountInputEl?.value || '';
-    const nudgeCount = nudgeCountInput === '' ? undefined : parseInt(nudgeCountInput);
+    const nudgeIntervalMinutes = parseInt(nudgeIntervalEl?.value || String(Constants.DEFAULT_NUDGE_INTERVAL_MINUTES)) || Constants.DEFAULT_NUDGE_INTERVAL_MINUTES;
 
     if (reminderEnabled && AppState.selectedDomain) {
       settings.domains[AppState.selectedDomain] = {
-        reminderEnabled: reminderEnabled,
-        reminderThreshold: reminderThreshold,
-        reminderInterval: reminderInterval
+        reminderEnabled: true,
+        reminderThreshold,
+        reminderInterval,
+        nudgeIntervalMinutes
       };
-
-      if (nudgeCount !== undefined) {
-        settings.domains[AppState.selectedDomain].nudgeCount = nudgeCount;
-      }
     } else if (AppState.selectedDomain) {
       if (settings.domains[AppState.selectedDomain]) {
         delete settings.domains[AppState.selectedDomain];
@@ -232,7 +187,6 @@ export async function saveSettings(): Promise<void> {
     }
 
     await browser.storage.local.set({ webTimeSettings: settings });
-
     browser.runtime.sendMessage({ type: 'SETTINGS_UPDATED' });
 
     const saveBtn = document.getElementById('save-settings-btn');
@@ -659,7 +613,7 @@ export function setupDetailViewScrolling(
 export const UIManager = {
   showGeneralView,
   showDetailView,
-  updateNudgeRecommendation,
+  updateNudgeIntervalVisibility,
   loadSettings,
   saveSettings,
   renderGeneralView,

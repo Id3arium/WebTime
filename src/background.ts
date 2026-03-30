@@ -1,5 +1,5 @@
 import { Constants } from './shared/constants.js';
-import { extractDomain, formatTimeWithSeconds, getLocalDateStr, log } from './shared/utils.js';
+import { extractDomain, formatTimeWithSeconds, getLocalDateStr, log, compute7DayStats } from './shared/utils.js';
 import type {
   TimeHistory,
   Domain,
@@ -33,7 +33,9 @@ let isSaving = false;
 let interventionState: InterventionState = {
   lastNudgeTime: {},
   lastReminderTime: {},
-  snoozedUntil: {}
+  snoozedUntil: {},
+  sessionStartShown: {},
+  averagePopupShown: {}
 };
 
 function getLocalDateStrWithReset(): DateString {
@@ -145,7 +147,9 @@ function incrementTimer(): void {
     interventionState = {
       lastNudgeTime: {},
       lastReminderTime: {},
-      snoozedUntil: {}
+      snoozedUntil: {},
+      sessionStartShown: interventionState.sessionStartShown, // preserve across day rollover
+      averagePopupShown: {}  // reset average popups on new day
     };
     console.log("New day, reset timer.");
   }
@@ -208,6 +212,8 @@ function handleDomainSwitch(url: string): void {
 
   if (trackedTabDomain) {
     saveTimeData();
+    // Reset session-start flag when leaving a domain so it shows again next visit
+    delete interventionState.sessionStartShown[trackedTabDomain];
   }
 
   trackedTabDomain = domain;
@@ -338,7 +344,9 @@ async function checkForInterventions(): Promise<void> {
   const settings = await loadInterventionSettings();
   if (!settings) return;
 
-  checkPhiBasedNudges(settings);
+  checkSessionStart(settings);
+  checkLinearNudges(settings);
+  checkAveragePopup(settings);
   checkTier2Reminders(settings);
 }
 
@@ -367,8 +375,10 @@ async function loadInterventionSettings(): Promise<InterventionSettings | null> 
   const domainSettings = settings.domains?.[trackedTabDomain] || {};
 
   const reminderEnabled = domainSettings.reminderEnabled || false;
-
   if (!reminderEnabled) return null;
+
+  const nudgeIntervalMinutes = domainSettings.nudgeIntervalMinutes ?? Constants.DEFAULT_NUDGE_INTERVAL_MINUTES;
+  const { averageSeconds } = compute7DayStats(timeHistory, trackedTabDomain, currentDateStr);
 
   return {
     global,
@@ -376,62 +386,62 @@ async function loadInterventionSettings(): Promise<InterventionSettings | null> 
     reminderEnabled,
     reminderThreshold: (domainSettings.reminderThreshold || 0) * 60,
     reminderInterval: domainSettings.reminderInterval || 15,
+    nudgeIntervalMinutes,
+    averageSeconds,
     timeInSeconds: todaysTotalTimeInActiveDomain
   };
 }
 
-function checkPhiBasedNudges(settings: InterventionSettings): void {
-  const { reminderThreshold, reminderInterval, timeInSeconds, domainSettings } = settings;
+function checkSessionStart(settings: InterventionSettings): void {
+  if (!trackedTabDomain) return;
+  if (interventionState.sessionStartShown[trackedTabDomain]) return;
+
+  // Only show session start at t=1 (first second of tracking on this domain)
+  if (settings.timeInSeconds !== 1) return;
+
+  interventionState.sessionStartShown[trackedTabDomain] = true;
+
+  const stats = compute7DayStats(timeHistory, trackedTabDomain, currentDateStr);
+  sendSessionStart(stats);
+}
+
+function checkLinearNudges(settings: InterventionSettings): void {
+  const { nudgeIntervalMinutes, reminderThreshold, timeInSeconds } = settings;
 
   if (timeInSeconds >= reminderThreshold) return;
 
-  const timeLimitMinutes = reminderThreshold / 60;
-  const reminderIntervalMinutes = reminderInterval;
+  const nudgeIntervalSeconds = nudgeIntervalMinutes * 60;
+  const isOnInterval = timeInSeconds > 0 && timeInSeconds % nudgeIntervalSeconds === 0;
+  if (!isOnInterval) return;
 
-  const userNudgeCount = domainSettings.nudgeCount;
+  if (!trackedTabDomain) return;
 
-  const nudgeTimes = calculatePhiNudgeTimes(timeLimitMinutes, reminderIntervalMinutes, userNudgeCount);
+  const lastNudge = interventionState.lastNudgeTime[trackedTabDomain] || -1;
+  if (timeInSeconds === lastNudge) return;
 
-  for (const nudgeTime of nudgeTimes) {
-    if (timeInSeconds === nudgeTime && trackedTabDomain) {
-      const lastNudge = interventionState.lastNudgeTime[trackedTabDomain] || -1;
-
-      if (timeInSeconds !== lastNudge) {
-        sendNudge();
-        interventionState.lastNudgeTime[trackedTabDomain] = timeInSeconds;
-        console.log(`φ-nudge triggered at ${Math.round(timeInSeconds / 60)}min`);
-        break;
-      }
-    }
-  }
+  sendNudge();
+  interventionState.lastNudgeTime[trackedTabDomain] = timeInSeconds;
+  console.log(`Linear nudge at ${Math.round(timeInSeconds / 60)}min`);
 }
 
-function calculatePhiNudgeTimes(
-  timeLimitMinutes: number,
-  reminderIntervalMinutes: number,
-  nudgeCount?: number
-): number[] {
-  const phi = Constants.PHI;
-  const timeLimitSeconds = timeLimitMinutes * 60;
+function checkAveragePopup(settings: InterventionSettings): void {
+  const { averageSeconds, nudgeIntervalMinutes, timeInSeconds } = settings;
 
-  const numNudges = (nudgeCount !== null && nudgeCount !== undefined)
-    ? nudgeCount
-    : Math.round(phi * Math.sqrt(timeLimitMinutes / reminderIntervalMinutes));
+  if (!trackedTabDomain) return;
+  if (averageSeconds === 0) return;
+  if (interventionState.averagePopupShown[trackedTabDomain]) return;
 
-  if (numNudges === 0) return [];
+  const nudgeIntervalSeconds = nudgeIntervalMinutes * 60;
+  const averagePopupThreshold = averageSeconds - nudgeIntervalSeconds;
 
-  const nudgeTimes: number[] = [];
+  if (averagePopupThreshold <= 0) return;
+  if (timeInSeconds < averagePopupThreshold) return;
 
-  for (let i = 1; i <= numNudges; i++) {
-    const timeBeforeLimit = timeLimitSeconds / Math.pow(phi, i);
-    const nudgeTime = timeLimitSeconds - timeBeforeLimit;
-    const clampedTime = Math.max(60, Math.min(timeLimitSeconds - 60, Math.round(nudgeTime)));
-    nudgeTimes.push(clampedTime);
-  }
+  interventionState.averagePopupShown[trackedTabDomain] = true;
 
-  nudgeTimes.sort((a, b) => a - b);
-
-  return nudgeTimes;
+  const minutesLeft = Math.round((averageSeconds - timeInSeconds) / 60);
+  sendAveragePopup(Math.max(0, minutesLeft));
+  console.log(`Average popup shown at ${Math.round(timeInSeconds / 60)}min (avg: ${Math.round(averageSeconds / 60)}min)`);
 }
 
 function checkTier2Reminders(settings: InterventionSettings): void {
@@ -450,8 +460,7 @@ function checkTier2Reminders(settings: InterventionSettings): void {
   if (!trackedTabDomain) return;
 
   const lastReminder = interventionState.lastReminderTime[trackedTabDomain] || -1;
-  const alreadyRemindedAtThisTime = timeInSeconds === lastReminder;
-  if (alreadyRemindedAtThisTime) return;
+  if (timeInSeconds === lastReminder) return;
 
   showReminder(global.customMessage);
   interventionState.lastReminderTime[trackedTabDomain] = timeInSeconds;
@@ -463,6 +472,24 @@ function sendNudge(): void {
   browser.tabs.sendMessage(activeTabId, {
     type: 'NUDGE'
   }).catch(err => console.warn('Failed to send nudge:', err));
+}
+
+function sendSessionStart(stats: ReturnType<typeof compute7DayStats>): void {
+  if (!activeTabId) return;
+
+  browser.tabs.sendMessage(activeTabId, {
+    type: 'SHOW_SESSION_START',
+    stats
+  }).catch(err => console.warn('Failed to send session start:', err));
+}
+
+function sendAveragePopup(minutesLeft: number): void {
+  if (!activeTabId) return;
+
+  browser.tabs.sendMessage(activeTabId, {
+    type: 'SHOW_AVERAGE_POPUP',
+    minutesLeft
+  }).catch(err => console.warn('Failed to send average popup:', err));
 }
 
 function showReminder(customMessage?: string): void {

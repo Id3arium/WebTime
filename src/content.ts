@@ -1,6 +1,6 @@
 import { Constants } from './shared/constants.js';
-import { formatTimeWithSeconds, escapeHtml } from './shared/utils.js';
-import type { ExtensionMessage } from './types.js';
+import { formatTimeWithSeconds, formatTimeCompact, escapeHtml } from './shared/utils.js';
+import type { ExtensionMessage, SessionStartStats } from './types.js';
 
 declare const browser: typeof chrome;
 
@@ -8,6 +8,8 @@ let timerText: HTMLDivElement | null = null;
 let lastActivityTime = Date.now();
 let blurOverlay: HTMLDivElement | null = null;
 let reminderDialog: HTMLDivElement | null = null;
+let sessionStartDialog: HTMLDivElement | null = null;
+let averagePopupDialog: HTMLDivElement | null = null;
 
 function createTimerElement(): void {
   const timer = document.createElement("div");
@@ -141,25 +143,172 @@ function createReminderOverlay(message: string, totalTime: string): HTMLDivEleme
   const buttons = reminderElement.querySelectorAll('button');
   buttons.forEach(btn => {
     if (btn.classList.contains('web-time-close-btn')) {
-      btn.addEventListener('click', () => {
-        hideReminderOverlay();
-      });
+      btn.addEventListener('click', () => hideReminderOverlay());
     } else if (btn.classList.contains('web-time-snooze-btn')) {
-      btn.addEventListener('mouseenter', () => {
-        (btn as HTMLButtonElement).style.background = '#555';
-      });
-      btn.addEventListener('mouseleave', () => {
-        (btn as HTMLButtonElement).style.background = '#444';
-      });
-      btn.addEventListener('click', () => {
-        handleSnooze((btn as HTMLButtonElement).dataset.duration || '3600000');
-      });
+      btn.addEventListener('mouseenter', () => { (btn as HTMLButtonElement).style.background = '#555'; });
+      btn.addEventListener('mouseleave', () => { (btn as HTMLButtonElement).style.background = '#444'; });
+      btn.addEventListener('click', () => handleSnooze((btn as HTMLButtonElement).dataset.duration || '3600000'));
     }
   });
 
   document.body.appendChild(reminderElement);
   reminderDialog = reminderElement;
   return reminderElement;
+}
+
+function buildBarChart(days: SessionStartStats['days']): string {
+  const maxSeconds = Math.max(...days.map(d => d.seconds), 1);
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  return days.map(({ date, seconds }) => {
+    const dayName = dayNames[new Date(date + 'T12:00:00').getDay()];
+    const barWidth = Math.round((seconds / maxSeconds) * 100);
+    const label = seconds > 0 ? formatTimeCompact(seconds) : '—';
+
+    return `
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+        <div style="width: 28px; font-size: 12px; color: #888; text-align: right; flex-shrink: 0;">${dayName}</div>
+        <div style="flex: 1; height: 16px; background: #333; border-radius: 3px; overflow: hidden;">
+          ${seconds > 0 ? `<div style="width: ${barWidth}%; height: 100%; background: rgba(69, 113, 231, 0.7); border-radius: 3px;"></div>` : ''}
+        </div>
+        <div style="width: 52px; font-size: 12px; color: #aaa; flex-shrink: 0;">${label}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function createSessionStartOverlay(stats: SessionStartStats): HTMLDivElement {
+  if (sessionStartDialog) return sessionStartDialog;
+
+  const el = document.createElement('div');
+  el.className = 'web-time-session-start-overlay';
+  el.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #2a2a2a;
+    color: #eee;
+    padding: 24px 28px;
+    border-radius: 8px;
+    box-shadow: 0 6px 32px rgba(0, 0, 0, 0.5);
+    z-index: 1000001;
+    pointer-events: auto;
+    width: 300px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  `;
+
+  const avgLabel = stats.averageSeconds > 0
+    ? `7-day avg: <strong>${formatTimeCompact(stats.averageSeconds)}</strong> / day`
+    : 'No recent history yet';
+
+  el.innerHTML = `
+    <div style="font-size: 13px; color: #999; margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.05em;">
+      This week
+    </div>
+    <div style="margin-bottom: 16px;">
+      ${buildBarChart(stats.days)}
+    </div>
+    <div style="font-size: 13px; color: #aaa; margin-bottom: 20px; padding-top: 10px; border-top: 1px solid #3a3a3a;">
+      ${avgLabel}
+    </div>
+    <button class="web-time-continue-btn" style="
+      width: 100%;
+      background: #3a3a3a;
+      border: none;
+      color: #eee;
+      padding: 11px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.2s;
+    ">Continue</button>
+  `;
+
+  const continueBtn = el.querySelector('.web-time-continue-btn') as HTMLButtonElement;
+  continueBtn.addEventListener('mouseenter', () => { continueBtn.style.background = '#4a4a4a'; });
+  continueBtn.addEventListener('mouseleave', () => { continueBtn.style.background = '#3a3a3a'; });
+  continueBtn.addEventListener('click', () => hideSessionStart());
+
+  document.body.appendChild(el);
+  sessionStartDialog = el;
+  return el;
+}
+
+function createAveragePopupOverlay(minutesLeft: number): HTMLDivElement {
+  if (averagePopupDialog) return averagePopupDialog;
+
+  const el = document.createElement('div');
+  el.className = 'web-time-average-popup-overlay';
+  el.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #2a2a2a;
+    color: #eee;
+    padding: 28px 32px;
+    border-radius: 8px;
+    box-shadow: 0 6px 32px rgba(0, 0, 0, 0.5);
+    z-index: 1000001;
+    pointer-events: auto;
+    min-width: 300px;
+    max-width: 380px;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  `;
+
+  const minutesMsg = minutesLeft > 0
+    ? `You have ~${minutesLeft} min left to stay below your 7-day average.`
+    : `You've reached your 7-day average for today.`;
+
+  el.innerHTML = `
+    <div style="font-size: 18px; font-weight: 600; color: #fff; margin-bottom: 12px;">
+      Most days you'd stop around now.
+    </div>
+    <div style="font-size: 14px; color: #aaa; margin-bottom: 24px; line-height: 1.5;">
+      ${minutesMsg}
+    </div>
+    <div style="display: flex; gap: 12px; justify-content: center;">
+      <button class="web-time-avg-done-btn" style="
+        background: #4571e7;
+        border: none;
+        color: #fff;
+        padding: 10px 20px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background 0.2s;
+      ">I'm done</button>
+      <button class="web-time-avg-keep-btn" style="
+        background: #3a3a3a;
+        border: none;
+        color: #eee;
+        padding: 10px 20px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background 0.2s;
+      ">Keep watching</button>
+    </div>
+  `;
+
+  const doneBtn = el.querySelector('.web-time-avg-done-btn') as HTMLButtonElement;
+  const keepBtn = el.querySelector('.web-time-avg-keep-btn') as HTMLButtonElement;
+
+  doneBtn.addEventListener('mouseenter', () => { doneBtn.style.background = '#3a5fd0'; });
+  doneBtn.addEventListener('mouseleave', () => { doneBtn.style.background = '#4571e7'; });
+  doneBtn.addEventListener('click', () => hideAveragePopup());
+
+  keepBtn.addEventListener('mouseenter', () => { keepBtn.style.background = '#4a4a4a'; });
+  keepBtn.addEventListener('mouseleave', () => { keepBtn.style.background = '#3a3a3a'; });
+  keepBtn.addEventListener('click', () => hideAveragePopup());
+
+  document.body.appendChild(el);
+  averagePopupDialog = el;
+  return el;
 }
 
 function showNudge(): void {
@@ -180,6 +329,48 @@ function showNudge(): void {
   setTimeout(() => {
     overlay.style.opacity = '0';
   }, Constants.OVERLAY_DURATIONS.NUDGE_MS);
+}
+
+function showSessionStart(stats: SessionStartStats): void {
+  const blurBg = createBlurOverlay();
+  const el = createSessionStartOverlay(stats);
+
+  blurBg.style.pointerEvents = 'none';
+  blurBg.style.opacity = '1';
+  setTimeout(() => { el.style.opacity = '1'; }, 100);
+}
+
+function hideSessionStart(): void {
+  if (blurOverlay) blurOverlay.style.opacity = '0';
+  if (sessionStartDialog) {
+    sessionStartDialog.style.opacity = '0';
+    setTimeout(() => {
+      sessionStartDialog?.parentNode?.removeChild(sessionStartDialog);
+      sessionStartDialog = null;
+      // Re-enable blur overlay pointer events for potential future overlays
+      if (blurOverlay) blurOverlay.style.pointerEvents = 'none';
+    }, 300);
+  }
+}
+
+function showAveragePopup(minutesLeft: number): void {
+  const blurBg = createBlurOverlay();
+  const el = createAveragePopupOverlay(minutesLeft);
+
+  blurBg.style.pointerEvents = 'none';
+  blurBg.style.opacity = '1';
+  setTimeout(() => { el.style.opacity = '1'; }, 100);
+}
+
+function hideAveragePopup(): void {
+  if (blurOverlay) blurOverlay.style.opacity = '0';
+  if (averagePopupDialog) {
+    averagePopupDialog.style.opacity = '0';
+    setTimeout(() => {
+      averagePopupDialog?.parentNode?.removeChild(averagePopupDialog);
+      averagePopupDialog = null;
+    }, 300);
+  }
 }
 
 function showReminderOverlay(
@@ -207,9 +398,7 @@ function showReminderOverlay(
 }
 
 function hideReminderOverlay(): void {
-  if (blurOverlay) {
-    blurOverlay.style.opacity = '0';
-  }
+  if (blurOverlay) blurOverlay.style.opacity = '0';
   if (reminderDialog) {
     reminderDialog.style.opacity = '0';
     setTimeout(() => {
@@ -243,14 +432,16 @@ function handleIncomingMessage(
     if (timerText) {
       timerText.textContent = formatTimeWithSeconds(message.time);
     } else {
-      console.error(
-        "Timer text element not found when trying to update time!"
-      );
+      console.error("Timer text element not found when trying to update time!");
     }
   } else if (message.type === "NUDGE") {
     showNudge();
   } else if (message.type === "SHOW_REMINDER") {
     showReminderOverlay(message.customMessage || '', message.totalTime, message.duration);
+  } else if (message.type === "SHOW_SESSION_START") {
+    showSessionStart(message.stats);
+  } else if (message.type === "SHOW_AVERAGE_POPUP") {
+    showAveragePopup(message.minutesLeft);
   }
 }
 

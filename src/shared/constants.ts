@@ -35,7 +35,7 @@ const COLORS: Colors = {
 };
 
 export const Constants: ConstantsType = {
-  PHI: (1 + Math.sqrt(5)) / 2,
+  DEFAULT_NUDGE_INTERVAL_MINUTES: 15,
   INACTIVITY_THRESHOLD_MS: 30000,
   ACTIVITY_CHECK_INTERVAL_MS: 1000,
   SAVE_INTERVAL_SECONDS: 60,
