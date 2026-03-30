@@ -1,4 +1,4 @@
-import { Constants } from './constants.js';
+import type { TimeHistory, Domain, DateString, SessionDayStat, SessionStartStats } from '../types.js';
 
 /**
  * Extract domain from URL, removing www. prefix
@@ -86,47 +86,48 @@ export function log(...args: unknown[]): void {
 }
 
 /**
- * Calculate nudge times using phi-based exponential decay
+ * Format time in seconds to a compact human-readable string (e.g. "1h 23min", "45min")
  */
-export function calculatePhiNudgeTimes(
-  timeLimitMinutes: number,
-  reminderIntervalMinutes: number,
-  nudgeCount?: number | null
-): number[] {
-  const phi = Constants.PHI;
-  const timeLimitSeconds = timeLimitMinutes * 60;
-
-  const numNudges = (nudgeCount !== null && nudgeCount !== undefined)
-    ? nudgeCount
-    : Math.round(phi * Math.sqrt(timeLimitMinutes / reminderIntervalMinutes));
-
-  if (numNudges === 0) return [];
-
-  const nudgeTimes: number[] = [];
-
-  for (let i = 1; i <= numNudges; i++) {
-    const timeBeforeLimit = timeLimitSeconds / Math.pow(phi, i);
-    const nudgeTime = timeLimitSeconds - timeBeforeLimit;
-    const clampedTime = Math.max(60, Math.min(timeLimitSeconds - 60, Math.round(nudgeTime)));
-    nudgeTimes.push(clampedTime);
-  }
-
-  nudgeTimes.sort((a, b) => a - b);
-
-  return nudgeTimes;
-}
-
-/**
- * Format nudge time in seconds to a compact display string
- */
-export function formatNudgeTime(seconds: number): string {
+export function formatTimeCompact(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
 
-  if (hours > 0) {
-    return minutes > 0 ? `${hours}h${minutes}m` : `${hours}h`;
+  if (hours > 0 && minutes > 0) return `${hours}h ${minutes}min`;
+  if (hours > 0) return `${hours}h`;
+  return `${minutes}min`;
+}
+
+/**
+ * Compute 7-day moving average for a domain, excluding today.
+ * Returns { days, averageSeconds } where days is the per-day breakdown
+ * for the last 7 days (ascending), and averageSeconds is the mean.
+ * Returns averageSeconds = 0 if no data exists.
+ */
+export function compute7DayStats(
+  timeHistory: TimeHistory,
+  domain: Domain,
+  currentDateStr: DateString
+): SessionStartStats {
+  const days: SessionDayStat[] = [];
+
+  for (let i = 1; i <= 7; i++) {
+    const date = new Date(currentDateStr);
+    date.setDate(date.getDate() - i);
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    const dateStr: DateString = `${yyyy}-${mm}-${dd}`;
+
+    const seconds = timeHistory[dateStr]?.[domain] ?? 0;
+    days.unshift({ date: dateStr, seconds });
   }
-  return `${minutes}m`;
+
+  const daysWithData = days.filter(d => d.seconds > 0);
+  const averageSeconds = daysWithData.length > 0
+    ? Math.round(daysWithData.reduce((sum, d) => sum + d.seconds, 0) / daysWithData.length)
+    : 0;
+
+  return { days, averageSeconds };
 }
 
 /**
@@ -146,8 +147,8 @@ export const Utils = {
   getLocalDateStr,
   formatDateForDisplay,
   log,
-  calculatePhiNudgeTimes,
-  formatNudgeTime,
+  formatTimeCompact,
+  compute7DayStats,
   escapeHtml
 };
 

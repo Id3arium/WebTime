@@ -40,13 +40,14 @@ export interface GlobalSettings {
   customMessage?: string; // Custom reminder message
   inactivityTimeoutS?: number; // Seconds before tab considered inactive (default: 30)
   popupDurationS?: number; // Seconds reminder popup stays visible (default: 10)
+  scalingPower?: number; // Chart bar scaling power (default: 0.8, range 0.3-1.0)
 }
 
 export interface DomainSettings {
   reminderEnabled?: boolean;
   reminderThreshold?: number; // Minutes
   reminderInterval?: number; // Minutes
-  nudgeCount?: number; // Number of nudges before reminder
+  nudgeIntervalMinutes?: number; // Minutes between linear nudges (default: 15)
 }
 
 export interface WebTimeSettings {
@@ -62,6 +63,18 @@ export interface InterventionState {
   lastNudgeTime: Record<Domain, number>;
   lastReminderTime: Record<Domain, number>;
   snoozedUntil: Record<Domain, number | 'tomorrow'>;
+  sessionStartShown: Record<Domain, boolean>; // reset on domain switch
+  averagePopupShown: Record<Domain, boolean>;  // reset on day rollover
+}
+
+export interface SessionDayStat {
+  date: DateString;
+  seconds: number;
+}
+
+export interface SessionStartStats {
+  days: SessionDayStat[];
+  averageSeconds: number;
 }
 
 export interface InterventionSettings {
@@ -70,6 +83,8 @@ export interface InterventionSettings {
   reminderEnabled: boolean;
   reminderThreshold: number; // In seconds
   reminderInterval: number; // In minutes
+  nudgeIntervalMinutes: number;
+  averageSeconds: number; // 7-day moving average in seconds (0 if no history)
   timeInSeconds: number;
 }
 
@@ -110,6 +125,16 @@ export interface ShowReminderMessage {
   duration: number;
 }
 
+export interface ShowSessionStartMessage {
+  type: 'SHOW_SESSION_START';
+  stats: SessionStartStats;
+}
+
+export interface ShowAveragePopupMessage {
+  type: 'SHOW_AVERAGE_POPUP';
+  minutesLeft: number;
+}
+
 export type ExtensionMessage =
   | TimeUpdateMessage
   | ContentScriptReadyMessage
@@ -117,7 +142,9 @@ export type ExtensionMessage =
   | SnoozeRemindersMessage
   | SettingsUpdatedMessage
   | NudgeMessage
-  | ShowReminderMessage;
+  | ShowReminderMessage
+  | ShowSessionStartMessage
+  | ShowAveragePopupMessage;
 
 // ============================================
 // Chart Types
@@ -196,7 +223,7 @@ export interface Colors {
 }
 
 export interface ConstantsType {
-  PHI: number;
+  DEFAULT_NUDGE_INTERVAL_MINUTES: number;
   INACTIVITY_THRESHOLD_MS: number;
   ACTIVITY_CHECK_INTERVAL_MS: number;
   SAVE_INTERVAL_SECONDS: number;

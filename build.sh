@@ -7,9 +7,9 @@ echo "🔷 Compiling TypeScript..."
 npm run build
 
 echo ""
-echo "🧪 Running φ-nudge tests..."
+echo "🧪 Running intervention tests..."
 echo ""
-node test-phi-nudges-v2.js
+node test-interventions.js
 
 if [ $? -eq 0 ]; then
     echo ""
