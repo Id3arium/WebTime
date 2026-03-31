@@ -331,6 +331,13 @@ function handleMessageReceived(
           console.log(`Date changed to ${currentDateStr} due to reset time change`);
         }
       }
+
+      // If interventions just got enabled for the current domain, reset the session
+      // start flag so the popup fires immediately on the next timer tick.
+      if (trackedTabDomain && settings.domains?.[trackedTabDomain]?.reminderEnabled) {
+        delete interventionState.sessionStartShown[trackedTabDomain];
+        console.log(`Interventions enabled for ${trackedTabDomain}, session start popup reset`);
+      }
     });
   }
 }
@@ -378,7 +385,7 @@ async function loadInterventionSettings(): Promise<InterventionSettings | null> 
   if (!reminderEnabled) return null;
 
   const nudgeIntervalMinutes = domainSettings.nudgeIntervalMinutes ?? Constants.DEFAULT_NUDGE_INTERVAL_MINUTES;
-  const { averageSeconds } = compute7DayStats(timeHistory, trackedTabDomain, currentDateStr);
+  const { averageSeconds, daysWithData } = compute7DayStats(timeHistory, trackedTabDomain, currentDateStr);
 
   return {
     global,
@@ -388,17 +395,18 @@ async function loadInterventionSettings(): Promise<InterventionSettings | null> 
     reminderInterval: domainSettings.reminderInterval || 15,
     nudgeIntervalMinutes,
     averageSeconds,
+    daysWithData,
     timeInSeconds: todaysTotalTimeInActiveDomain
   };
 }
 
-function checkSessionStart(settings: InterventionSettings): void {
+function checkSessionStart(_settings: InterventionSettings): void {
   if (!trackedTabDomain) return;
   if (interventionState.sessionStartShown[trackedTabDomain]) return;
 
-  // Only show session start at t=1 (first second of tracking on this domain)
-  if (settings.timeInSeconds !== 1) return;
-
+  // Fire immediately on the first tick where sessionStartShown is unset.
+  // This covers both: navigating fresh to the site, and enabling interventions
+  // mid-session (SETTINGS_UPDATED clears the flag, so this fires on the next tick).
   interventionState.sessionStartShown[trackedTabDomain] = true;
 
   const stats = compute7DayStats(timeHistory, trackedTabDomain, currentDateStr);
@@ -424,24 +432,24 @@ function checkLinearNudges(settings: InterventionSettings): void {
   console.log(`Linear nudge at ${Math.round(timeInSeconds / 60)}min`);
 }
 
+const AVERAGE_POPUP_MIN_DAYS = 4; // require at least this many days of history
+
 function checkAveragePopup(settings: InterventionSettings): void {
-  const { averageSeconds, nudgeIntervalMinutes, timeInSeconds } = settings;
+  const { averageSeconds, daysWithData, timeInSeconds } = settings;
 
   if (!trackedTabDomain) return;
   if (averageSeconds === 0) return;
+  if (daysWithData < AVERAGE_POPUP_MIN_DAYS) return;
   if (interventionState.averagePopupShown[trackedTabDomain]) return;
 
-  const nudgeIntervalSeconds = nudgeIntervalMinutes * 60;
-  const averagePopupThreshold = averageSeconds - nudgeIntervalSeconds;
-
-  if (averagePopupThreshold <= 0) return;
+  const averagePopupThreshold = Math.round(averageSeconds * 0.8);
   if (timeInSeconds < averagePopupThreshold) return;
 
   interventionState.averagePopupShown[trackedTabDomain] = true;
 
   const minutesLeft = Math.round((averageSeconds - timeInSeconds) / 60);
   sendAveragePopup(Math.max(0, minutesLeft));
-  console.log(`Average popup shown at ${Math.round(timeInSeconds / 60)}min (avg: ${Math.round(averageSeconds / 60)}min)`);
+  console.log(`Average popup shown at ${Math.round(timeInSeconds / 60)}min (80% of avg: ${Math.round(averageSeconds / 60)}min)`);
 }
 
 function checkTier2Reminders(settings: InterventionSettings): void {

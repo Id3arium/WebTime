@@ -11,6 +11,19 @@ let reminderDialog: HTMLDivElement | null = null;
 let sessionStartDialog: HTMLDivElement | null = null;
 let averagePopupDialog: HTMLDivElement | null = null;
 
+// Queue of popup-show functions — at most one mandatory popup visible at a time.
+// When a popup is dismissed it calls dequeuePopup() to show the next waiting one.
+const popupQueue: Array<() => void> = [];
+
+function isAnyMandatoryPopupVisible(): boolean {
+  return sessionStartDialog !== null || averagePopupDialog !== null;
+}
+
+function dequeuePopup(): void {
+  const next = popupQueue.shift();
+  if (next) next();
+}
+
 function createTimerElement(): void {
   const timer = document.createElement("div");
   timer.className = "web-time-timer";
@@ -205,7 +218,7 @@ function createSessionStartOverlay(stats: SessionStartStats): HTMLDivElement {
 
   el.innerHTML = `
     <div style="font-size: 13px; color: #999; margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.05em;">
-      This week
+      Usage this week
     </div>
     <div style="margin-bottom: 16px;">
       ${buildBarChart(stats.days)}
@@ -271,40 +284,23 @@ function createAveragePopupOverlay(minutesLeft: number): HTMLDivElement {
     <div style="font-size: 14px; color: #aaa; margin-bottom: 24px; line-height: 1.5;">
       ${minutesMsg}
     </div>
-    <div style="display: flex; gap: 12px; justify-content: center;">
-      <button class="web-time-avg-done-btn" style="
-        background: #4571e7;
-        border: none;
-        color: #fff;
-        padding: 10px 20px;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 14px;
-        transition: background 0.2s;
-      ">I'm done</button>
-      <button class="web-time-avg-keep-btn" style="
-        background: #3a3a3a;
-        border: none;
-        color: #eee;
-        padding: 10px 20px;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 14px;
-        transition: background 0.2s;
-      ">Keep watching</button>
-    </div>
+    <button class="web-time-avg-continue-btn" style="
+      width: 100%;
+      background: #3a3a3a;
+      border: none;
+      color: #eee;
+      padding: 11px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.2s;
+    ">Continue</button>
   `;
 
-  const doneBtn = el.querySelector('.web-time-avg-done-btn') as HTMLButtonElement;
-  const keepBtn = el.querySelector('.web-time-avg-keep-btn') as HTMLButtonElement;
-
-  doneBtn.addEventListener('mouseenter', () => { doneBtn.style.background = '#3a5fd0'; });
-  doneBtn.addEventListener('mouseleave', () => { doneBtn.style.background = '#4571e7'; });
-  doneBtn.addEventListener('click', () => hideAveragePopup());
-
-  keepBtn.addEventListener('mouseenter', () => { keepBtn.style.background = '#4a4a4a'; });
-  keepBtn.addEventListener('mouseleave', () => { keepBtn.style.background = '#3a3a3a'; });
-  keepBtn.addEventListener('click', () => hideAveragePopup());
+  const continueBtn = el.querySelector('.web-time-avg-continue-btn') as HTMLButtonElement;
+  continueBtn.addEventListener('mouseenter', () => { continueBtn.style.background = '#4a4a4a'; });
+  continueBtn.addEventListener('mouseleave', () => { continueBtn.style.background = '#3a3a3a'; });
+  continueBtn.addEventListener('click', () => hideAveragePopup());
 
   document.body.appendChild(el);
   averagePopupDialog = el;
@@ -332,6 +328,11 @@ function showNudge(): void {
 }
 
 function showSessionStart(stats: SessionStartStats): void {
+  if (isAnyMandatoryPopupVisible()) {
+    popupQueue.push(() => showSessionStart(stats));
+    return;
+  }
+
   const blurBg = createBlurOverlay();
   const el = createSessionStartOverlay(stats);
 
@@ -347,13 +348,18 @@ function hideSessionStart(): void {
     setTimeout(() => {
       sessionStartDialog?.parentNode?.removeChild(sessionStartDialog);
       sessionStartDialog = null;
-      // Re-enable blur overlay pointer events for potential future overlays
       if (blurOverlay) blurOverlay.style.pointerEvents = 'none';
+      dequeuePopup();
     }, 300);
   }
 }
 
 function showAveragePopup(minutesLeft: number): void {
+  if (isAnyMandatoryPopupVisible()) {
+    popupQueue.push(() => showAveragePopup(minutesLeft));
+    return;
+  }
+
   const blurBg = createBlurOverlay();
   const el = createAveragePopupOverlay(minutesLeft);
 
@@ -369,6 +375,7 @@ function hideAveragePopup(): void {
     setTimeout(() => {
       averagePopupDialog?.parentNode?.removeChild(averagePopupDialog);
       averagePopupDialog = null;
+      dequeuePopup();
     }, 300);
   }
 }
