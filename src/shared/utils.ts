@@ -98,10 +98,9 @@ export function formatTimeCompact(seconds: number): string {
 }
 
 /**
- * Compute 7-day moving average for a domain, excluding today.
- * Returns { days, averageSeconds } where days is the per-day breakdown
- * for the last 7 days (ascending), and averageSeconds is the mean.
- * Returns averageSeconds = 0 if no data exists.
+ * Compute 7-day stats for a domain, excluding today.
+ * Returns per-day breakdown, mean seconds over days with data, and count of days with data.
+ * averageSeconds = 0 and daysWithData = 0 if no history exists.
  */
 export function compute7DayStats(
   timeHistory: TimeHistory,
@@ -122,12 +121,13 @@ export function compute7DayStats(
     days.unshift({ date: dateStr, seconds });
   }
 
-  const daysWithData = days.filter(d => d.seconds > 0);
-  const averageSeconds = daysWithData.length > 0
-    ? Math.round(daysWithData.reduce((sum, d) => sum + d.seconds, 0) / daysWithData.length)
+  const daysWithDataArr = days.filter(d => d.seconds > 0);
+  const daysWithData = daysWithDataArr.length;
+  const averageSeconds = daysWithData > 0
+    ? Math.round(daysWithDataArr.reduce((sum, d) => sum + d.seconds, 0) / daysWithData)
     : 0;
 
-  return { days, averageSeconds };
+  return { days, averageSeconds, daysWithData };
 }
 
 /**

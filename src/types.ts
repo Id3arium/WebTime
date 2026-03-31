@@ -75,6 +75,7 @@ export interface SessionDayStat {
 export interface SessionStartStats {
   days: SessionDayStat[];
   averageSeconds: number;
+  daysWithData: number; // how many of the last 7 days had any usage
 }
 
 export interface InterventionSettings {
@@ -85,6 +86,7 @@ export interface InterventionSettings {
   reminderInterval: number; // In minutes
   nudgeIntervalMinutes: number;
   averageSeconds: number; // 7-day moving average in seconds (0 if no history)
+  daysWithData: number; // days with usage in last 7 days
   timeInSeconds: number;
 }
 

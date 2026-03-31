@@ -1,5 +1,5 @@
 // test-interventions.js
-// Tests for the new linear nudge + 7-day average intervention system
+// Tests for the linear nudge + 7-day average intervention system
 // Run with: node test-interventions.js
 
 // ── Replicated logic from src/shared/utils.ts ─────────────────────────────
@@ -113,18 +113,24 @@ const historyWithToday = { ...fullWeekHistory, [today]: { [domain]: 99999 } };
 const statsExcludingToday = compute7DayStats(historyWithToday, domain, today);
 assert(statsExcludingToday.averageSeconds === 3600, "Today's data is excluded from the average");
 
-// ── Average popup threshold ───────────────────────────────────────────────
+// ── Average popup threshold (80% of average) ──────────────────────────────
 
-section('Average popup threshold: averageSeconds - nudgeIntervalSeconds');
+section('Average popup threshold: 80% of 7-day average');
 
-function averagePopupThreshold(averageSeconds, nudgeIntervalMinutes) {
-  return averageSeconds - (nudgeIntervalMinutes * 60);
+function averagePopupThreshold(averageSeconds) {
+  return Math.round(averageSeconds * 0.8);
 }
 
-assert(averagePopupThreshold(3600, 15) === 2700, '1hr avg, 15min nudge → popup at 45min (2700s)');
-assert(averagePopupThreshold(1800, 15) === 900, '30min avg, 15min nudge → popup at 15min (900s)');
-assert(averagePopupThreshold(600, 15) < 0, 'Avg < nudge interval → threshold negative (skip popup)');
-assert(averagePopupThreshold(0, 15) === -900, 'No data → threshold negative (skip popup)');
+assert(averagePopupThreshold(3600) === 2880, '1hr avg → popup at 48min (2880s = 80%)');
+assert(averagePopupThreshold(1800) === 1440, '30min avg → popup at 24min (1440s = 80%)');
+assert(averagePopupThreshold(14400) === 11520, '4hr avg → popup at 3h12m (11520s = 80%)');
+assert(averagePopupThreshold(0) === 0, 'No data → threshold is 0 (popup skipped by guard)');
+
+// Verify the minutesLeft calculation at threshold
+const avg = 3600;
+const threshold = averagePopupThreshold(avg);
+const minutesLeftAtThreshold = Math.round((avg - threshold) / 60);
+assert(minutesLeftAtThreshold === 12, '1hr avg: ~12min left shown when popup fires at 80%');
 
 // ── Summary ───────────────────────────────────────────────────────────────
 
