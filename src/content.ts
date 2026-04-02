@@ -49,8 +49,8 @@ function createBlurOverlay(): HTMLDivElement {
     left: 0;
     width: 100%;
     height: 100%;
-    backdrop-filter: blur(3px);
-    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     background: rgba(0, 0, 0, 0.3);
     z-index: 999999;
     pointer-events: none;
@@ -81,8 +81,8 @@ function createReminderOverlay(message: string, totalTime: string): HTMLDivEleme
     transform: translate(-50%, -50%);
     background: #2a2a2a;
     color: #eee;
-    padding: 24px 32px;
-    border-radius: 6px;
+    padding: 24px;
+    border-radius: 8px;
     box-shadow: 0 6px 32px rgba(0, 0, 0, 0.4);
     z-index: 1000001;
     pointer-events: auto;
@@ -108,11 +108,11 @@ function createReminderOverlay(message: string, totalTime: string): HTMLDivEleme
       line-height: 1;
       transition: color 0.2s;
     " onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#999'">×</button>
-    <div style="font-size: 14px; color: #999; margin-bottom: 8px;">
-      ${totalTime} on this site today
-    </div>
-    <div style="font-size: 18px; font-weight: 600; margin-bottom: 20px; color: #fff;">
+    <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px; color: #ccc;">
       ${escapeHtml(message)}
+    </div>
+    <div style="font-size: 16px; color: #ccc; font-weight: 500; margin-bottom: 20px;">
+      ${totalTime} on this site today
     </div>
     <div style="display: flex; gap: 12px; justify-content: center; margin-bottom: 16px;">
       <button class="web-time-snooze-btn" data-duration="3600000" style="
@@ -183,7 +183,7 @@ function buildBarChart(days: SessionStartStats['days']): string {
 
     return `
       <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-        <div style="width: 42px; font-size: 12px; color: #888; text-align: right; flex-shrink: 0;">${dayName} ${dayOfMonth}</div>
+        <div style="width: 56px; font-size: 12px; color: #888; text-align: right; flex-shrink: 0; white-space: nowrap;">${dayName} ${dayOfMonth}</div>
         <div style="flex: 1; height: 16px; background: #333; border-radius: 3px; overflow: hidden;">
           ${seconds > 0 ? `<div style="width: ${barWidth}%; height: 100%; background: rgba(69, 113, 231, 0.7); border-radius: 3px;"></div>` : ''}
         </div>
@@ -200,12 +200,12 @@ function createSessionStartOverlay(stats: SessionStartStats): HTMLDivElement {
   el.className = 'web-time-session-start-overlay';
   el.style.cssText = `
     position: fixed;
-    top: 50%;
+    top: 42%;
     left: 50%;
     transform: translate(-50%, -50%);
     background: #2a2a2a;
     color: #eee;
-    padding: 24px 28px;
+    padding: 24px;
     border-radius: 8px;
     box-shadow: 0 6px 32px rgba(0, 0, 0, 0.5);
     z-index: 1000001;
@@ -216,17 +216,17 @@ function createSessionStartOverlay(stats: SessionStartStats): HTMLDivElement {
   `;
 
   const avgLabel = stats.averageSeconds > 0
-    ? `7-day avg: <strong>${formatTimeCompact(stats.averageSeconds)}</strong> / day`
-    : 'No recent history yet';
+    ? `${formatTimeCompact(stats.averageSeconds)} / day average`
+    : '<span style="color: #777;">No recent history</span>';
 
   el.innerHTML = `
-    <div style="font-size: 14px; font-weight: 600; color: #ccc; margin-bottom: 16px; text-align: center; letter-spacing: 0.02em;">
-      Usage in past ${stats.days.length} days
+    <div style="font-size: 18px; font-weight: 600; color: #ccc; margin-bottom: 16px; text-align: center;">
+      Usage this week
     </div>
     <div style="margin-bottom: 16px;">
       ${buildBarChart(stats.days)}
     </div>
-    <div style="font-size: 13px; color: #aaa; margin-bottom: 24px; padding-top: 10px; border-top: 1px solid #3a3a3a; text-align: center;">
+    <div style="font-size: 16px; color: #ccc; font-weight: 500; margin-bottom: 20px; padding-top: 12px; border-top: 1px solid #3a3a3a; text-align: center;">
       ${avgLabel}
     </div>
     <button class="web-time-continue-btn" style="
@@ -238,6 +238,7 @@ function createSessionStartOverlay(stats: SessionStartStats): HTMLDivElement {
       border-radius: 6px;
       cursor: pointer;
       font-size: 14px;
+      text-align: center;
       transition: background 0.2s;
     ">Continue</button>
   `;
@@ -264,7 +265,7 @@ function createAveragePopupOverlay(minutesLeft: number, averageMinutes: number):
     transform: translate(-50%, -50%);
     background: #2a2a2a;
     color: #eee;
-    padding: 28px 32px;
+    padding: 24px;
     border-radius: 8px;
     box-shadow: 0 6px 32px rgba(0, 0, 0, 0.5);
     z-index: 1000001;
@@ -287,13 +288,13 @@ function createAveragePopupOverlay(minutesLeft: number, averageMinutes: number):
     : `You've reached your 7-day average.`;
 
   el.innerHTML = `
-    <div style="font-size: 15px; color: #eee; margin-bottom: 6px;">
-      You're at 80% of your 7-day average.
+    <div style="font-size: 18px; font-weight: 600; color: #ccc; margin-bottom: 6px;">
+      Approaching your average
     </div>
-    <div style="font-size: 22px; font-weight: 600; color: #fff; margin-bottom: 8px;">
-      avg: ${avgLabel} / day
+    <div style="font-size: 16px; color: #ccc; font-weight: 500; margin-bottom: 8px;">
+      ${avgLabel} / day
     </div>
-    <div style="font-size: 13px; color: #888; margin-bottom: 24px;">
+    <div style="font-size: 14px; color: #eee; margin-bottom: 24px;">
       ${untilAvgLine}
     </div>
     <button class="web-time-avg-continue-btn" style="

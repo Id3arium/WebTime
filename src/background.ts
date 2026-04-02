@@ -38,6 +38,7 @@ let interventionState: InterventionState = {
   averagePopupShown: {}
 };
 
+
 function getLocalDateStrWithReset(): DateString {
   return getLocalDateStr(dayResetTime);
 }
@@ -271,6 +272,12 @@ function handleTabUpdated(
       console.log(`Removed tab ${tabId} from tracked tabs`);
     }
   }
+  // When audio stops, treat it as a fresh activity event so the inactivity
+  // timeout starts from now rather than cutting off immediately.
+  if (changeInfo.audible === false) {
+    tabLastActivity[tabId] = Date.now();
+  }
+
   const hasRelevantChanges = changeInfo.url !== undefined || changeInfo.audible !== undefined;
   if (tabId === activeTabId && hasRelevantChanges) {
     updateTimingState(tabId);
@@ -333,7 +340,7 @@ function handleMessageReceived(
         }
       }
 
-      // If interventions just got enabled for the current domain, reset the session
+      // If interventions are enabled for the current domain, reset the session
       // start flag so the popup fires immediately on the next timer tick.
       if (trackedTabDomain && settings.domains?.[trackedTabDomain]?.reminderEnabled) {
         delete interventionState.sessionStartShown[trackedTabDomain];
