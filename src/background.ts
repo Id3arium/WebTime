@@ -148,8 +148,8 @@ function incrementTimer(): void {
       lastNudgeTime: {},
       lastReminderTime: {},
       snoozedUntil: {},
-      sessionStartShown: interventionState.sessionStartShown, // preserve across day rollover
-      averagePopupShown: {}  // reset average popups on new day
+      sessionStartShown: {},  // reset all intervention state on new day
+      averagePopupShown: {}
     };
     console.log("New day, reset timer.");
   }
@@ -212,8 +212,9 @@ function handleDomainSwitch(url: string): void {
 
   if (trackedTabDomain) {
     saveTimeData();
-    // Reset session-start flag when leaving a domain so it shows again next visit
-    delete interventionState.sessionStartShown[trackedTabDomain];
+    // sessionStartShown is NOT reset here — it resets only on day rollover.
+    // This means the session start popup fires once per day per domain,
+    // regardless of tab switching or how many tabs of the same domain are open.
   }
 
   trackedTabDomain = domain;
@@ -404,9 +405,8 @@ function checkSessionStart(_settings: InterventionSettings): void {
   if (!trackedTabDomain) return;
   if (interventionState.sessionStartShown[trackedTabDomain]) return;
 
-  // Fire immediately on the first tick where sessionStartShown is unset.
-  // This covers both: navigating fresh to the site, and enabling interventions
-  // mid-session (SETTINGS_UPDATED clears the flag, so this fires on the next tick).
+  // Fire on the first tick where sessionStartShown is unset for this domain.
+  // Resets only on day rollover — so once per day per domain, not once per tab switch.
   interventionState.sessionStartShown[trackedTabDomain] = true;
 
   const stats = compute7DayStats(timeHistory, trackedTabDomain, currentDateStr);
@@ -448,7 +448,8 @@ function checkAveragePopup(settings: InterventionSettings): void {
   interventionState.averagePopupShown[trackedTabDomain] = true;
 
   const minutesLeft = Math.round((averageSeconds - timeInSeconds) / 60);
-  sendAveragePopup(Math.max(0, minutesLeft));
+  const averageMinutes = Math.round(averageSeconds / 60);
+  sendAveragePopup(Math.max(0, minutesLeft), averageMinutes);
   console.log(`Average popup shown at ${Math.round(timeInSeconds / 60)}min (80% of avg: ${Math.round(averageSeconds / 60)}min)`);
 }
 
@@ -491,12 +492,13 @@ function sendSessionStart(stats: ReturnType<typeof compute7DayStats>): void {
   }).catch(err => console.warn('Failed to send session start:', err));
 }
 
-function sendAveragePopup(minutesLeft: number): void {
+function sendAveragePopup(minutesLeft: number, averageMinutes: number): void {
   if (!activeTabId) return;
 
   browser.tabs.sendMessage(activeTabId, {
     type: 'SHOW_AVERAGE_POPUP',
-    minutesLeft
+    minutesLeft,
+    averageMinutes
   }).catch(err => console.warn('Failed to send average popup:', err));
 }
 

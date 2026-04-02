@@ -63,7 +63,7 @@ export interface InterventionState {
   lastNudgeTime: Record<Domain, number>;
   lastReminderTime: Record<Domain, number>;
   snoozedUntil: Record<Domain, number | 'tomorrow'>;
-  sessionStartShown: Record<Domain, boolean>; // reset on domain switch
+  sessionStartShown: Record<Domain, boolean>; // reset on day rollover
   averagePopupShown: Record<Domain, boolean>;  // reset on day rollover
 }
 
@@ -135,6 +135,7 @@ export interface ShowSessionStartMessage {
 export interface ShowAveragePopupMessage {
   type: 'SHOW_AVERAGE_POPUP';
   minutesLeft: number;
+  averageMinutes: number; // the actual 7-day average, for display
 }
 
 export type ExtensionMessage =
