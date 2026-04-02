@@ -174,17 +174,20 @@ function buildBarChart(days: SessionStartStats['days']): string {
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   return days.map(({ date, seconds }) => {
-    const dayName = dayNames[new Date(date + 'T12:00:00').getDay()];
+    const [y, m, d] = date.split('-').map(Number);
+    const dateObj = new Date(y, m - 1, d, 12, 0, 0);
+    const dayName = dayNames[dateObj.getDay()];
+    const dayOfMonth = dateObj.getDate();
     const barWidth = Math.round((seconds / maxSeconds) * 100);
     const label = seconds > 0 ? formatTimeCompact(seconds) : '—';
 
     return `
       <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-        <div style="width: 28px; font-size: 12px; color: #888; text-align: right; flex-shrink: 0;">${dayName}</div>
+        <div style="width: 42px; font-size: 12px; color: #888; text-align: right; flex-shrink: 0;">${dayName} ${dayOfMonth}</div>
         <div style="flex: 1; height: 16px; background: #333; border-radius: 3px; overflow: hidden;">
           ${seconds > 0 ? `<div style="width: ${barWidth}%; height: 100%; background: rgba(69, 113, 231, 0.7); border-radius: 3px;"></div>` : ''}
         </div>
-        <div style="width: 52px; font-size: 12px; color: #aaa; flex-shrink: 0;">${label}</div>
+        <div style="width: 44px; font-size: 12px; color: #aaa; flex-shrink: 0;">${label}</div>
       </div>
     `;
   }).join('');
@@ -217,13 +220,13 @@ function createSessionStartOverlay(stats: SessionStartStats): HTMLDivElement {
     : 'No recent history yet';
 
   el.innerHTML = `
-    <div style="font-size: 13px; color: #999; margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.05em;">
-      Usage this week
+    <div style="font-size: 14px; font-weight: 600; color: #ccc; margin-bottom: 16px; text-align: center; letter-spacing: 0.02em;">
+      Usage in past ${stats.days.length} days
     </div>
     <div style="margin-bottom: 16px;">
       ${buildBarChart(stats.days)}
     </div>
-    <div style="font-size: 13px; color: #aaa; margin-bottom: 20px; padding-top: 10px; border-top: 1px solid #3a3a3a;">
+    <div style="font-size: 13px; color: #aaa; margin-bottom: 24px; padding-top: 10px; border-top: 1px solid #3a3a3a; text-align: center;">
       ${avgLabel}
     </div>
     <button class="web-time-continue-btn" style="
@@ -249,7 +252,7 @@ function createSessionStartOverlay(stats: SessionStartStats): HTMLDivElement {
   return el;
 }
 
-function createAveragePopupOverlay(minutesLeft: number): HTMLDivElement {
+function createAveragePopupOverlay(minutesLeft: number, averageMinutes: number): HTMLDivElement {
   if (averagePopupDialog) return averagePopupDialog;
 
   const el = document.createElement('div');
@@ -273,16 +276,25 @@ function createAveragePopupOverlay(minutesLeft: number): HTMLDivElement {
     transition: opacity 0.3s ease;
   `;
 
-  const minutesMsg = minutesLeft > 0
-    ? `You have ~${minutesLeft} min left to stay below your 7-day average.`
-    : `You've reached your 7-day average for today.`;
+  const avgHours = Math.floor(averageMinutes / 60);
+  const avgMins = averageMinutes % 60;
+  const avgLabel = avgHours > 0 && avgMins > 0
+    ? `${avgHours}h ${avgMins}m`
+    : avgHours > 0 ? `${avgHours}h` : `${avgMins}m`;
+
+  const untilAvgLine = minutesLeft > 0
+    ? `You'll reach the average in ${minutesLeft} min.`
+    : `You've reached your 7-day average.`;
 
   el.innerHTML = `
-    <div style="font-size: 18px; font-weight: 600; color: #fff; margin-bottom: 12px;">
-      Most days you'd stop around now.
+    <div style="font-size: 15px; color: #eee; margin-bottom: 6px;">
+      You're at 80% of your 7-day average.
     </div>
-    <div style="font-size: 14px; color: #aaa; margin-bottom: 24px; line-height: 1.5;">
-      ${minutesMsg}
+    <div style="font-size: 22px; font-weight: 600; color: #fff; margin-bottom: 8px;">
+      avg: ${avgLabel} / day
+    </div>
+    <div style="font-size: 13px; color: #888; margin-bottom: 24px;">
+      ${untilAvgLine}
     </div>
     <button class="web-time-avg-continue-btn" style="
       width: 100%;
@@ -354,14 +366,14 @@ function hideSessionStart(): void {
   }
 }
 
-function showAveragePopup(minutesLeft: number): void {
+function showAveragePopup(minutesLeft: number, averageMinutes: number): void {
   if (isAnyMandatoryPopupVisible()) {
-    popupQueue.push(() => showAveragePopup(minutesLeft));
+    popupQueue.push(() => showAveragePopup(minutesLeft, averageMinutes));
     return;
   }
 
   const blurBg = createBlurOverlay();
-  const el = createAveragePopupOverlay(minutesLeft);
+  const el = createAveragePopupOverlay(minutesLeft, averageMinutes);
 
   blurBg.style.pointerEvents = 'none';
   blurBg.style.opacity = '1';
@@ -448,7 +460,7 @@ function handleIncomingMessage(
   } else if (message.type === "SHOW_SESSION_START") {
     showSessionStart(message.stats);
   } else if (message.type === "SHOW_AVERAGE_POPUP") {
-    showAveragePopup(message.minutesLeft);
+    showAveragePopup(message.minutesLeft, message.averageMinutes);
   }
 }
 

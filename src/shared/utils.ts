@@ -65,12 +65,18 @@ export function getLocalDateStr(resetHour: number = 0): string {
 }
 
 /**
+ * Parse a YYYY-MM-DD date string safely in local time (avoids UTC midnight timezone issues).
+ */
+function parseDateLocal(dateStr: DateString): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day, 12, 0, 0); // noon local time
+}
+
+/**
  * Format date string for display (e.g., "2025-01-15" -> "Jan 15")
  */
 export function formatDateForDisplay(dateString: string): string {
-  const [year, month, day] = dateString.split('-').map(num => parseInt(num, 10));
-
-  const date = new Date(year, month - 1, day);
+  const date = parseDateLocal(dateString);
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   return `${months[date.getMonth()]} ${date.getDate()}`;
 }
@@ -86,21 +92,23 @@ export function log(...args: unknown[]): void {
 }
 
 /**
- * Format time in seconds to a compact human-readable string (e.g. "1h 23min", "45min")
+ * Format time in seconds to a compact human-readable string (e.g. "1h 23m", "45m")
  */
 export function formatTimeCompact(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
 
-  if (hours > 0 && minutes > 0) return `${hours}h ${minutes}min`;
+  if (hours > 0 && minutes > 0) return `${hours}h ${minutes}m`;
   if (hours > 0) return `${hours}h`;
-  return `${minutes}min`;
+  return `${minutes}m`;
 }
 
 /**
  * Compute 7-day stats for a domain, excluding today.
  * Returns per-day breakdown, mean seconds over days with data, and count of days with data.
  * averageSeconds = 0 and daysWithData = 0 if no history exists.
+ *
+ * Uses local-time date arithmetic to avoid UTC midnight timezone issues.
  */
 export function compute7DayStats(
   timeHistory: TimeHistory,
@@ -108,9 +116,10 @@ export function compute7DayStats(
   currentDateStr: DateString
 ): SessionStartStats {
   const days: SessionDayStat[] = [];
+  const baseDate = parseDateLocal(currentDateStr);
 
   for (let i = 1; i <= 7; i++) {
-    const date = new Date(currentDateStr);
+    const date = new Date(baseDate);
     date.setDate(date.getDate() - i);
     const yyyy = date.getFullYear();
     const mm = String(date.getMonth() + 1).padStart(2, '0');
