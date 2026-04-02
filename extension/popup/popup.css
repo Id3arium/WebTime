@@ -16,8 +16,8 @@ body {
   overflow: hidden;
 
   background-color: var(--dark-bg);
-  backdrop-filter: blur(8px);              /* Blur effect */
-  -webkit-backdrop-filter: blur(8px);      /* For Safari */
+  backdrop-filter: blur(6px);              /* Blur effect */
+  -webkit-backdrop-filter: blur(6px);      /* For Safari */
 }
 
 .content {

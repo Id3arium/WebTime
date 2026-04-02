@@ -31,8 +31,8 @@ function createBlurOverlay() {
         left: 0;
         width: 100%;
         height: 100%;
-        backdrop-filter: blur(3px);
-        -webkit-backdrop-filter: blur(3px);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
         background: rgba(0, 0, 0, 0.3);
         z-index: 999999;
         pointer-events: none;
