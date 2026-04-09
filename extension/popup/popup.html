@@ -88,6 +88,25 @@
                   Interventions: <span class="domain" id="settings-domain-inline"></span>
                 </div>
                 <div class="intervention-row">
+                  <input type="checkbox" id="session-limit-enabled">
+                  <div class="intervention-grid">
+                    <div class="intervention-group">
+                      <label>Session limit</label>
+                      <div class="time-inputs">
+                        <input type="number" id="session-limit-minutes" min="1" placeholder="30">
+                        <span>min</span>
+                      </div>
+                    </div>
+                    <div class="intervention-group">
+                      <label>Cooldown +<span id="cooldown-recommended" style="color: #888; font-size: 11px;"></span></label>
+                      <div class="time-inputs">
+                        <input type="number" id="cooldown-increment-minutes" min="1" placeholder="10">
+                        <span>min</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="intervention-row">
                   <input type="checkbox" id="reminder-enabled">
                   <div class="intervention-grid">
                     <div class="intervention-group">

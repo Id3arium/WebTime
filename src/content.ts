@@ -10,6 +10,7 @@ let blurOverlay: HTMLDivElement | null = null;
 let reminderDialog: HTMLDivElement | null = null;
 let sessionStartDialog: HTMLDivElement | null = null;
 let averagePopupDialog: HTMLDivElement | null = null;
+let blockerDialog: HTMLDivElement | null = null;
 
 // Queue of popup-show functions — at most one mandatory popup visible at a time.
 // When a popup is dismissed it calls dequeuePopup() to show the next waiting one.
@@ -22,6 +23,31 @@ function isAnyMandatoryPopupVisible(): boolean {
 function dequeuePopup(): void {
   const next = popupQueue.shift();
   if (next) next();
+}
+
+function blockPageScroll(block: boolean): void {
+  if (block) {
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+  } else {
+    document.body.style.overflow = '';
+    document.documentElement.style.overflow = '';
+  }
+}
+
+function pauseAllMedia(): void {
+  document.querySelectorAll('video, audio').forEach(el => {
+    const media = el as HTMLMediaElement;
+    if (!media.paused) {
+      media.pause();
+    }
+  });
+}
+
+function formatCountdown(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
 function createTimerElement(): void {
@@ -56,7 +82,12 @@ function createBlurOverlay(): HTMLDivElement {
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.3s ease;
+    overflow: hidden;
   `;
+
+  // Block scrolling when overlay is active
+  overlay.addEventListener('wheel', (e) => { e.preventDefault(); }, { passive: false });
+  overlay.addEventListener('touchmove', (e) => { e.preventDefault(); }, { passive: false });
 
   const timer = document.querySelector('.web-time-timer');
   if (timer) {
@@ -239,7 +270,7 @@ function createSessionStartOverlay(stats: SessionStartStats): HTMLDivElement {
       cursor: pointer;
       font-size: 14px;
       text-align: center;
-      transition: background 0.2s;
+      transition: background 0.2s, opacity 0.3s;
     ">Continue</button>
   `;
 
@@ -306,7 +337,7 @@ function createAveragePopupOverlay(minutesLeft: number, averageMinutes: number):
       border-radius: 6px;
       cursor: pointer;
       font-size: 14px;
-      transition: background 0.2s;
+      transition: background 0.2s, opacity 0.3s;
     ">Continue</button>
   `;
 
@@ -322,7 +353,9 @@ function createAveragePopupOverlay(minutesLeft: number, averageMinutes: number):
 
 function showNudge(): void {
   const overlay = createBlurOverlay();
+  overlay.style.pointerEvents = 'all';
   overlay.style.opacity = '1';
+  blockPageScroll(true);
 
   const timer = document.querySelector('.web-time-timer') as HTMLElement | null;
   if (timer) {
@@ -337,6 +370,8 @@ function showNudge(): void {
 
   setTimeout(() => {
     overlay.style.opacity = '0';
+    overlay.style.pointerEvents = 'none';
+    blockPageScroll(false);
   }, Constants.OVERLAY_DURATIONS.NUDGE_MS);
 }
 
@@ -349,19 +384,25 @@ function showSessionStart(stats: SessionStartStats): void {
   const blurBg = createBlurOverlay();
   const el = createSessionStartOverlay(stats);
 
-  blurBg.style.pointerEvents = 'none';
+  // Simple/closable popup — button appears immediately, no media pause
+  blurBg.style.pointerEvents = 'all';
   blurBg.style.opacity = '1';
+  blockPageScroll(true);
+
   setTimeout(() => { el.style.opacity = '1'; }, 100);
 }
 
 function hideSessionStart(): void {
-  if (blurOverlay) blurOverlay.style.opacity = '0';
+  if (blurOverlay) {
+    blurOverlay.style.opacity = '0';
+    blurOverlay.style.pointerEvents = 'none';
+  }
+  blockPageScroll(false);
   if (sessionStartDialog) {
     sessionStartDialog.style.opacity = '0';
     setTimeout(() => {
       sessionStartDialog?.parentNode?.removeChild(sessionStartDialog);
       sessionStartDialog = null;
-      if (blurOverlay) blurOverlay.style.pointerEvents = 'none';
       dequeuePopup();
     }, 300);
   }
@@ -376,13 +417,21 @@ function showAveragePopup(minutesLeft: number, averageMinutes: number): void {
   const blurBg = createBlurOverlay();
   const el = createAveragePopupOverlay(minutesLeft, averageMinutes);
 
-  blurBg.style.pointerEvents = 'none';
+  // Simple/closable popup — button appears immediately
+  blurBg.style.pointerEvents = 'all';
   blurBg.style.opacity = '1';
+  blockPageScroll(true);
+  pauseAllMedia();
+
   setTimeout(() => { el.style.opacity = '1'; }, 100);
 }
 
 function hideAveragePopup(): void {
-  if (blurOverlay) blurOverlay.style.opacity = '0';
+  if (blurOverlay) {
+    blurOverlay.style.opacity = '0';
+    blurOverlay.style.pointerEvents = 'none';
+  }
+  blockPageScroll(false);
   if (averagePopupDialog) {
     averagePopupDialog.style.opacity = '0';
     setTimeout(() => {
@@ -401,7 +450,26 @@ function showReminderOverlay(
   const blurBg = createBlurOverlay();
   const reminderElement = createReminderOverlay(message, totalTime);
 
+  // Half-closable popup — buttons appear after half the timer
+  blurBg.style.pointerEvents = 'all';
   blurBg.style.opacity = '1';
+  blockPageScroll(true);
+  pauseAllMedia();
+
+  const halfDuration = Math.round(duration / 2);
+  const allButtons = reminderElement.querySelectorAll('button');
+  allButtons.forEach(btn => {
+    (btn as HTMLElement).style.opacity = '0';
+    (btn as HTMLElement).style.pointerEvents = 'none';
+    (btn as HTMLElement).style.transition = 'opacity 0.3s ease, background 0.2s';
+  });
+  setTimeout(() => {
+    allButtons.forEach(btn => {
+      (btn as HTMLElement).style.opacity = '1';
+      (btn as HTMLElement).style.pointerEvents = 'auto';
+    });
+  }, halfDuration);
+
   setTimeout(() => {
     reminderElement.style.opacity = '1';
 
@@ -418,7 +486,11 @@ function showReminderOverlay(
 }
 
 function hideReminderOverlay(): void {
-  if (blurOverlay) blurOverlay.style.opacity = '0';
+  if (blurOverlay) {
+    blurOverlay.style.opacity = '0';
+    blurOverlay.style.pointerEvents = 'none';
+  }
+  blockPageScroll(false);
   if (reminderDialog) {
     reminderDialog.style.opacity = '0';
     setTimeout(() => {
@@ -443,6 +515,108 @@ function handleSnooze(duration: string): void {
   });
 }
 
+function showBlocker(remainingSeconds: number, totalCooldownSeconds: number, cooldownCount: number, cooldownIncrementMinutes: number): void {
+  pauseAllMedia();
+
+  const blurBg = createBlurOverlay();
+  blurBg.style.pointerEvents = 'all';
+  blurBg.style.opacity = '1';
+  blockPageScroll(true);
+
+  if (blockerDialog) {
+    // Update existing blocker countdown
+    const countdownEl = blockerDialog.querySelector('.web-time-blocker-countdown');
+    if (countdownEl) {
+      countdownEl.textContent = formatCountdown(remainingSeconds);
+    }
+    const progressEl = blockerDialog.querySelector('.web-time-blocker-progress-fill') as HTMLElement | null;
+    if (progressEl && totalCooldownSeconds > 0) {
+      // Bar shrinks from 100% to 0% (same direction as reminder)
+      const pct = Math.max(0, (remainingSeconds / totalCooldownSeconds) * 100);
+      progressEl.style.width = `${pct}%`;
+    }
+    return;
+  }
+
+  // Build the cooldown explanation line
+  const totalMinutes = Math.round(totalCooldownSeconds / 60);
+  let cooldownExplanation: string;
+  if (cooldownCount > 1 && cooldownIncrementMinutes > 0) {
+    cooldownExplanation = `Session ${cooldownCount} · ${cooldownCount} × ${cooldownIncrementMinutes}m = ${totalMinutes}m cooldown`;
+  } else if (cooldownCount === 1 && cooldownIncrementMinutes > 0) {
+    cooldownExplanation = `Session ${cooldownCount} · ${totalMinutes}m cooldown`;
+  } else {
+    cooldownExplanation = `${totalMinutes}m cooldown`;
+  }
+
+  const el = document.createElement('div');
+  el.className = 'web-time-blocker-overlay';
+  el.style.cssText = `
+    position: fixed;
+    top: 42%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #2a2a2a;
+    color: #eee;
+    padding: 28px;
+    border-radius: 8px;
+    box-shadow: 0 6px 32px rgba(0, 0, 0, 0.5);
+    z-index: 1000001;
+    pointer-events: auto;
+    width: 300px;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    overflow: hidden;
+  `;
+
+  el.innerHTML = `
+    <div style="font-size: 18px; font-weight: 600; color: #ccc; margin-bottom: 8px;">
+      Session limit reached
+    </div>
+    <div style="font-size: 14px; color: #eee; margin-bottom: 16px;">
+      ${cooldownExplanation}
+    </div>
+    <div style="font-size: 24px; font-weight: 500; color: #fff; margin-bottom: 16px; font-variant-numeric: tabular-nums;" class="web-time-blocker-countdown">
+      ${formatCountdown(remainingSeconds)}
+    </div>
+    <div style="
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+    ">
+      <div class="web-time-blocker-progress-fill" style="
+        height: 100%;
+        background: #4a9eff;
+        width: 100%;
+        transition: width 1s linear;
+      "></div>
+    </div>
+  `;
+
+  document.body.appendChild(el);
+  blockerDialog = el;
+  setTimeout(() => { el.style.opacity = '1'; }, 50);
+}
+
+function hideBlocker(): void {
+  if (blurOverlay) {
+    blurOverlay.style.opacity = '0';
+    blurOverlay.style.pointerEvents = 'none';
+  }
+  blockPageScroll(false);
+  if (blockerDialog) {
+    blockerDialog.style.opacity = '0';
+    setTimeout(() => {
+      blockerDialog?.parentNode?.removeChild(blockerDialog);
+      blockerDialog = null;
+    }, 300);
+  }
+}
+
 function handleIncomingMessage(
   message: ExtensionMessage,
   _sender: chrome.runtime.MessageSender,
@@ -462,6 +636,10 @@ function handleIncomingMessage(
     showSessionStart(message.stats);
   } else if (message.type === "SHOW_AVERAGE_POPUP") {
     showAveragePopup(message.minutesLeft, message.averageMinutes);
+  } else if (message.type === "SHOW_BLOCKER") {
+    showBlocker(message.cooldownRemainingSeconds, message.totalCooldownSeconds, message.cooldownCount, message.cooldownIncrementMinutes);
+  } else if (message.type === "HIDE_BLOCKER") {
+    hideBlocker();
   }
 }
 

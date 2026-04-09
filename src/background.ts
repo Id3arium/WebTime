@@ -6,6 +6,7 @@ import type {
   DateString,
   InterventionState,
   InterventionSettings,
+  SessionLimitState,
   WebTimeSettings,
   ExtensionMessage
 } from './types.js';
@@ -36,6 +37,13 @@ let interventionState: InterventionState = {
   snoozedUntil: {},
   sessionStartShown: {},
   averagePopupShown: {}
+};
+
+let sessionLimitState: SessionLimitState = {
+  continuousUsage: {},
+  cooldownEndTime: {},
+  cooldownCount: {},
+  cooldownIntervals: {}
 };
 
 
@@ -140,6 +148,13 @@ async function loadTimeData(): Promise<void> {
 
 function incrementTimer(): void {
   todaysTotalTimeInActiveDomain++;
+
+  // Track continuous usage for session limits
+  if (trackedTabDomain) {
+    sessionLimitState.continuousUsage[trackedTabDomain] =
+      (sessionLimitState.continuousUsage[trackedTabDomain] || 0) + 1;
+  }
+
   const newDateStr = getLocalDateStrWithReset();
   if (newDateStr !== currentDateStr) {
     saveTimeData();
@@ -151,6 +166,14 @@ function incrementTimer(): void {
       snoozedUntil: {},
       sessionStartShown: {},  // reset all intervention state on new day
       averagePopupShown: {}
+    };
+    // Reset session limit state on day rollover
+    clearAllCooldownIntervals();
+    sessionLimitState = {
+      continuousUsage: {},
+      cooldownEndTime: {},
+      cooldownCount: {},
+      cooldownIntervals: {}
     };
     console.log("New day, reset timer.");
   }
@@ -176,6 +199,11 @@ function stopTimer(): void {
   clearInterval(timerInterval);
   timerInterval = null;
   saveTimeData();
+
+  // Reset continuous usage on inactivity stop
+  if (trackedTabDomain) {
+    sessionLimitState.continuousUsage[trackedTabDomain] = 0;
+  }
 }
 
 function updateTimerDisplay(updatedTime: number): void {
@@ -213,6 +241,8 @@ function handleDomainSwitch(url: string): void {
 
   if (trackedTabDomain) {
     saveTimeData();
+    // Reset continuous usage when leaving a domain (session breaks)
+    sessionLimitState.continuousUsage[trackedTabDomain] = 0;
     // sessionStartShown is NOT reset here — it resets only on day rollover.
     // This means the session start popup fires once per day per domain,
     // regardless of tab switching or how many tabs of the same domain are open.
@@ -303,10 +333,37 @@ function handleMessageReceived(
   if (message.type === "CONTENT_SCRIPT_READY" && sender.tab?.id) {
     trackedTabIds.add(sender.tab.id);
     updateTimerDisplay(todaysTotalTimeInActiveDomain);
+
+    // If the domain is currently in cooldown, immediately show blocker on this new tab
+    if (sender.tab.url) {
+      const domain = extractDomain(sender.tab.url);
+      if (domain) {
+        const endTime = sessionLimitState.cooldownEndTime[domain] || 0;
+        if (endTime > Date.now()) {
+          const remaining = Math.ceil((endTime - Date.now()) / 1000);
+          const count = sessionLimitState.cooldownCount[domain] || 1;
+          browser.tabs.sendMessage(sender.tab.id, {
+            type: 'SHOW_BLOCKER',
+            cooldownRemainingSeconds: remaining,
+            totalCooldownSeconds: remaining,
+            cooldownCount: count,
+            cooldownIncrementMinutes: 0 // not known from here, but the popup will still show
+          }).catch(() => {});
+        }
+      }
+    }
   }
 
   if (message.type === "USER_ACTIVE" && sender.tab?.id) {
     tabLastActivity[sender.tab.id] = Date.now();
+  }
+
+  if (message.type === "BLOCKER_CONTINUE" && sender.tab?.url) {
+    const domain = extractDomain(sender.tab.url);
+    if (domain) {
+      sessionLimitState.continuousUsage[domain] = 0;
+      console.log(`Blocker continued for ${domain}, continuous usage reset`);
+    }
   }
 
   if (message.type === "SNOOZE_REMINDERS" && sender.tab?.url) {
@@ -353,16 +410,21 @@ function handleMessageReceived(
 async function checkForInterventions(): Promise<void> {
   if (!trackedTabDomain || !activeTabId) return;
 
-  const isCurrentlyActive = await checkAndClearSnooze();
-  if (!isCurrentlyActive) return;
-
   const settings = await loadInterventionSettings();
   if (!settings) return;
 
-  checkSessionStart(settings);
-  checkLinearNudges(settings);
-  checkAveragePopup(settings);
-  checkTier2Reminders(settings);
+  // Session limit always runs — independent of snooze state
+  if (checkSessionLimit(settings)) return;
+
+  const isCurrentlyActive = await checkAndClearSnooze();
+  if (!isCurrentlyActive) return;
+
+  if (settings.reminderEnabled) {
+    checkSessionStart(settings);
+    checkLinearNudges(settings);
+    checkAveragePopup(settings);
+    checkTier2Reminders(settings);
+  }
 }
 
 async function checkAndClearSnooze(): Promise<boolean> {
@@ -390,7 +452,10 @@ async function loadInterventionSettings(): Promise<InterventionSettings | null> 
   const domainSettings = settings.domains?.[trackedTabDomain] || {};
 
   const reminderEnabled = domainSettings.reminderEnabled || false;
-  if (!reminderEnabled) return null;
+  const hasSessionLimit = (domainSettings.sessionLimit || 0) > 0;
+
+  // Need either reminders or session limit enabled to proceed
+  if (!reminderEnabled && !hasSessionLimit) return null;
 
   const nudgeIntervalMinutes = domainSettings.nudgeIntervalMinutes ?? Constants.DEFAULT_NUDGE_INTERVAL_MINUTES;
   const { averageSeconds, daysWithData } = compute7DayStats(timeHistory, trackedTabDomain, currentDateStr);
@@ -404,7 +469,9 @@ async function loadInterventionSettings(): Promise<InterventionSettings | null> 
     nudgeIntervalMinutes,
     averageSeconds,
     daysWithData,
-    timeInSeconds: todaysTotalTimeInActiveDomain
+    timeInSeconds: todaysTotalTimeInActiveDomain,
+    sessionLimitSeconds: (domainSettings.sessionLimit || 0) * 60,
+    cooldownIncrementSeconds: (domainSettings.cooldownIncrement || 0) * 60
   };
 }
 
@@ -480,6 +547,116 @@ function checkTier2Reminders(settings: InterventionSettings): void {
 
   showReminder(global.customMessage);
   interventionState.lastReminderTime[trackedTabDomain] = timeInSeconds;
+}
+
+function clearAllCooldownIntervals(): void {
+  for (const domain of Object.keys(sessionLimitState.cooldownIntervals)) {
+    clearInterval(sessionLimitState.cooldownIntervals[domain]);
+  }
+  sessionLimitState.cooldownIntervals = {};
+}
+
+function sendBlockerToAllTabsOfDomain(domain: Domain, remainingSeconds: number, totalSeconds: number, cooldownCount: number, cooldownIncrementMinutes: number): void {
+  const message = {
+    type: 'SHOW_BLOCKER' as const,
+    cooldownRemainingSeconds: remainingSeconds,
+    totalCooldownSeconds: totalSeconds,
+    cooldownCount,
+    cooldownIncrementMinutes
+  };
+
+  trackedTabIds.forEach(tabId => {
+    browser.tabs.get(tabId).then(tab => {
+      if (tab.url && extractDomain(tab.url) === domain) {
+        browser.tabs.sendMessage(tabId, message).catch(() => {});
+      }
+    }).catch(() => {});
+  });
+}
+
+function sendHideBlockerToAllTabsOfDomain(domain: Domain): void {
+  const message = { type: 'HIDE_BLOCKER' as const };
+
+  trackedTabIds.forEach(tabId => {
+    browser.tabs.get(tabId).then(tab => {
+      if (tab.url && extractDomain(tab.url) === domain) {
+        browser.tabs.sendMessage(tabId, message).catch(() => {});
+      }
+    }).catch(() => {});
+  });
+}
+
+function startCooldownInterval(domain: Domain, totalCooldownSeconds: number, cooldownCount: number, cooldownIncrementMinutes: number): void {
+  // Clear any existing interval for this domain
+  if (sessionLimitState.cooldownIntervals[domain]) {
+    clearInterval(sessionLimitState.cooldownIntervals[domain]);
+  }
+
+  sessionLimitState.cooldownIntervals[domain] = setInterval(() => {
+    const endTime = sessionLimitState.cooldownEndTime[domain] || 0;
+    const remaining = Math.ceil((endTime - Date.now()) / 1000);
+
+    if (remaining <= 0) {
+      // Cooldown expired
+      clearInterval(sessionLimitState.cooldownIntervals[domain]);
+      delete sessionLimitState.cooldownIntervals[domain];
+      sessionLimitState.cooldownEndTime[domain] = 0;
+      sessionLimitState.continuousUsage[domain] = 0;
+      sendHideBlockerToAllTabsOfDomain(domain);
+      console.log(`Cooldown expired for ${domain}`);
+    } else {
+      sendBlockerToAllTabsOfDomain(domain, remaining, totalCooldownSeconds, cooldownCount, cooldownIncrementMinutes);
+    }
+  }, 1000);
+}
+
+function checkSessionLimit(settings: InterventionSettings): boolean {
+  const { sessionLimitSeconds, cooldownIncrementSeconds } = settings;
+  if (sessionLimitSeconds <= 0 || !trackedTabDomain) return false;
+
+  const domain = trackedTabDomain;
+  const continuous = sessionLimitState.continuousUsage[domain] || 0;
+
+  // Log every 30 seconds for debugging
+  if (continuous > 0 && continuous % 30 === 0) {
+    console.log(`Session limit: ${continuous}s / ${sessionLimitSeconds}s for ${domain}`);
+  }
+
+  // Currently in cooldown? Block everything.
+  const endTime = sessionLimitState.cooldownEndTime[domain] || 0;
+  if (endTime > Date.now()) {
+    return true; // cooldown interval handles UI updates
+  }
+
+  // Check if session limit reached
+  if (continuous >= sessionLimitSeconds) {
+    // Calculate escalating cooldown
+    sessionLimitState.cooldownCount[domain] = (sessionLimitState.cooldownCount[domain] || 0) + 1;
+    const count = sessionLimitState.cooldownCount[domain];
+    const totalCooldownSeconds = count * cooldownIncrementSeconds;
+
+    const incrementMinutes = Math.round(cooldownIncrementSeconds / 60);
+
+    if (totalCooldownSeconds <= 0) {
+      // No cooldown increment configured — use session limit as fallback
+      const fallback = sessionLimitSeconds;
+      const fallbackMinutes = Math.round(fallback / 60);
+      sessionLimitState.cooldownEndTime[domain] = Date.now() + (fallback * 1000);
+      sendBlockerToAllTabsOfDomain(domain, fallback, fallback, count, fallbackMinutes);
+      startCooldownInterval(domain, fallback, count, fallbackMinutes);
+      console.log(`Session limit reached for ${domain}, cooldown: ${fallback}s (fallback)`);
+    } else {
+      sessionLimitState.cooldownEndTime[domain] = Date.now() + (totalCooldownSeconds * 1000);
+      sendBlockerToAllTabsOfDomain(domain, totalCooldownSeconds, totalCooldownSeconds, count, incrementMinutes);
+      startCooldownInterval(domain, totalCooldownSeconds, count, incrementMinutes);
+      console.log(`Session limit reached for ${domain}, cooldown: ${totalCooldownSeconds}s (count: ${count})`);
+    }
+
+    sessionLimitState.continuousUsage[domain] = 0;
+    return true;
+  }
+
+  return false;
 }
 
 function sendNudge(): void {
