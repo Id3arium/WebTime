@@ -33,6 +33,16 @@ interface ExtendedChart {
   chartArea?: { left: number; right: number; bottom: number };
 }
 
+function updateCooldownRecommendation(sessionLimitMinutes: number, el: HTMLElement | null): void {
+  if (!el) return;
+  if (sessionLimitMinutes > 0) {
+    const rec = Math.max(1, Math.round(sessionLimitMinutes / 3));
+    el.textContent = ` (rec: ${rec}m)`;
+  } else {
+    el.textContent = '';
+  }
+}
+
 export function showGeneralView(): void {
   AppState.setView(ViewState.GENERAL);
   const container = document.querySelector('.pages-container');
@@ -110,6 +120,31 @@ export async function loadSettings(): Promise<void> {
     if (reminderIntervalEl) reminderIntervalEl.value = String(reminderInterval);
     if (nudgeIntervalEl) nudgeIntervalEl.value = String(nudgeIntervalMinutes);
 
+    // Session limit settings
+    const sessionLimitMinutes = domainSettings.sessionLimit || 0;
+    const cooldownIncrement = domainSettings.cooldownIncrement || 0;
+    const sessionLimitEnabled = sessionLimitMinutes > 0;
+
+    const sessionLimitEnabledEl = document.getElementById('session-limit-enabled') as HTMLInputElement | null;
+    const sessionLimitEl = document.getElementById('session-limit-minutes') as HTMLInputElement | null;
+    const cooldownIncrementEl = document.getElementById('cooldown-increment-minutes') as HTMLInputElement | null;
+    const cooldownRecommendedEl = document.getElementById('cooldown-recommended');
+
+    if (sessionLimitEnabledEl) sessionLimitEnabledEl.checked = sessionLimitEnabled;
+    if (sessionLimitEl) sessionLimitEl.value = sessionLimitMinutes > 0 ? String(sessionLimitMinutes) : '';
+    if (cooldownIncrementEl) cooldownIncrementEl.value = cooldownIncrement > 0 ? String(cooldownIncrement) : '';
+
+    // Show recommended cooldown increment = 1/3 of session limit
+    updateCooldownRecommendation(sessionLimitMinutes, cooldownRecommendedEl);
+
+    // Live-update recommended value as session limit changes
+    if (sessionLimitEl) {
+      sessionLimitEl.addEventListener('input', () => {
+        const val = parseInt(sessionLimitEl.value) || 0;
+        updateCooldownRecommendation(val, cooldownRecommendedEl);
+      });
+    }
+
     updateNudgeIntervalVisibility();
 
     if (reminderMinutesEl && reminderHoursEl) {
@@ -173,12 +208,26 @@ export async function saveSettings(): Promise<void> {
     const reminderInterval = parseInt(reminderIntervalEl?.value || '15') || 15;
     const nudgeIntervalMinutes = parseInt(nudgeIntervalEl?.value || String(Constants.DEFAULT_NUDGE_INTERVAL_MINUTES)) || Constants.DEFAULT_NUDGE_INTERVAL_MINUTES;
 
-    if (reminderEnabled && AppState.selectedDomain) {
+    const sessionLimitEnabledEl = document.getElementById('session-limit-enabled') as HTMLInputElement | null;
+    const sessionLimitEl = document.getElementById('session-limit-minutes') as HTMLInputElement | null;
+    const cooldownIncrementEl = document.getElementById('cooldown-increment-minutes') as HTMLInputElement | null;
+    const sessionLimitEnabled = sessionLimitEnabledEl?.checked || false;
+    // Use placeholder as default when checkbox is on but field is empty
+    const sessionLimitDefault = parseInt(sessionLimitEl?.placeholder || '30') || 30;
+    const cooldownIncrementDefault = parseInt(cooldownIncrementEl?.placeholder || '10') || 10;
+    const sessionLimit = sessionLimitEnabled ? (parseInt(sessionLimitEl?.value || '') || sessionLimitDefault) : 0;
+    const cooldownIncrement = sessionLimitEnabled ? (parseInt(cooldownIncrementEl?.value || '') || cooldownIncrementDefault) : 0;
+
+    const hasAnySettings = reminderEnabled || sessionLimit > 0;
+
+    if (hasAnySettings && AppState.selectedDomain) {
       settings.domains[AppState.selectedDomain] = {
-        reminderEnabled: true,
+        reminderEnabled,
         reminderThreshold,
         reminderInterval,
-        nudgeIntervalMinutes
+        nudgeIntervalMinutes,
+        sessionLimit: sessionLimit > 0 ? sessionLimit : undefined,
+        cooldownIncrement: cooldownIncrement > 0 ? cooldownIncrement : undefined
       };
     } else if (AppState.selectedDomain) {
       if (settings.domains[AppState.selectedDomain]) {

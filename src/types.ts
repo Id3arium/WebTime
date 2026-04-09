@@ -48,6 +48,8 @@ export interface DomainSettings {
   reminderThreshold?: number; // Minutes
   reminderInterval?: number; // Minutes
   nudgeIntervalMinutes?: number; // Minutes between linear nudges (default: 15)
+  sessionLimit?: number; // Minutes — continuous usage before cooldown triggers
+  cooldownIncrement?: number; // Minutes — each successive cooldown grows by this amount
 }
 
 export interface WebTimeSettings {
@@ -88,6 +90,20 @@ export interface InterventionSettings {
   averageSeconds: number; // 7-day moving average in seconds (0 if no history)
   daysWithData: number; // days with usage in last 7 days
   timeInSeconds: number;
+  sessionLimitSeconds: number; // 0 = disabled
+  cooldownIncrementSeconds: number;
+}
+
+/** Tracks session limit cooldown state per domain (in-memory only, resets on restart) */
+export interface SessionLimitState {
+  /** Seconds of continuous usage in current session */
+  continuousUsage: Record<Domain, number>;
+  /** Timestamp (ms) when cooldown ends — 0 = not in cooldown */
+  cooldownEndTime: Record<Domain, number>;
+  /** Number of cooldowns triggered today (for escalation) */
+  cooldownCount: Record<Domain, number>;
+  /** Active setInterval IDs for cooldown countdown updates */
+  cooldownIntervals: Record<Domain, ReturnType<typeof setInterval>>;
 }
 
 // ============================================
@@ -138,6 +154,22 @@ export interface ShowAveragePopupMessage {
   averageMinutes: number; // the actual 7-day average, for display
 }
 
+export interface ShowBlockerMessage {
+  type: 'SHOW_BLOCKER';
+  cooldownRemainingSeconds: number;
+  totalCooldownSeconds: number;
+  cooldownCount: number; // how many cooldowns triggered today
+  cooldownIncrementMinutes: number; // the per-cooldown increment in minutes
+}
+
+export interface HideBlockerMessage {
+  type: 'HIDE_BLOCKER';
+}
+
+export interface BlockerContinueMessage {
+  type: 'BLOCKER_CONTINUE';
+}
+
 export type ExtensionMessage =
   | TimeUpdateMessage
   | ContentScriptReadyMessage
@@ -147,7 +179,10 @@ export type ExtensionMessage =
   | NudgeMessage
   | ShowReminderMessage
   | ShowSessionStartMessage
-  | ShowAveragePopupMessage;
+  | ShowAveragePopupMessage
+  | ShowBlockerMessage
+  | HideBlockerMessage
+  | BlockerContinueMessage;
 
 // ============================================
 // Chart Types
