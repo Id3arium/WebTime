@@ -35,6 +35,31 @@ function blockPageScroll(block: boolean): void {
   }
 }
 
+/** Block keyboard events from reaching the page (e.g. space/k to play/pause on YT) */
+function blockKeyboardHandler(e: KeyboardEvent): void {
+  // Allow Tab for accessibility within our popup buttons
+  if (e.key === 'Tab') return;
+  e.stopPropagation();
+  e.preventDefault();
+}
+
+let keyboardBlocked = false;
+
+function blockKeyboard(block: boolean): void {
+  if (block && !keyboardBlocked) {
+    // Capture phase so we intercept before the page's handlers
+    document.addEventListener('keydown', blockKeyboardHandler, true);
+    document.addEventListener('keyup', blockKeyboardHandler, true);
+    document.addEventListener('keypress', blockKeyboardHandler, true);
+    keyboardBlocked = true;
+  } else if (!block && keyboardBlocked) {
+    document.removeEventListener('keydown', blockKeyboardHandler, true);
+    document.removeEventListener('keyup', blockKeyboardHandler, true);
+    document.removeEventListener('keypress', blockKeyboardHandler, true);
+    keyboardBlocked = false;
+  }
+}
+
 function pauseAllMedia(): void {
   document.querySelectorAll('video, audio').forEach(el => {
     const media = el as HTMLMediaElement;
@@ -356,6 +381,7 @@ function showNudge(): void {
   overlay.style.pointerEvents = 'all';
   overlay.style.opacity = '1';
   blockPageScroll(true);
+  blockKeyboard(true);
 
   const timer = document.querySelector('.web-time-timer') as HTMLElement | null;
   if (timer) {
@@ -372,6 +398,7 @@ function showNudge(): void {
     overlay.style.opacity = '0';
     overlay.style.pointerEvents = 'none';
     blockPageScroll(false);
+    blockKeyboard(false);
   }, Constants.OVERLAY_DURATIONS.NUDGE_MS);
 }
 
@@ -388,6 +415,7 @@ function showSessionStart(stats: SessionStartStats): void {
   blurBg.style.pointerEvents = 'all';
   blurBg.style.opacity = '1';
   blockPageScroll(true);
+  blockKeyboard(true);
 
   setTimeout(() => { el.style.opacity = '1'; }, 100);
 }
@@ -398,6 +426,7 @@ function hideSessionStart(): void {
     blurOverlay.style.pointerEvents = 'none';
   }
   blockPageScroll(false);
+  blockKeyboard(false);
   if (sessionStartDialog) {
     sessionStartDialog.style.opacity = '0';
     setTimeout(() => {
@@ -421,6 +450,7 @@ function showAveragePopup(minutesLeft: number, averageMinutes: number): void {
   blurBg.style.pointerEvents = 'all';
   blurBg.style.opacity = '1';
   blockPageScroll(true);
+  blockKeyboard(true);
   pauseAllMedia();
 
   setTimeout(() => { el.style.opacity = '1'; }, 100);
@@ -432,6 +462,7 @@ function hideAveragePopup(): void {
     blurOverlay.style.pointerEvents = 'none';
   }
   blockPageScroll(false);
+  blockKeyboard(false);
   if (averagePopupDialog) {
     averagePopupDialog.style.opacity = '0';
     setTimeout(() => {
@@ -454,6 +485,7 @@ function showReminderOverlay(
   blurBg.style.pointerEvents = 'all';
   blurBg.style.opacity = '1';
   blockPageScroll(true);
+  blockKeyboard(true);
   pauseAllMedia();
 
   const halfDuration = Math.round(duration / 2);
@@ -491,6 +523,7 @@ function hideReminderOverlay(): void {
     blurOverlay.style.pointerEvents = 'none';
   }
   blockPageScroll(false);
+  blockKeyboard(false);
   if (reminderDialog) {
     reminderDialog.style.opacity = '0';
     setTimeout(() => {
@@ -522,6 +555,7 @@ function showBlocker(remainingSeconds: number, totalCooldownSeconds: number, coo
   blurBg.style.pointerEvents = 'all';
   blurBg.style.opacity = '1';
   blockPageScroll(true);
+  blockKeyboard(true);
 
   if (blockerDialog) {
     // Update existing blocker countdown
@@ -608,6 +642,7 @@ function hideBlocker(): void {
     blurOverlay.style.pointerEvents = 'none';
   }
   blockPageScroll(false);
+  blockKeyboard(false);
   if (blockerDialog) {
     blockerDialog.style.opacity = '0';
     setTimeout(() => {
