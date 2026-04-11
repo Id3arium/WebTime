@@ -48,6 +48,7 @@ export interface DomainSettings {
   reminderThreshold?: number; // Minutes
   reminderInterval?: number; // Minutes
   nudgeIntervalMinutes?: number; // Minutes between linear nudges (default: 15)
+  sessionLimitEnabled?: boolean;
   sessionLimit?: number; // Minutes — continuous usage before cooldown triggers
   cooldownIncrement?: number; // Minutes — each successive cooldown grows by this amount
 }
