@@ -120,22 +120,29 @@ export async function loadSettings(): Promise<void> {
     if (reminderIntervalEl) reminderIntervalEl.value = String(reminderInterval);
     if (nudgeIntervalEl) nudgeIntervalEl.value = String(nudgeIntervalMinutes);
 
-    // Session limit settings
-    const sessionLimitMinutes = domainSettings.sessionLimit || 0;
-    const cooldownIncrement = domainSettings.cooldownIncrement || 0;
-    const sessionLimitEnabled = sessionLimitMinutes > 0;
-
+    // Session limit settings — keep stored value even when disabled so the
+    // user's numbers are preserved across toggles. Fall back to the HTML
+    // default value (30 / 10) only when nothing has ever been stored.
     const sessionLimitEnabledEl = document.getElementById('session-limit-enabled') as HTMLInputElement | null;
     const sessionLimitEl = document.getElementById('session-limit-minutes') as HTMLInputElement | null;
     const cooldownIncrementEl = document.getElementById('cooldown-increment-minutes') as HTMLInputElement | null;
     const cooldownRecommendedEl = document.getElementById('cooldown-recommended');
 
+    const sessionLimitEnabled = domainSettings.sessionLimitEnabled || false;
+    const storedSessionLimit = domainSettings.sessionLimit;
+    const storedCooldownIncrement = domainSettings.cooldownIncrement;
+
     if (sessionLimitEnabledEl) sessionLimitEnabledEl.checked = sessionLimitEnabled;
-    if (sessionLimitEl) sessionLimitEl.value = sessionLimitMinutes > 0 ? String(sessionLimitMinutes) : '';
-    if (cooldownIncrementEl) cooldownIncrementEl.value = cooldownIncrement > 0 ? String(cooldownIncrement) : '';
+    if (sessionLimitEl && storedSessionLimit !== undefined && storedSessionLimit > 0) {
+      sessionLimitEl.value = String(storedSessionLimit);
+    }
+    if (cooldownIncrementEl && storedCooldownIncrement !== undefined && storedCooldownIncrement > 0) {
+      cooldownIncrementEl.value = String(storedCooldownIncrement);
+    }
 
     // Show recommended cooldown increment = 1/3 of session limit
-    updateCooldownRecommendation(sessionLimitMinutes, cooldownRecommendedEl);
+    const currentSessionLimitForRec = parseInt(sessionLimitEl?.value || '0') || 0;
+    updateCooldownRecommendation(currentSessionLimitForRec, cooldownRecommendedEl);
 
     // Live-update recommended value as session limit changes
     if (sessionLimitEl) {
@@ -212,13 +219,12 @@ export async function saveSettings(): Promise<void> {
     const sessionLimitEl = document.getElementById('session-limit-minutes') as HTMLInputElement | null;
     const cooldownIncrementEl = document.getElementById('cooldown-increment-minutes') as HTMLInputElement | null;
     const sessionLimitEnabled = sessionLimitEnabledEl?.checked || false;
-    // Use placeholder as default when checkbox is on but field is empty
-    const sessionLimitDefault = parseInt(sessionLimitEl?.placeholder || '30') || 30;
-    const cooldownIncrementDefault = parseInt(cooldownIncrementEl?.placeholder || '10') || 10;
-    const sessionLimit = sessionLimitEnabled ? (parseInt(sessionLimitEl?.value || '') || sessionLimitDefault) : 0;
-    const cooldownIncrement = sessionLimitEnabled ? (parseInt(cooldownIncrementEl?.value || '') || cooldownIncrementDefault) : 0;
+    // Always persist whatever value is in the inputs, independent of the enabled
+    // checkbox, so toggling off then on preserves the user's numbers.
+    const sessionLimit = parseInt(sessionLimitEl?.value || '') || 0;
+    const cooldownIncrement = parseInt(cooldownIncrementEl?.value || '') || 0;
 
-    const hasAnySettings = reminderEnabled || sessionLimit > 0;
+    const hasAnySettings = reminderEnabled || sessionLimitEnabled || sessionLimit > 0 || cooldownIncrement > 0;
 
     if (hasAnySettings && AppState.selectedDomain) {
       settings.domains[AppState.selectedDomain] = {
@@ -226,6 +232,7 @@ export async function saveSettings(): Promise<void> {
         reminderThreshold,
         reminderInterval,
         nudgeIntervalMinutes,
+        sessionLimitEnabled,
         sessionLimit: sessionLimit > 0 ? sessionLimit : undefined,
         cooldownIncrement: cooldownIncrement > 0 ? cooldownIncrement : undefined
       };

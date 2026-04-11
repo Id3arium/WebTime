@@ -412,7 +412,9 @@ function handleMessageReceived(
       // settings change. This handles mid-day changes to sessionLimit so the
       // next trigger is anchored to the new limit, not the old one.
       if (trackedTabDomain) {
-        const newLimitSeconds = (settings.domains?.[trackedTabDomain]?.sessionLimit || 0) * 60;
+        const domainCfg = settings.domains?.[trackedTabDomain];
+        const slEnabled = domainCfg?.sessionLimitEnabled || false;
+        const newLimitSeconds = slEnabled ? (domainCfg?.sessionLimit || 0) * 60 : 0;
         if (newLimitSeconds > 0) {
           nextSessionBoundary[trackedTabDomain] = computeNextBoundary(
             todaysTotalTimeInActiveDomain,
@@ -476,7 +478,8 @@ async function loadInterventionSettings(): Promise<InterventionSettings | null> 
   const domainSettings = settings.domains?.[trackedTabDomain] || {};
 
   const reminderEnabled = domainSettings.reminderEnabled || false;
-  const hasSessionLimit = (domainSettings.sessionLimit || 0) > 0;
+  const sessionLimitEnabled = domainSettings.sessionLimitEnabled || false;
+  const hasSessionLimit = sessionLimitEnabled && (domainSettings.sessionLimit || 0) > 0;
 
   // Need either reminders or session limit enabled to proceed
   if (!reminderEnabled && !hasSessionLimit) return null;
@@ -494,8 +497,8 @@ async function loadInterventionSettings(): Promise<InterventionSettings | null> 
     averageSeconds,
     daysWithData,
     timeInSeconds: todaysTotalTimeInActiveDomain,
-    sessionLimitSeconds: (domainSettings.sessionLimit || 0) * 60,
-    cooldownIncrementSeconds: (domainSettings.cooldownIncrement || 0) * 60
+    sessionLimitSeconds: hasSessionLimit ? (domainSettings.sessionLimit || 0) * 60 : 0,
+    cooldownIncrementSeconds: hasSessionLimit ? (domainSettings.cooldownIncrement || 0) * 60 : 0
   };
 }
 
@@ -645,11 +648,10 @@ function checkSessionLimit(settings: InterventionSettings): boolean {
 
   const sessionNum = Math.round(nextSessionBoundary[domain] / sessionLimitSeconds);
   // Escalating cooldown: session 1 = 1× increment, session 2 = 2×, etc.
-  // Fallback to sessionLimitSeconds if no increment is configured (matches old behavior).
-  const cooldownSeconds = Math.max(
-    sessionNum * cooldownIncrementSeconds,
-    sessionLimitSeconds
-  );
+  // Fallback to sessionLimitSeconds only if no increment is configured at all.
+  const cooldownSeconds = cooldownIncrementSeconds > 0
+    ? sessionNum * cooldownIncrementSeconds
+    : sessionLimitSeconds;
   const incrementMinutes = Math.round(cooldownIncrementSeconds / 60);
 
   cooldownEndTime[domain] = Date.now() + cooldownSeconds * 1000;
