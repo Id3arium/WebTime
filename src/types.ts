@@ -94,18 +94,6 @@ export interface InterventionSettings {
   cooldownIncrementSeconds: number;
 }
 
-/** Tracks session limit cooldown state per domain (in-memory only, resets on restart) */
-export interface SessionLimitState {
-  /** Seconds of continuous usage in current session */
-  continuousUsage: Record<Domain, number>;
-  /** Timestamp (ms) when cooldown ends — 0 = not in cooldown */
-  cooldownEndTime: Record<Domain, number>;
-  /** Number of cooldowns triggered today (for escalation) */
-  cooldownCount: Record<Domain, number>;
-  /** Active setInterval IDs for cooldown countdown updates */
-  cooldownIntervals: Record<Domain, ReturnType<typeof setInterval>>;
-}
-
 // ============================================
 // Message Types (Background <-> Content Script)
 // ============================================
@@ -166,10 +154,6 @@ export interface HideBlockerMessage {
   type: 'HIDE_BLOCKER';
 }
 
-export interface BlockerContinueMessage {
-  type: 'BLOCKER_CONTINUE';
-}
-
 export type ExtensionMessage =
   | TimeUpdateMessage
   | ContentScriptReadyMessage
@@ -181,8 +165,7 @@ export type ExtensionMessage =
   | ShowSessionStartMessage
   | ShowAveragePopupMessage
   | ShowBlockerMessage
-  | HideBlockerMessage
-  | BlockerContinueMessage;
+  | HideBlockerMessage;
 
 // ============================================
 // Chart Types
