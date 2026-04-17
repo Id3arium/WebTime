@@ -44,8 +44,12 @@ let interventionState: InterventionState = {
 // cooldownEndTime[domain] = ms epoch when the active cooldown ends (absent = not in cooldown).
 // cooldownTickers[domain] = the 1s setInterval that drives the blocker countdown UI.
 const nextSessionBoundary: Record<Domain, number> = {};
+const cachedDomainSessionLimit: Record<Domain, { sessionLimitSeconds: number }> = {};
 const cooldownEndTime: Record<Domain, number> = {};
 const cooldownTickers: Record<Domain, ReturnType<typeof setInterval>> = {};
+
+// Cache previous intervention settings per domain to detect actual changes
+const previousInterventionSettings: Record<Domain, string> = {};
 
 function computeNextBoundary(totalSeconds: number, limitSeconds: number): number {
   return (Math.floor(totalSeconds / limitSeconds) + 1) * limitSeconds;
@@ -215,7 +219,22 @@ function stopTimer(): void {
 }
 
 function updateTimerDisplay(updatedTime: number): void {
-  const message = { type: "TIME_UPDATE", time: updatedTime };
+  // Include session time info if a session limit is configured for this domain
+  const message: { type: string; time: number; sessionTime?: number; sessionLimitSeconds?: number } = {
+    type: "TIME_UPDATE",
+    time: updatedTime
+  };
+
+  if (trackedTabDomain) {
+    const data = cachedDomainSessionLimit[trackedTabDomain];
+    if (data && data.sessionLimitSeconds > 0) {
+      const limitSec = data.sessionLimitSeconds;
+      const sessionTime = updatedTime % limitSec;
+      message.sessionTime = sessionTime;
+      message.sessionLimitSeconds = limitSec;
+    }
+  }
+
   trackedTabIds.forEach((tabId) => {
     browser.tabs.sendMessage(tabId, message).catch(() => {
       console.warn(`Failed to send TIME_UPDATE to tab ${tabId}. Removing from tracking.`);
@@ -401,11 +420,26 @@ function handleMessageReceived(
         }
       }
 
-      // If interventions are enabled for the current domain, reset the session
-      // start flag so the popup fires immediately on the next timer tick.
-      if (trackedTabDomain && settings.domains?.[trackedTabDomain]?.reminderEnabled) {
-        delete interventionState.sessionStartShown[trackedTabDomain];
-        console.log(`Interventions enabled for ${trackedTabDomain}, session start popup reset`);
+      // Re-show session start popup only when intervention settings actually change
+      // (not on every save). Compare a fingerprint of relevant settings.
+      if (trackedTabDomain) {
+        const domainCfg = settings.domains?.[trackedTabDomain];
+        const fingerprint = JSON.stringify({
+          reminderEnabled: domainCfg?.reminderEnabled,
+          reminderThreshold: domainCfg?.reminderThreshold,
+          reminderInterval: domainCfg?.reminderInterval,
+          nudgeIntervalMinutes: domainCfg?.nudgeIntervalMinutes,
+          sessionLimitEnabled: domainCfg?.sessionLimitEnabled,
+          sessionLimit: domainCfg?.sessionLimit,
+          cooldownIncrement: domainCfg?.cooldownIncrement
+        });
+        const prev = previousInterventionSettings[trackedTabDomain];
+        if (prev !== undefined && prev !== fingerprint) {
+          // Settings actually changed — reset so popup re-fires
+          delete interventionState.sessionStartShown[trackedTabDomain];
+          console.log(`Intervention settings changed for ${trackedTabDomain}, session start popup reset`);
+        }
+        previousInterventionSettings[trackedTabDomain] = fingerprint;
       }
 
       // Recompute the next session boundary for the tracked domain whenever
@@ -480,6 +514,11 @@ async function loadInterventionSettings(): Promise<InterventionSettings | null> 
   const reminderEnabled = domainSettings.reminderEnabled || false;
   const sessionLimitEnabled = domainSettings.sessionLimitEnabled || false;
   const hasSessionLimit = sessionLimitEnabled && (domainSettings.sessionLimit || 0) > 0;
+
+  // Cache session limit for timer display (even when returning null)
+  cachedDomainSessionLimit[trackedTabDomain] = {
+    sessionLimitSeconds: hasSessionLimit ? (domainSettings.sessionLimit || 0) * 60 : 0
+  };
 
   // Need either reminders or session limit enabled to proceed
   if (!reminderEnabled && !hasSessionLimit) return null;
