@@ -102,6 +102,8 @@ export interface InterventionSettings {
 export interface TimeUpdateMessage {
   type: 'TIME_UPDATE';
   time: number;
+  sessionTime?: number;       // seconds elapsed in current session (only when session limit is active)
+  sessionLimitSeconds?: number; // the session limit in seconds (only when session limit is active)
 }
 
 export interface ContentScriptReadyMessage {

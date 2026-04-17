@@ -1,11 +1,15 @@
 import { Constants } from './shared/constants.js';
-import { formatTimeWithSeconds, formatTimeCompact, escapeHtml } from './shared/utils.js';
+import { formatTimeCompact, escapeHtml } from './shared/utils.js';
 import type { ExtensionMessage, SessionStartStats } from './types.js';
 
 declare const browser: typeof chrome;
 
 let timerText: HTMLDivElement | null = null;
 let lastActivityTime = Date.now();
+let showSessionTime = false;  // toggle: false = daily time, true = session time
+let lastDailyTime = 0;
+let lastSessionTime: number | undefined;
+let lastSessionLimitSeconds: number | undefined;
 let blurOverlay: HTMLDivElement | null = null;
 let reminderDialog: HTMLDivElement | null = null;
 let sessionStartDialog: HTMLDivElement | null = null;
@@ -84,9 +88,43 @@ function createTimerElement(): void {
   timerText.style.cssText = "color: #f7f7f7 !important;";
 
   timer.appendChild(timerText);
+
+  // Click to toggle between daily time and session time (synced across tabs)
+  timer.addEventListener('click', () => {
+    if (lastSessionTime !== undefined && lastSessionLimitSeconds !== undefined && lastSessionLimitSeconds > 0) {
+      showSessionTime = !showSessionTime;
+      updateTimerText();
+      // Persist so all tabs pick it up
+      browser.storage.local.set({ webTimeShowSessionTimer: showSessionTime });
+    }
+  });
+  timer.style.cursor = 'pointer';
+
   document.body.appendChild(timer);
 
   console.log("Timer element created and added to page.");
+}
+
+/** Adaptive time format: MM:SS when < 1h, H:MM:SS when >= 1h */
+function formatTimeAdaptive(timeInSeconds: number): string {
+  timeInSeconds = Math.max(0, Math.floor(timeInSeconds));
+  const hours = Math.floor(timeInSeconds / 3600);
+  const minutes = Math.floor((timeInSeconds % 3600) / 60);
+  const seconds = timeInSeconds % 60;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function updateTimerText(): void {
+  if (!timerText) return;
+  if (showSessionTime && lastSessionTime !== undefined && lastSessionLimitSeconds && lastSessionLimitSeconds > 0) {
+    const remaining = Math.max(0, lastSessionLimitSeconds - lastSessionTime);
+    timerText.textContent = `⏱ ${formatTimeAdaptive(remaining)}`;
+  } else {
+    timerText.textContent = formatTimeAdaptive(lastDailyTime);
+  }
 }
 
 function createBlurOverlay(): HTMLDivElement {
@@ -238,9 +276,9 @@ function buildBarChart(days: SessionStartStats['days']): string {
     const label = seconds > 0 ? formatTimeCompact(seconds) : '—';
 
     return `
-      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
         <div style="width: 56px; font-size: 12px; color: #888; text-align: right; flex-shrink: 0; white-space: nowrap;">${dayName} ${dayOfMonth}</div>
-        <div style="flex: 1; height: 16px; background: #333; border-radius: 3px; overflow: hidden;">
+        <div style="flex: 1; height: 10px; background: #333; border-radius: 3px; overflow: hidden;">
           ${seconds > 0 ? `<div style="width: ${barWidth}%; height: 100%; background: rgba(69, 113, 231, 0.7); border-radius: 3px;"></div>` : ''}
         </div>
         <div style="width: 44px; font-size: 12px; color: #aaa; flex-shrink: 0;">${label}</div>
@@ -276,13 +314,13 @@ function createSessionStartOverlay(stats: SessionStartStats): HTMLDivElement {
     : '<span style="color: #777;">No recent history</span>';
 
   el.innerHTML = `
-    <div style="font-size: 18px; font-weight: 600; color: #ccc; margin-bottom: 16px; text-align: center;">
+    <div style="font-size: 18px; font-weight: 600; color: #ccc; margin-bottom: 12px; text-align: center;">
       Usage this week
     </div>
-    <div style="margin-bottom: 16px;">
+    <div style="margin-bottom: 12px;">
       ${buildBarChart(stats.days)}
     </div>
-    <div style="font-size: 16px; color: #ccc; font-weight: 500; margin-bottom: 20px; padding-top: 12px; border-top: 1px solid #3a3a3a; text-align: center;">
+    <div style="font-size: 14px; color: #ccc; font-weight: 500; margin-bottom: 14px; padding-top: 10px; border-top: 1px solid #3a3a3a; text-align: center;">
       ${avgLabel}
     </div>
     <button class="web-time-continue-btn" style="
@@ -290,10 +328,10 @@ function createSessionStartOverlay(stats: SessionStartStats): HTMLDivElement {
       background: #3a3a3a;
       border: none;
       color: #eee;
-      padding: 11px;
+      padding: 7px;
       border-radius: 6px;
       cursor: pointer;
-      font-size: 14px;
+      font-size: 13px;
       text-align: center;
       transition: background 0.2s, opacity 0.3s;
     ">Continue</button>
@@ -358,10 +396,10 @@ function createAveragePopupOverlay(minutesLeft: number, averageMinutes: number):
       background: #3a3a3a;
       border: none;
       color: #eee;
-      padding: 11px;
+      padding: 7px;
       border-radius: 6px;
       cursor: pointer;
-      font-size: 14px;
+      font-size: 13px;
       transition: background 0.2s, opacity 0.3s;
     ">Continue</button>
   `;
@@ -658,8 +696,15 @@ function handleIncomingMessage(
   _sendResponse: (response?: unknown) => void
 ): void {
   if (message.type === "TIME_UPDATE") {
+    lastDailyTime = message.time;
+    lastSessionTime = message.sessionTime;
+    lastSessionLimitSeconds = message.sessionLimitSeconds;
+    // If session limit was removed, fall back to daily view
+    if (showSessionTime && (lastSessionTime === undefined || !lastSessionLimitSeconds)) {
+      showSessionTime = false;
+    }
     if (timerText) {
-      timerText.textContent = formatTimeWithSeconds(message.time);
+      updateTimerText();
     } else {
       console.error("Timer text element not found when trying to update time!");
     }
@@ -695,6 +740,22 @@ function init(): void {
 
   createTimerElement();
   browser.runtime.onMessage.addListener(handleIncomingMessage);
+
+  // Load persisted timer toggle state
+  browser.storage.local.get('webTimeShowSessionTimer').then(data => {
+    if (data.webTimeShowSessionTimer !== undefined) {
+      showSessionTime = data.webTimeShowSessionTimer;
+      updateTimerText();
+    }
+  });
+
+  // Sync timer toggle across tabs when changed elsewhere
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.webTimeShowSessionTimer) {
+      showSessionTime = changes.webTimeShowSessionTimer.newValue ?? false;
+      updateTimerText();
+    }
+  });
 
   try {
     const readyMessage = { type: "CONTENT_SCRIPT_READY" };
