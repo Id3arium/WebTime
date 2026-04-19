@@ -6,7 +6,7 @@ declare const browser: typeof chrome;
 
 let timerText: HTMLDivElement | null = null;
 let lastActivityTime = Date.now();
-let showSessionTime = false;  // toggle: false = daily time, true = session time
+let showSessionTime = false;  // global toggle: false = daily time, true = session time
 let lastDailyTime = 0;
 let lastSessionTime: number | undefined;
 let lastSessionLimitSeconds: number | undefined;
@@ -89,12 +89,11 @@ function createTimerElement(): void {
 
   timer.appendChild(timerText);
 
-  // Click to toggle between daily time and session time (synced across tabs)
+  // Click to toggle between daily time and session time (synced globally across tabs)
   timer.addEventListener('click', () => {
     if (lastSessionTime !== undefined && lastSessionLimitSeconds !== undefined && lastSessionLimitSeconds > 0) {
       showSessionTime = !showSessionTime;
       updateTimerText();
-      // Persist so all tabs pick it up
       browser.storage.local.set({ webTimeShowSessionTimer: showSessionTime });
     }
   });
@@ -699,10 +698,10 @@ function handleIncomingMessage(
     lastDailyTime = message.time;
     lastSessionTime = message.sessionTime;
     lastSessionLimitSeconds = message.sessionLimitSeconds;
-    // If session limit was removed, fall back to daily view
-    if (showSessionTime && (lastSessionTime === undefined || !lastSessionLimitSeconds)) {
-      showSessionTime = false;
-    }
+    // Note: don't reset showSessionTime here. The toggle is a global preference
+    // and updateTimerText() already falls back to daily display when session
+    // data is unavailable for this tab (e.g. domain has no session limit, or
+    // another domain is currently active so background sends shared updates).
     if (timerText) {
       updateTimerText();
     } else {
