@@ -33,6 +33,63 @@ interface ExtendedChart {
   chartArea?: { left: number; right: number; bottom: number };
 }
 
+/** Wire a click-to-capture keyboard shortcut input. */
+function setupShortcutCapture(input: HTMLInputElement): void {
+  if (input.dataset.captureSetup === 'true') return;
+  input.dataset.captureSetup = 'true';
+
+  let capturing = false;
+
+  const stopCapture = (): void => {
+    capturing = false;
+    input.style.background = '';
+    input.blur();
+  };
+
+  input.addEventListener('focus', () => {
+    capturing = true;
+    input.style.background = '#3a3a5a';
+    input.value = 'Press a key combo…';
+  });
+
+  input.addEventListener('blur', () => {
+    if (capturing) {
+      // Aborted without pressing anything — restore previous
+      capturing = false;
+      input.style.background = '';
+      // Leave the placeholder; if user blurred without pressing, fall back
+      if (input.value === 'Press a key combo…') {
+        input.value = 'Ctrl+E';
+      }
+    }
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (!capturing) return;
+    if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const parts: string[] = [];
+    if (e.ctrlKey) parts.push('Ctrl');
+    if (e.metaKey) parts.push('Cmd');
+    if (e.altKey) parts.push('Alt');
+    if (e.shiftKey) parts.push('Shift');
+    // Use e.code for letter/digit keys so Alt+E doesn't become Alt+´ on Mac
+    let k: string;
+    if (/^Key[A-Z]$/.test(e.code)) {
+      k = e.code.slice(3); // "KeyE" -> "E"
+    } else if (/^Digit\d$/.test(e.code)) {
+      k = e.code.slice(5); // "Digit1" -> "1"
+    } else {
+      k = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+    }
+    parts.push(k);
+    input.value = parts.join('+');
+    delete input.dataset.disabled;
+    stopCapture();
+  });
+}
+
 function updateCooldownRecommendation(sessionLimitMinutes: number, el: HTMLElement | null): void {
   if (!el) return;
   if (sessionLimitMinutes > 0) {
@@ -100,6 +157,21 @@ export async function loadSettings(): Promise<void> {
     if (inactivityEl) inactivityEl.value = String(global.inactivityTimeoutS ?? 30);
     if (popupDurationEl) popupDurationEl.value = String(global.popupDurationS ?? 10);
     if (chartScalingEl) chartScalingEl.value = String(global.scalingPower ?? 0.8);
+
+    // End-session shortcut: undefined = default Ctrl+E, null = disabled, string = custom
+    const endSessionShortcutEl = document.getElementById('end-session-shortcut') as HTMLInputElement | null;
+    if (endSessionShortcutEl) {
+      const sc = global.endSessionShortcut;
+      endSessionShortcutEl.value = sc === null ? '(disabled)' : (sc || 'Ctrl+E');
+      setupShortcutCapture(endSessionShortcutEl);
+    }
+    const endSessionShortcutClearEl = document.getElementById('end-session-shortcut-clear');
+    if (endSessionShortcutClearEl && endSessionShortcutEl) {
+      endSessionShortcutClearEl.addEventListener('click', () => {
+        endSessionShortcutEl.value = '(disabled)';
+        endSessionShortcutEl.dataset.disabled = 'true';
+      });
+    }
 
     const domainSettings = settings.domains?.[AppState.selectedDomain || ''] || {};
 
@@ -192,12 +264,23 @@ export async function saveSettings(): Promise<void> {
 
     const scalingPower = parseFloat(chartScalingEl?.value || '0.8') || 0.8;
 
+    const endSessionShortcutEl = document.getElementById('end-session-shortcut') as HTMLInputElement | null;
+    let endSessionShortcut: string | null | undefined;
+    if (endSessionShortcutEl?.dataset.disabled === 'true') {
+      endSessionShortcut = null;
+    } else if (endSessionShortcutEl?.value && endSessionShortcutEl.value !== '(disabled)') {
+      endSessionShortcut = endSessionShortcutEl.value;
+    } else {
+      endSessionShortcut = undefined; // use default
+    }
+
     settings.global = {
       dayResetTime: parseInt(dayResetTimeEl?.value || '0'),
       customMessage: customMessageEl?.value || '',
       inactivityTimeoutS: parseInt(inactivityTimeoutEl?.value || '30') || 30,
       popupDurationS: parseInt(popupDurationEl?.value || '10') || 10,
-      scalingPower: Math.max(0.3, Math.min(1.0, scalingPower))
+      scalingPower: Math.max(0.3, Math.min(1.0, scalingPower)),
+      endSessionShortcut
     };
 
     if (!settings.domains) settings.domains = {};

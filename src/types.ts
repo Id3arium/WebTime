@@ -41,6 +41,7 @@ export interface GlobalSettings {
   inactivityTimeoutS?: number; // Seconds before tab considered inactive (default: 30)
   popupDurationS?: number; // Seconds reminder popup stays visible (default: 10)
   scalingPower?: number; // Chart bar scaling power (default: 0.8, range 0.3-1.0)
+  endSessionShortcut?: string | null; // Keyboard shortcut to end session early; null = disabled, undefined = default (Ctrl+E)
 }
 
 export interface DomainSettings {
@@ -157,6 +158,22 @@ export interface HideBlockerMessage {
   type: 'HIDE_BLOCKER';
 }
 
+export interface EndSessionEarlyMessage {
+  type: 'END_SESSION_EARLY';
+}
+
+export interface EndSessionConfirmOpenMessage {
+  type: 'END_SESSION_CONFIRM_OPEN';
+}
+
+export interface EndSessionConfirmCloseMessage {
+  type: 'END_SESSION_CONFIRM_CLOSE';
+}
+
+export interface RequestBlockerStateMessage {
+  type: 'REQUEST_BLOCKER_STATE';
+}
+
 export type ExtensionMessage =
   | TimeUpdateMessage
   | ContentScriptReadyMessage
@@ -168,7 +185,11 @@ export type ExtensionMessage =
   | ShowSessionStartMessage
   | ShowAveragePopupMessage
   | ShowBlockerMessage
-  | HideBlockerMessage;
+  | HideBlockerMessage
+  | EndSessionEarlyMessage
+  | EndSessionConfirmOpenMessage
+  | EndSessionConfirmCloseMessage
+  | RequestBlockerStateMessage;
 
 // ============================================
 // Chart Types

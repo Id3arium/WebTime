@@ -15,6 +15,8 @@ let reminderDialog: HTMLDivElement | null = null;
 let sessionStartDialog: HTMLDivElement | null = null;
 let averagePopupDialog: HTMLDivElement | null = null;
 let blockerDialog: HTMLDivElement | null = null;
+let endSessionDialog: HTMLDivElement | null = null;
+let endSessionShortcut: string = 'Ctrl+E'; // default; overridden by settings
 
 // Queue of popup-show functions — at most one mandatory popup visible at a time.
 // When a popup is dismissed it calls dequeuePopup() to show the next waiting one.
@@ -418,7 +420,8 @@ function showNudge(): void {
   overlay.style.pointerEvents = 'all';
   overlay.style.opacity = '1';
   blockPageScroll(true);
-  blockKeyboard(true);
+  // Note: do NOT block keyboard for nudges. They last <1s and blocking
+  // keys for that brief window feels like an unresponsiveness bug.
 
   const timer = document.querySelector('.web-time-timer') as HTMLElement | null;
   if (timer) {
@@ -435,7 +438,6 @@ function showNudge(): void {
     overlay.style.opacity = '0';
     overlay.style.pointerEvents = 'none';
     blockPageScroll(false);
-    blockKeyboard(false);
   }, Constants.OVERLAY_DURATIONS.NUDGE_MS);
 }
 
@@ -689,6 +691,158 @@ function hideBlocker(): void {
   }
 }
 
+// ============================================================================
+// End Session Early — keyboard shortcut + confirmation popup
+// ============================================================================
+
+/** Convert a KeyboardEvent into the canonical "Ctrl+Shift+E" style string. */
+function keyEventToShortcut(e: KeyboardEvent): string | null {
+  // Ignore pure modifier keypresses
+  if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return null;
+  const parts: string[] = [];
+  if (e.ctrlKey) parts.push('Ctrl');
+  if (e.metaKey) parts.push('Cmd');
+  if (e.altKey) parts.push('Alt');
+  if (e.shiftKey) parts.push('Shift');
+  // Use e.code for letter/digit keys so Alt+E doesn't become Alt+´ on Mac
+  let k: string;
+  if (/^Key[A-Z]$/.test(e.code)) {
+    k = e.code.slice(3);
+  } else if (/^Digit\d$/.test(e.code)) {
+    k = e.code.slice(5);
+  } else {
+    k = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+  }
+  parts.push(k);
+  return parts.join('+');
+}
+
+function isEndSessionShortcutMatch(e: KeyboardEvent): boolean {
+  if (!endSessionShortcut) return false;
+  const pressed = keyEventToShortcut(e);
+  if (!pressed) return false;
+  // Treat Ctrl and Cmd as interchangeable for cross-platform comfort
+  const normalize = (s: string) => s.replace(/\bCmd\b/g, 'Ctrl');
+  return normalize(pressed) === normalize(endSessionShortcut);
+}
+
+function isAnyInterventionVisible(): boolean {
+  return reminderDialog !== null
+    || sessionStartDialog !== null
+    || averagePopupDialog !== null
+    || blockerDialog !== null
+    || endSessionDialog !== null;
+}
+
+function isInTextInput(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  if (target.isContentEditable) return true;
+  return false;
+}
+
+function showEndSessionConfirm(): void {
+  if (endSessionDialog) return;
+  // Need an active session to end
+  if (lastSessionTime === undefined || !lastSessionLimitSeconds || lastSessionLimitSeconds <= 0) return;
+
+  const remaining = Math.max(0, lastSessionLimitSeconds - lastSessionTime);
+  if (remaining <= 0) return; // already at boundary
+
+  const blurBg = createBlurOverlay();
+  blurBg.style.pointerEvents = 'all';
+  blurBg.style.opacity = '1';
+  blockPageScroll(true);
+  blockKeyboard(true);
+
+  const el = document.createElement('div');
+  el.className = 'web-time-end-session-overlay';
+  el.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #2a2a2a;
+    color: #eee;
+    padding: 24px;
+    border-radius: 8px;
+    box-shadow: 0 6px 32px rgba(0, 0, 0, 0.5);
+    z-index: 1000002;
+    pointer-events: auto;
+    width: 320px;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  `;
+  el.innerHTML = `
+    <div style="font-size: 16px; color: #eee; margin-bottom: 18px; line-height: 1.4;">
+      End session early and carry over the remaining ${escapeHtml(formatTimeAdaptive(remaining))}?
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <button class="web-time-end-cancel" style="
+        flex: 1; background: #3a3a3a; border: none; color: #eee;
+        padding: 8px; border-radius: 6px; cursor: pointer; font-size: 13px;
+      ">Cancel</button>
+      <button class="web-time-end-ok" style="
+        flex: 1; background: #4571e7; border: none; color: #fff;
+        padding: 8px; border-radius: 6px; cursor: pointer; font-size: 13px;
+      ">OK</button>
+    </div>
+  `;
+  document.body.appendChild(el);
+  endSessionDialog = el;
+  setTimeout(() => { el.style.opacity = '1'; }, 50);
+  // Tell background to freeze the timer while the user decides.
+  browser.runtime.sendMessage({ type: 'END_SESSION_CONFIRM_OPEN' }).catch(() => {});
+
+  const close = (): void => {
+    if (!endSessionDialog) return;
+    endSessionDialog.style.opacity = '0';
+    if (blurOverlay) {
+      blurOverlay.style.opacity = '0';
+      blurOverlay.style.pointerEvents = 'none';
+    }
+    blockPageScroll(false);
+    blockKeyboard(false);
+    browser.runtime.sendMessage({ type: 'END_SESSION_CONFIRM_CLOSE' }).catch(() => {});
+    setTimeout(() => {
+      endSessionDialog?.parentNode?.removeChild(endSessionDialog);
+      endSessionDialog = null;
+    }, 300);
+  };
+
+  el.querySelector('.web-time-end-cancel')?.addEventListener('click', close);
+  el.querySelector('.web-time-end-ok')?.addEventListener('click', () => {
+    browser.runtime.sendMessage({ type: 'END_SESSION_EARLY' }).catch(() => {});
+    close();
+  });
+}
+
+// When this tab becomes visible (after being backgrounded/discarded), ask
+// background for the current blocker state. If the message fails, it means the
+// extension was updated and this content script is orphaned — reload the tab
+// so it picks up the new version instead of running stale code.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    browser.runtime.sendMessage({ type: 'REQUEST_BLOCKER_STATE' }).catch(() => {
+      console.log('WebTime: extension context invalidated, reloading tab');
+      location.reload();
+    });
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (!isEndSessionShortcutMatch(e)) return;
+  // Don't fire while another intervention is up
+  if (isAnyInterventionVisible()) return;
+  // Don't fire while typing in a text input — too many in-app shortcut conflicts
+  if (isInTextInput(e.target)) return;
+  e.preventDefault();
+  e.stopPropagation();
+  showEndSessionConfirm();
+}, true);
+
 function handleIncomingMessage(
   message: ExtensionMessage,
   _sender: chrome.runtime.MessageSender,
@@ -754,6 +908,18 @@ function init(): void {
       showSessionTime = changes.webTimeShowSessionTimer.newValue ?? false;
       updateTimerText();
     }
+    if (area === 'local' && changes.webTimeSettings) {
+      const newSettings = changes.webTimeSettings.newValue;
+      const sc = newSettings?.global?.endSessionShortcut;
+      // null = explicitly disabled, undefined = use default
+      endSessionShortcut = sc === null ? '' : (sc || 'Ctrl+E');
+    }
+  });
+
+  // Load the end-session shortcut from settings
+  browser.storage.local.get('webTimeSettings').then(data => {
+    const sc = data.webTimeSettings?.global?.endSessionShortcut;
+    endSessionShortcut = sc === null ? '' : (sc || 'Ctrl+E');
   });
 
   try {

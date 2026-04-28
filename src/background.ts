@@ -1,5 +1,11 @@
 import { Constants } from './shared/constants.js';
 import { extractDomain, formatTimeWithSeconds, getLocalDateStr, log, compute7DayStats } from './shared/utils.js';
+import {
+  nextBoundary,
+  computeTimerDisplay,
+  endSessionEarly as computeEndSessionEarly,
+  naturalCooldown,
+} from './shared/session-math.js';
 import type {
   TimeHistory,
   Domain,
@@ -44,6 +50,11 @@ let interventionState: InterventionState = {
 // cooldownEndTime[domain] = ms epoch when the active cooldown ends (absent = not in cooldown).
 // cooldownTickers[domain] = the 1s setInterval that drives the blocker countdown UI.
 const nextSessionBoundary: Record<Domain, number> = {};
+// Extra seconds added to the *current* session because the previous session
+// ended early. The current session's effective length is (baseLimit + carryover).
+// Cleared when a normal cooldown fires (next session is aligned again) or on
+// day rollover / domain switch / settings change.
+const carryoverSeconds: Record<Domain, number> = {};
 const cachedDomainSessionLimit: Record<Domain, { sessionLimitSeconds: number }> = {};
 const cooldownEndTime: Record<Domain, number> = {};
 const cooldownTickers: Record<Domain, ReturnType<typeof setInterval>> = {};
@@ -51,9 +62,11 @@ const cooldownTickers: Record<Domain, ReturnType<typeof setInterval>> = {};
 // Cache previous intervention settings per domain to detect actual changes
 const previousInterventionSettings: Record<Domain, string> = {};
 
-function computeNextBoundary(totalSeconds: number, limitSeconds: number): number {
-  return (Math.floor(totalSeconds / limitSeconds) + 1) * limitSeconds;
-}
+// True while the end-session-early confirmation popup is open on any tab.
+// Freezes the timer (no daily increment) so the user has time to decide.
+let endSessionConfirmOpen = false;
+
+// nextBoundary moved to shared/session-math.ts as `nextBoundary`
 
 function clearAllCooldowns(): void {
   for (const domain of Object.keys(cooldownTickers)) {
@@ -173,6 +186,10 @@ function incrementTimer(): void {
     return;
   }
 
+  // End-session confirmation popup is open — freeze daily count so the
+  // displayed remaining/elapsed time stays put while the user decides.
+  if (endSessionConfirmOpen) return;
+
   todaysTotalTimeInActiveDomain++;
 
   const newDateStr = getLocalDateStrWithReset();
@@ -191,6 +208,9 @@ function incrementTimer(): void {
     clearAllCooldowns();
     for (const domain of Object.keys(nextSessionBoundary)) {
       delete nextSessionBoundary[domain];
+    }
+    for (const domain of Object.keys(carryoverSeconds)) {
+      delete carryoverSeconds[domain];
     }
     console.log("New day, reset timer.");
   }
@@ -227,11 +247,24 @@ function updateTimerDisplay(updatedTime: number): void {
 
   if (trackedTabDomain) {
     const data = cachedDomainSessionLimit[trackedTabDomain];
-    if (data && data.sessionLimitSeconds > 0) {
-      const limitSec = data.sessionLimitSeconds;
-      const sessionTime = updatedTime % limitSec;
-      message.sessionTime = sessionTime;
-      message.sessionLimitSeconds = limitSec;
+    const baseLimitSec = data?.sessionLimitSeconds || 0;
+    if (baseLimitSec > 0) {
+      const boundary = nextSessionBoundary[trackedTabDomain] ?? nextBoundary(updatedTime, baseLimitSec);
+      const carryover = carryoverSeconds[trackedTabDomain] || 0;
+      const display = computeTimerDisplay({
+        dailyTotal: updatedTime,
+        baseLimit: baseLimitSec,
+        boundary,
+        carryover,
+      });
+      message.sessionTime = display.sessionTime;
+      message.sessionLimitSeconds = display.sessionLimitSeconds;
+      console.log(
+        `[timer] domain=${trackedTabDomain} daily=${updatedTime}s ` +
+        `boundary=${boundary}s base=${baseLimitSec}s carryover=${carryover}s ` +
+        `effLimit=${display.sessionLimitSeconds}s sessionTime=${display.sessionTime}s ` +
+        `→ remaining=${display.remaining}s`
+      );
     }
   }
 
@@ -284,11 +317,13 @@ function handleDomainSwitch(url: string): void {
 
   const todayData = timeHistory[currentDateStr] || {};
   todaysTotalTimeInActiveDomain = todayData[trackedTabDomain] || 0;
-  // Clear cached boundary for this domain so checkSessionLimit recomputes it
-  // from the current daily total + current settings on the next tick. This
-  // covers the case where the user changed the session limit for this domain
-  // while tracking a different one.
-  delete nextSessionBoundary[trackedTabDomain];
+  // NOTE: We deliberately do NOT clear nextSessionBoundary or carryoverSeconds
+  // here. The previous version cleared them on every domain switch to handle
+  // settings changes made for an inactive domain — but that wiped legitimate
+  // mid-cooldown carryover state when the user briefly switched away and back.
+  // Settings changes are now handled directly in the SETTINGS_UPDATED handler,
+  // which clears the relevant state for the changed domain. So domain switches
+  // can safely preserve session/cooldown state across tabs of the same domain.
   console.log(`Switched to domain: ${trackedTabDomain}, time: ${todaysTotalTimeInActiveDomain}`);
   updateTimerDisplay(todaysTotalTimeInActiveDomain);
 }
@@ -389,6 +424,42 @@ function handleMessageReceived(
     tabLastActivity[sender.tab.id] = Date.now();
   }
 
+  if (message.type === "END_SESSION_EARLY") {
+    void endSessionEarly();
+  }
+
+  if (message.type === "END_SESSION_CONFIRM_OPEN") {
+    endSessionConfirmOpen = true;
+  }
+
+  if (message.type === "END_SESSION_CONFIRM_CLOSE") {
+    endSessionConfirmOpen = false;
+  }
+
+  // A tab is asking for the current blocker state — typically on visibilitychange
+  // after waking from a discarded/hidden state. Respond with SHOW or HIDE so the
+  // tab's UI matches reality (it may have missed the original HIDE_BLOCKER while
+  // suspended).
+  if (message.type === "REQUEST_BLOCKER_STATE" && sender.tab?.id && sender.tab?.url) {
+    const tabId = sender.tab.id;
+    const domain = extractDomain(sender.tab.url);
+    if (domain) {
+      const endTime = cooldownEndTime[domain] || 0;
+      if (endTime > Date.now()) {
+        const remaining = Math.ceil((endTime - Date.now()) / 1000);
+        browser.tabs.sendMessage(tabId, {
+          type: 'SHOW_BLOCKER',
+          cooldownRemainingSeconds: remaining,
+          totalCooldownSeconds: remaining,
+          cooldownCount: 1,
+          cooldownIncrementMinutes: 0
+        }).catch(() => {});
+      } else {
+        browser.tabs.sendMessage(tabId, { type: 'HIDE_BLOCKER' }).catch(() => {});
+      }
+    }
+  }
+
   if (message.type === "SNOOZE_REMINDERS" && sender.tab?.url) {
     const domain = extractDomain(sender.tab.url);
     if (domain) {
@@ -420,10 +491,16 @@ function handleMessageReceived(
         }
       }
 
-      // Re-show session start popup only when intervention settings actually change
-      // (not on every save). Compare a fingerprint of relevant settings.
-      if (trackedTabDomain) {
-        const domainCfg = settings.domains?.[trackedTabDomain];
+      // For every domain that we have prior fingerprints for OR for the
+      // currently tracked domain, detect actual changes. Only reset session
+      // state for domains whose intervention settings *actually* changed.
+      const allDomainsToCheck = new Set<Domain>([
+        ...Object.keys(previousInterventionSettings),
+        ...(trackedTabDomain ? [trackedTabDomain] : []),
+      ]);
+
+      for (const domain of allDomainsToCheck) {
+        const domainCfg = settings.domains?.[domain];
         const fingerprint = JSON.stringify({
           reminderEnabled: domainCfg?.reminderEnabled,
           reminderThreshold: domainCfg?.reminderThreshold,
@@ -433,35 +510,37 @@ function handleMessageReceived(
           sessionLimit: domainCfg?.sessionLimit,
           cooldownIncrement: domainCfg?.cooldownIncrement
         });
-        const prev = previousInterventionSettings[trackedTabDomain];
-        if (prev !== undefined && prev !== fingerprint) {
-          // Settings actually changed — reset so popup re-fires
-          delete interventionState.sessionStartShown[trackedTabDomain];
-          console.log(`Intervention settings changed for ${trackedTabDomain}, session start popup reset`);
-        }
-        previousInterventionSettings[trackedTabDomain] = fingerprint;
-      }
+        const prev = previousInterventionSettings[domain];
+        const settingsActuallyChanged = prev !== undefined && prev !== fingerprint;
+        previousInterventionSettings[domain] = fingerprint;
 
-      // Recompute the next session boundary for the tracked domain whenever
-      // settings change. This handles mid-day changes to sessionLimit so the
-      // next trigger is anchored to the new limit, not the old one.
-      if (trackedTabDomain) {
-        const domainCfg = settings.domains?.[trackedTabDomain];
+        if (!settingsActuallyChanged) continue;
+
+        // Reset session-start popup so it re-fires for the new settings.
+        delete interventionState.sessionStartShown[domain];
+
+        // Recompute boundary anchored to current daily total + new limit.
+        // Drop carryover (it was relative to old limit). Only for the active
+        // domain do we need the live boundary cached; for inactive domains,
+        // wiping the boundary is fine — checkSessionLimit will recompute when
+        // the user returns to that domain.
+        delete carryoverSeconds[domain];
         const slEnabled = domainCfg?.sessionLimitEnabled || false;
         const newLimitSeconds = slEnabled ? (domainCfg?.sessionLimit || 0) * 60 : 0;
-        if (newLimitSeconds > 0) {
-          nextSessionBoundary[trackedTabDomain] = computeNextBoundary(
+        if (newLimitSeconds > 0 && domain === trackedTabDomain) {
+          nextSessionBoundary[domain] = nextBoundary(
             todaysTotalTimeInActiveDomain,
             newLimitSeconds
           );
           console.log(
-            `Session boundary recomputed for ${trackedTabDomain}: ` +
-            `next trigger at ${nextSessionBoundary[trackedTabDomain]}s ` +
+            `Session boundary recomputed for ${domain}: ` +
+            `next trigger at ${nextSessionBoundary[domain]}s ` +
             `(daily=${todaysTotalTimeInActiveDomain}s, limit=${newLimitSeconds}s)`
           );
         } else {
-          delete nextSessionBoundary[trackedTabDomain];
+          delete nextSessionBoundary[domain];
         }
+        console.log(`Intervention settings changed for ${domain}, session state reset`);
       }
     });
   }
@@ -659,11 +738,66 @@ function startCooldownTicker(domain: Domain, totalCooldownSeconds: number, sessi
       delete cooldownTickers[domain];
       delete cooldownEndTime[domain];
       sendHideBlockerToAllTabsOfDomain(domain);
+      // Push a fresh timer update so all tabs of this domain immediately show
+      // the new session's full extended length (sessionTime=0, limit=base+carry).
+      if (trackedTabDomain === domain) {
+        updateTimerDisplay(todaysTotalTimeInActiveDomain);
+      }
       console.log(`Cooldown expired for ${domain}`);
     } else {
       sendBlockerToAllTabsOfDomain(domain, remaining, totalCooldownSeconds, sessionNum, cooldownIncrementMinutes);
     }
   }, 1000);
+}
+
+/**
+ * End the current session early. The unused time in the current session is
+ * "carried over" so the next session lasts (limit + carryover) instead of
+ * just limit. The cooldown that triggers now is for the current session
+ * number — sessionNum doesn't change as a result of ending early.
+ */
+async function endSessionEarly(): Promise<void> {
+  if (!trackedTabDomain) return;
+  const domain = trackedTabDomain;
+
+  // Don't end if already in cooldown
+  if ((cooldownEndTime[domain] || 0) > Date.now()) return;
+
+  const settings = await loadInterventionSettings();
+  if (!settings) return;
+  const { sessionLimitSeconds, cooldownIncrementSeconds } = settings;
+  if (sessionLimitSeconds <= 0) return;
+
+  if (nextSessionBoundary[domain] === undefined) {
+    nextSessionBoundary[domain] = nextBoundary(todaysTotalTimeInActiveDomain, sessionLimitSeconds);
+  }
+  const priorCarryover = carryoverSeconds[domain] || 0;
+
+  const result = computeEndSessionEarly({
+    dailyTotal: todaysTotalTimeInActiveDomain,
+    baseLimit: sessionLimitSeconds,
+    boundary: nextSessionBoundary[domain],
+    priorCarryover,
+    cooldownIncrement: cooldownIncrementSeconds,
+  });
+  if (!result) return; // no carryover to claim — normal cooldown will fire
+
+  const incrementMinutes = Math.round(cooldownIncrementSeconds / 60);
+
+  cooldownEndTime[domain] = Date.now() + result.cooldownSeconds * 1000;
+  nextSessionBoundary[domain] = result.newBoundary;
+  carryoverSeconds[domain] = result.newCarryover;
+
+  sendBlockerToAllTabsOfDomain(domain, result.cooldownSeconds, result.cooldownSeconds, result.sessionNum, incrementMinutes);
+  startCooldownTicker(domain, result.cooldownSeconds, result.sessionNum, incrementMinutes);
+  // Push a timer update so the session timer immediately reflects the NEW
+  // (extended) session length instead of the previous session's remaining time.
+  updateTimerDisplay(todaysTotalTimeInActiveDomain);
+  console.log(
+    `Session ${result.sessionNum} ended early for ${domain} ` +
+    `(daily=${todaysTotalTimeInActiveDomain}s, carryoverToNext=${result.newCarryover}s, ` +
+    `cooldown=${result.cooldownSeconds}s, nextBoundary=${result.newBoundary}s)`
+  );
 }
 
 function checkSessionLimit(settings: InterventionSettings): boolean {
@@ -680,28 +814,33 @@ function checkSessionLimit(settings: InterventionSettings): boolean {
   // Lazily initialize the next boundary for this domain. This runs once on
   // the first tick after a domain switch / extension load / settings change.
   if (nextSessionBoundary[domain] === undefined) {
-    nextSessionBoundary[domain] = computeNextBoundary(todaysTotalTimeInActiveDomain, sessionLimitSeconds);
+    nextSessionBoundary[domain] = nextBoundary(todaysTotalTimeInActiveDomain, sessionLimitSeconds);
   }
 
   if (todaysTotalTimeInActiveDomain < nextSessionBoundary[domain]) return false;
 
-  const sessionNum = Math.round(nextSessionBoundary[domain] / sessionLimitSeconds);
-  // Escalating cooldown: session 1 = 1× increment, session 2 = 2×, etc.
-  // Fallback to sessionLimitSeconds only if no increment is configured at all.
-  const cooldownSeconds = cooldownIncrementSeconds > 0
-    ? sessionNum * cooldownIncrementSeconds
-    : sessionLimitSeconds;
+  const priorCarryover = carryoverSeconds[domain] || 0;
+  const result = naturalCooldown({
+    baseLimit: sessionLimitSeconds,
+    boundary: nextSessionBoundary[domain],
+    priorCarryover,
+    cooldownIncrement: cooldownIncrementSeconds,
+  });
   const incrementMinutes = Math.round(cooldownIncrementSeconds / 60);
 
-  cooldownEndTime[domain] = Date.now() + cooldownSeconds * 1000;
-  nextSessionBoundary[domain] += sessionLimitSeconds;
+  cooldownEndTime[domain] = Date.now() + result.cooldownSeconds * 1000;
+  delete carryoverSeconds[domain];
+  nextSessionBoundary[domain] = result.newBoundary;
 
-  sendBlockerToAllTabsOfDomain(domain, cooldownSeconds, cooldownSeconds, sessionNum, incrementMinutes);
-  startCooldownTicker(domain, cooldownSeconds, sessionNum, incrementMinutes);
+  sendBlockerToAllTabsOfDomain(domain, result.cooldownSeconds, result.cooldownSeconds, result.sessionNum, incrementMinutes);
+  startCooldownTicker(domain, result.cooldownSeconds, result.sessionNum, incrementMinutes);
+  // Push a timer update so the session timer reflects the next session's
+  // full length (sessionTime=0, sessionLimitSeconds=baseLimit) immediately.
+  updateTimerDisplay(todaysTotalTimeInActiveDomain);
   console.log(
-    `Session ${sessionNum} limit reached for ${domain} ` +
-    `(daily=${todaysTotalTimeInActiveDomain}s, cooldown=${cooldownSeconds}s, ` +
-    `nextBoundary=${nextSessionBoundary[domain]}s)`
+    `Session ${result.sessionNum} limit reached for ${domain} ` +
+    `(daily=${todaysTotalTimeInActiveDomain}s, cooldown=${result.cooldownSeconds}s, ` +
+    `nextBoundary=${result.newBoundary}s)`
   );
   return true;
 }
@@ -751,6 +890,8 @@ async function init(): Promise<void> {
   browser.tabs.onUpdated.addListener(handleTabUpdated);
   browser.tabs.onRemoved.addListener(handleTabRemoved);
   browser.runtime.onMessage.addListener(handleMessageReceived);
+
+
 
   const settingsData = await browser.storage.local.get('webTimeSettings');
   const settings: WebTimeSettings = settingsData.webTimeSettings || { global: {}, domains: {} };
