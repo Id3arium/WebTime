@@ -3,6 +3,7 @@
   "version": "2.2.0",
   "description": "Track and take control of your time.",
   "scripts": {
+    "test": "node --test test/*.test.mjs",
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && npm run bundle",
     "bundle": "node build.mjs",
