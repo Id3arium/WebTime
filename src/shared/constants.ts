@@ -1,8 +1,7 @@
 import type { ConstantsType, OverlayDurations, ChartConfig, Colors } from '../types.js';
 
 const OVERLAY_DURATIONS: OverlayDurations = {
-  NUDGE_MS: 1000,
-  REMINDER_DISPLAY_MS: 10000
+  NUDGE_MS: 1000
 };
 
 const CHART_CONFIG: ChartConfig = {
@@ -35,7 +34,6 @@ const COLORS: Colors = {
 };
 
 export const Constants: ConstantsType = {
-  DEFAULT_NUDGE_INTERVAL_MINUTES: 15,
   INACTIVITY_THRESHOLD_MS: 30000,
   ACTIVITY_CHECK_INTERVAL_MS: 1000,
   SAVE_INTERVAL_SECONDS: 60,

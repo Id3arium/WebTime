@@ -1,10 +1,13 @@
 import { Constants } from './shared/constants.js';
-import { extractDomain, formatTimeWithSeconds, getLocalDateStr, log, compute7DayStats } from './shared/utils.js';
+import { extractDomain, getLocalDateStr, log, compute7DayStats } from './shared/utils.js';
 import {
   nextBoundary,
   computeTimerDisplay,
   endSessionEarly as computeEndSessionEarly,
   naturalCooldown,
+  computePhiNudgeTimes,
+  computeGraceSeconds,
+  isInWindDown,
 } from './shared/session-math.js';
 import type {
   TimeHistory,
@@ -13,7 +16,8 @@ import type {
   InterventionState,
   InterventionSettings,
   WebTimeSettings,
-  ExtensionMessage
+  ExtensionMessage,
+  SessionStartStats
 } from './types.js';
 
 declare const browser: typeof chrome;
@@ -28,7 +32,6 @@ const SAVE_INTERVAL_SECONDS = Constants.SAVE_INTERVAL_SECONDS;
 const tabLastActivity: Record<number, number> = {};
 let trackedTabDomain: Domain | null = null;
 let inactivityThresholdMs = Constants.INACTIVITY_THRESHOLD_MS;
-let reminderDisplayMs = Constants.OVERLAY_DURATIONS.REMINDER_DISPLAY_MS;
 const ACTIVITY_CHECK_INTERVAL_MS = Constants.ACTIVITY_CHECK_INTERVAL_MS;
 
 let currentDateStr: DateString = getLocalDateStr();
@@ -38,9 +41,6 @@ let isSaving = false;
 
 let interventionState: InterventionState = {
   lastNudgeTime: {},
-  lastReminderTime: {},
-  snoozedUntil: {},
-  sessionStartShown: {},
   averagePopupShown: {}
 };
 
@@ -58,6 +58,15 @@ const carryoverSeconds: Record<Domain, number> = {};
 const cachedDomainSessionLimit: Record<Domain, { sessionLimitSeconds: number }> = {};
 const cooldownEndTime: Record<Domain, number> = {};
 const cooldownTickers: Record<Domain, ReturnType<typeof setInterval>> = {};
+
+// Grace period: seconds earned from ending a session early, used at the next boundary
+const graceSeconds: Record<Domain, number> = {};
+// Which phi nudge times (session-relative) have already fired this session
+const phiNudgeFired: Record<Domain, Set<number>> = {};
+// Whether the wind-down overlay is currently active for a domain
+const windDownActive: Record<Domain, boolean> = {};
+// Whether a grace extension is currently active (boundary was extended by grace)
+const graceActive: Record<Domain, boolean> = {};
 
 // Cache previous intervention settings per domain to detect actual changes
 const previousInterventionSettings: Record<Domain, string> = {};
@@ -199,19 +208,16 @@ function incrementTimer(): void {
     todaysTotalTimeInActiveDomain = 0;
     interventionState = {
       lastNudgeTime: {},
-      lastReminderTime: {},
-      snoozedUntil: {},
-      sessionStartShown: {},  // reset all intervention state on new day
       averagePopupShown: {}
     };
     // Reset session limit state on day rollover
     clearAllCooldowns();
-    for (const domain of Object.keys(nextSessionBoundary)) {
-      delete nextSessionBoundary[domain];
-    }
-    for (const domain of Object.keys(carryoverSeconds)) {
-      delete carryoverSeconds[domain];
-    }
+    for (const domain of Object.keys(nextSessionBoundary)) delete nextSessionBoundary[domain];
+    for (const domain of Object.keys(carryoverSeconds)) delete carryoverSeconds[domain];
+    for (const domain of Object.keys(graceSeconds)) delete graceSeconds[domain];
+    for (const domain of Object.keys(phiNudgeFired)) delete phiNudgeFired[domain];
+    for (const domain of Object.keys(windDownActive)) delete windDownActive[domain];
+    for (const domain of Object.keys(graceActive)) delete graceActive[domain];
     console.log("New day, reset timer.");
   }
   updateTimerDisplay(todaysTotalTimeInActiveDomain);
@@ -301,9 +307,6 @@ function handleDomainSwitch(url: string): void {
 
   if (trackedTabDomain) {
     saveTimeData();
-    // sessionStartShown is NOT reset here — it resets only on day rollover.
-    // This means the session start popup fires once per day per domain,
-    // regardless of tab switching or how many tabs of the same domain are open.
   }
 
   trackedTabDomain = domain;
@@ -460,11 +463,22 @@ function handleMessageReceived(
     }
   }
 
-  if (message.type === "SNOOZE_REMINDERS" && sender.tab?.url) {
+  if (message.type === "GRACE_ACCEPTED" && sender.tab?.url) {
+    const domain = extractDomain(sender.tab.url);
+    if (domain && graceActive[domain]) {
+      // Grace already extended the boundary in checkSessionLimit — just hide the prompt
+      delete graceActive[domain];
+      sendMessageToAllTabsOfDomain(domain, { type: 'HIDE_BLOCKER' as const });
+      console.log(`Grace accepted for ${domain}`);
+    }
+  }
+
+  if (message.type === "GRACE_DECLINED" && sender.tab?.url) {
     const domain = extractDomain(sender.tab.url);
     if (domain) {
-      interventionState.snoozedUntil[domain] = message.duration;
-      console.log(`Snoozed reminders for ${domain} until`, message.duration);
+      delete graceActive[domain];
+      // Revert the boundary extension and trigger normal cooldown
+      void triggerNormalCooldown(domain);
     }
   }
 
@@ -473,8 +487,7 @@ function handleMessageReceived(
       const settings: WebTimeSettings = data.webTimeSettings || { global: {}, domains: {} };
 
       inactivityThresholdMs = (settings.global?.inactivityTimeoutS ?? 30) * 1000;
-      reminderDisplayMs = (settings.global?.popupDurationS ?? 10) * 1000;
-      console.log(`Inactivity threshold: ${inactivityThresholdMs}ms, Reminder display: ${reminderDisplayMs}ms`);
+      console.log(`Inactivity threshold: ${inactivityThresholdMs}ms`);
 
       const newResetTime = settings.global?.dayResetTime || 0;
       if (newResetTime !== dayResetTime) {
@@ -502,10 +515,6 @@ function handleMessageReceived(
       for (const domain of allDomainsToCheck) {
         const domainCfg = settings.domains?.[domain];
         const fingerprint = JSON.stringify({
-          reminderEnabled: domainCfg?.reminderEnabled,
-          reminderThreshold: domainCfg?.reminderThreshold,
-          reminderInterval: domainCfg?.reminderInterval,
-          nudgeIntervalMinutes: domainCfg?.nudgeIntervalMinutes,
           sessionLimitEnabled: domainCfg?.sessionLimitEnabled,
           sessionLimit: domainCfg?.sessionLimit,
           cooldownIncrement: domainCfg?.cooldownIncrement
@@ -515,9 +524,6 @@ function handleMessageReceived(
         previousInterventionSettings[domain] = fingerprint;
 
         if (!settingsActuallyChanged) continue;
-
-        // Reset session-start popup so it re-fires for the new settings.
-        delete interventionState.sessionStartShown[domain];
 
         // Recompute boundary anchored to current daily total + new limit.
         // Drop carryover (it was relative to old limit). Only for the active
@@ -552,34 +558,11 @@ async function checkForInterventions(): Promise<void> {
   const settings = await loadInterventionSettings();
   if (!settings) return;
 
-  // Session limit always runs — independent of snooze state
+  checkWindDown(settings);
   if (checkSessionLimit(settings)) return;
 
-  const isCurrentlyActive = await checkAndClearSnooze();
-  if (!isCurrentlyActive) return;
-
-  if (settings.reminderEnabled) {
-    checkSessionStart(settings);
-    checkLinearNudges(settings);
-    checkAveragePopup(settings);
-    checkTier2Reminders(settings);
-  }
-}
-
-async function checkAndClearSnooze(): Promise<boolean> {
-  if (!trackedTabDomain) return true;
-
-  const snoozeUntil = interventionState.snoozedUntil[trackedTabDomain];
-  if (!snoozeUntil) return true;
-
-  const isSnoozedUntilTomorrow = snoozeUntil === 'tomorrow';
-  if (isSnoozedUntilTomorrow) return false;
-
-  const isStillSnoozed = Date.now() < (snoozeUntil as number);
-  if (isStillSnoozed) return false;
-
-  delete interventionState.snoozedUntil[trackedTabDomain];
-  return true;
+  checkPhiNudges(settings);
+  checkAveragePopup(settings);
 }
 
 async function loadInterventionSettings(): Promise<InterventionSettings | null> {
@@ -590,7 +573,6 @@ async function loadInterventionSettings(): Promise<InterventionSettings | null> 
   const global = settings.global || {};
   const domainSettings = settings.domains?.[trackedTabDomain] || {};
 
-  const reminderEnabled = domainSettings.reminderEnabled || false;
   const sessionLimitEnabled = domainSettings.sessionLimitEnabled || false;
   const hasSessionLimit = sessionLimitEnabled && (domainSettings.sessionLimit || 0) > 0;
 
@@ -599,19 +581,11 @@ async function loadInterventionSettings(): Promise<InterventionSettings | null> 
     sessionLimitSeconds: hasSessionLimit ? (domainSettings.sessionLimit || 0) * 60 : 0
   };
 
-  // Need either reminders or session limit enabled to proceed
-  if (!reminderEnabled && !hasSessionLimit) return null;
-
-  const nudgeIntervalMinutes = domainSettings.nudgeIntervalMinutes ?? Constants.DEFAULT_NUDGE_INTERVAL_MINUTES;
   const { averageSeconds, daysWithData } = compute7DayStats(timeHistory, trackedTabDomain, currentDateStr);
 
   return {
     global,
     domainSettings,
-    reminderEnabled,
-    reminderThreshold: (domainSettings.reminderThreshold || 0) * 60,
-    reminderInterval: domainSettings.reminderInterval || 15,
-    nudgeIntervalMinutes,
     averageSeconds,
     daysWithData,
     timeInSeconds: todaysTotalTimeInActiveDomain,
@@ -620,35 +594,31 @@ async function loadInterventionSettings(): Promise<InterventionSettings | null> 
   };
 }
 
-function checkSessionStart(_settings: InterventionSettings): void {
-  if (!trackedTabDomain) return;
-  if (interventionState.sessionStartShown[trackedTabDomain]) return;
+function checkPhiNudges(settings: InterventionSettings): void {
+  const { sessionLimitSeconds } = settings;
+  if (sessionLimitSeconds <= 0 || !trackedTabDomain) return;
 
-  // Fire on the first tick where sessionStartShown is unset for this domain.
-  // Resets only on day rollover — so once per day per domain, not once per tab switch.
-  interventionState.sessionStartShown[trackedTabDomain] = true;
+  const domain = trackedTabDomain;
+  const boundary = nextSessionBoundary[domain] ?? nextBoundary(todaysTotalTimeInActiveDomain, sessionLimitSeconds);
+  const carryover = carryoverSeconds[domain] || 0;
+  const display = computeTimerDisplay({
+    dailyTotal: todaysTotalTimeInActiveDomain,
+    baseLimit: sessionLimitSeconds,
+    boundary,
+    carryover,
+  });
 
-  const stats = compute7DayStats(timeHistory, trackedTabDomain, currentDateStr);
-  sendSessionStart(stats);
-}
+  const nudgeTimes = computePhiNudgeTimes(display.sessionLimitSeconds, settings.domainSettings.nudgeCount);
+  if (!phiNudgeFired[domain]) phiNudgeFired[domain] = new Set();
 
-function checkLinearNudges(settings: InterventionSettings): void {
-  const { nudgeIntervalMinutes, reminderThreshold, timeInSeconds } = settings;
-
-  if (timeInSeconds >= reminderThreshold) return;
-
-  const nudgeIntervalSeconds = nudgeIntervalMinutes * 60;
-  const isOnInterval = timeInSeconds > 0 && timeInSeconds % nudgeIntervalSeconds === 0;
-  if (!isOnInterval) return;
-
-  if (!trackedTabDomain) return;
-
-  const lastNudge = interventionState.lastNudgeTime[trackedTabDomain] || -1;
-  if (timeInSeconds === lastNudge) return;
-
-  sendNudge();
-  interventionState.lastNudgeTime[trackedTabDomain] = timeInSeconds;
-  console.log(`Linear nudge at ${Math.round(timeInSeconds / 60)}min`);
+  for (const nudgeTime of nudgeTimes) {
+    if (display.sessionTime === nudgeTime && !phiNudgeFired[domain].has(nudgeTime)) {
+      sendNudge();
+      phiNudgeFired[domain].add(nudgeTime);
+      console.log(`φ-nudge at ${Math.round(nudgeTime / 60)}min into session (${display.remaining}s remaining)`);
+      break;
+    }
+  }
 }
 
 const AVERAGE_POPUP_MIN_DAYS = 4; // require at least this many days of history
@@ -668,30 +638,84 @@ function checkAveragePopup(settings: InterventionSettings): void {
 
   const minutesLeft = Math.round((averageSeconds - timeInSeconds) / 60);
   const averageMinutes = Math.round(averageSeconds / 60);
-  sendAveragePopup(Math.max(0, minutesLeft), averageMinutes);
+  const stats = compute7DayStats(timeHistory, trackedTabDomain, currentDateStr);
+  sendAveragePopup(Math.max(0, minutesLeft), averageMinutes, stats);
   console.log(`Average popup shown at ${Math.round(timeInSeconds / 60)}min (80% of avg: ${Math.round(averageSeconds / 60)}min)`);
 }
 
-function checkTier2Reminders(settings: InterventionSettings): void {
-  const { reminderEnabled, reminderThreshold, reminderInterval, timeInSeconds, global } = settings;
+function sendMessageToAllTabsOfDomain(domain: Domain, message: Record<string, unknown>): void {
+  trackedTabIds.forEach(tabId => {
+    browser.tabs.get(tabId).then(tab => {
+      if (tab.url && extractDomain(tab.url) === domain) {
+        browser.tabs.sendMessage(tabId, message).catch(() => {});
+      }
+    }).catch(() => {});
+  });
+}
 
-  if (!reminderEnabled) return;
+function checkWindDown(settings: InterventionSettings): void {
+  const { sessionLimitSeconds } = settings;
+  if (sessionLimitSeconds <= 0 || !trackedTabDomain) return;
 
-  const hasReachedReminderThreshold = timeInSeconds >= reminderThreshold;
-  if (!hasReachedReminderThreshold) return;
+  const domain = trackedTabDomain;
+  if ((cooldownEndTime[domain] || 0) > Date.now()) return;
 
-  const timeOverThreshold = timeInSeconds - reminderThreshold;
-  const reminderIntervalSeconds = reminderInterval * 60;
-  const isOnReminderInterval = timeOverThreshold % reminderIntervalSeconds === 0;
-  if (!isOnReminderInterval) return;
+  const boundary = nextSessionBoundary[domain] ?? nextBoundary(todaysTotalTimeInActiveDomain, sessionLimitSeconds);
+  const carryover = carryoverSeconds[domain] || 0;
+  const display = computeTimerDisplay({
+    dailyTotal: todaysTotalTimeInActiveDomain,
+    baseLimit: sessionLimitSeconds,
+    boundary,
+    carryover,
+  });
 
-  if (!trackedTabDomain) return;
+  const wd = isInWindDown(display.sessionTime, display.sessionLimitSeconds);
 
-  const lastReminder = interventionState.lastReminderTime[trackedTabDomain] || -1;
-  if (timeInSeconds === lastReminder) return;
+  if (wd.active && !windDownActive[domain]) {
+    windDownActive[domain] = true;
+    console.log(`Wind-down started for ${domain} (${wd.remaining}s remaining)`);
+  }
 
-  showReminder(global.customMessage);
-  interventionState.lastReminderTime[trackedTabDomain] = timeInSeconds;
+  if (wd.active) {
+    sendMessageToAllTabsOfDomain(domain, {
+      type: 'SHOW_WIND_DOWN',
+      progress: wd.progress,
+      remainingSeconds: wd.remaining
+    });
+  } else if (windDownActive[domain]) {
+    windDownActive[domain] = false;
+    sendMessageToAllTabsOfDomain(domain, { type: 'HIDE_WIND_DOWN' });
+  }
+}
+
+async function triggerNormalCooldown(domain: Domain): Promise<void> {
+  const settings = await loadInterventionSettings();
+  if (!settings) return;
+  const { sessionLimitSeconds, cooldownIncrementSeconds } = settings;
+  if (sessionLimitSeconds <= 0) return;
+
+  const boundary = nextSessionBoundary[domain];
+  if (boundary === undefined) return;
+
+  const priorCarryover = carryoverSeconds[domain] || 0;
+  const result = naturalCooldown({
+    baseLimit: sessionLimitSeconds,
+    boundary,
+    priorCarryover,
+    cooldownIncrement: cooldownIncrementSeconds,
+  });
+  const incrementMinutes = Math.round(cooldownIncrementSeconds / 60);
+
+  cooldownEndTime[domain] = Date.now() + result.cooldownSeconds * 1000;
+  delete carryoverSeconds[domain];
+  delete phiNudgeFired[domain];
+  delete windDownActive[domain];
+  nextSessionBoundary[domain] = result.newBoundary;
+
+  sendBlockerToAllTabsOfDomain(domain, result.cooldownSeconds, result.cooldownSeconds, result.sessionNum, incrementMinutes);
+  startCooldownTicker(domain, result.cooldownSeconds, result.sessionNum, incrementMinutes);
+  updateTimerDisplay(todaysTotalTimeInActiveDomain);
+  console.log(`Normal cooldown triggered for ${domain} (session ${result.sessionNum}, ${result.cooldownSeconds}s)`);
 }
 
 function sendBlockerToAllTabsOfDomain(domain: Domain, remainingSeconds: number, totalSeconds: number, cooldownCount: number, cooldownIncrementMinutes: number): void {
@@ -737,6 +761,8 @@ function startCooldownTicker(domain: Domain, totalCooldownSeconds: number, sessi
       clearInterval(cooldownTickers[domain]);
       delete cooldownTickers[domain];
       delete cooldownEndTime[domain];
+      delete phiNudgeFired[domain];
+      delete windDownActive[domain];
       sendHideBlockerToAllTabsOfDomain(domain);
       // Push a fresh timer update so all tabs of this domain immediately show
       // the new session's full extended length (sessionTime=0, limit=base+carry).
@@ -788,10 +814,18 @@ async function endSessionEarly(): Promise<void> {
   nextSessionBoundary[domain] = result.newBoundary;
   carryoverSeconds[domain] = result.newCarryover;
 
+  // Earn grace for the next session (only from ending early, not during a grace extension)
+  if (!graceActive[domain]) {
+    const effectiveLimit = sessionLimitSeconds + priorCarryover;
+    graceSeconds[domain] = computeGraceSeconds(effectiveLimit);
+    console.log(`Grace earned for next session: ${graceSeconds[domain]}s`);
+  }
+
+  delete phiNudgeFired[domain];
+  delete windDownActive[domain];
+
   sendBlockerToAllTabsOfDomain(domain, result.cooldownSeconds, result.cooldownSeconds, result.sessionNum, incrementMinutes);
   startCooldownTicker(domain, result.cooldownSeconds, result.sessionNum, incrementMinutes);
-  // Push a timer update so the session timer immediately reflects the NEW
-  // (extended) session length instead of the previous session's remaining time.
   updateTimerDisplay(todaysTotalTimeInActiveDomain);
   console.log(
     `Session ${result.sessionNum} ended early for ${domain} ` +
@@ -819,6 +853,32 @@ function checkSessionLimit(settings: InterventionSettings): boolean {
 
   if (todaysTotalTimeInActiveDomain < nextSessionBoundary[domain]) return false;
 
+  // If grace is already active (user is in a grace-extended period), trigger normal cooldown
+  if (graceActive[domain]) {
+    delete graceActive[domain];
+    void triggerNormalCooldown(domain);
+    return true;
+  }
+
+  // Check if user has earned grace from a previous early end
+  const grace = graceSeconds[domain] || 0;
+  if (grace > 0) {
+    // Extend boundary by grace amount and show prompt
+    nextSessionBoundary[domain] += grace;
+    delete graceSeconds[domain];
+    graceActive[domain] = true;
+    // Hide wind-down since we're extending
+    delete windDownActive[domain];
+    sendMessageToAllTabsOfDomain(domain, { type: 'HIDE_WIND_DOWN' });
+    sendMessageToAllTabsOfDomain(domain, {
+      type: 'SHOW_GRACE_PROMPT',
+      graceSeconds: grace
+    });
+    console.log(`Grace prompt shown for ${domain} (${grace}s grace available)`);
+    return true;
+  }
+
+  // No grace available — normal cooldown
   const priorCarryover = carryoverSeconds[domain] || 0;
   const result = naturalCooldown({
     baseLimit: sessionLimitSeconds,
@@ -830,12 +890,12 @@ function checkSessionLimit(settings: InterventionSettings): boolean {
 
   cooldownEndTime[domain] = Date.now() + result.cooldownSeconds * 1000;
   delete carryoverSeconds[domain];
+  delete phiNudgeFired[domain];
+  delete windDownActive[domain];
   nextSessionBoundary[domain] = result.newBoundary;
 
   sendBlockerToAllTabsOfDomain(domain, result.cooldownSeconds, result.cooldownSeconds, result.sessionNum, incrementMinutes);
   startCooldownTicker(domain, result.cooldownSeconds, result.sessionNum, incrementMinutes);
-  // Push a timer update so the session timer reflects the next session's
-  // full length (sessionTime=0, sessionLimitSeconds=baseLimit) immediately.
   updateTimerDisplay(todaysTotalTimeInActiveDomain);
   console.log(
     `Session ${result.sessionNum} limit reached for ${domain} ` +
@@ -853,36 +913,15 @@ function sendNudge(): void {
   }).catch(err => console.warn('Failed to send nudge:', err));
 }
 
-function sendSessionStart(stats: ReturnType<typeof compute7DayStats>): void {
-  if (!activeTabId) return;
-
-  browser.tabs.sendMessage(activeTabId, {
-    type: 'SHOW_SESSION_START',
-    stats
-  }).catch(err => console.warn('Failed to send session start:', err));
-}
-
-function sendAveragePopup(minutesLeft: number, averageMinutes: number): void {
+function sendAveragePopup(minutesLeft: number, averageMinutes: number, stats: SessionStartStats): void {
   if (!activeTabId) return;
 
   browser.tabs.sendMessage(activeTabId, {
     type: 'SHOW_AVERAGE_POPUP',
     minutesLeft,
-    averageMinutes
+    averageMinutes,
+    stats
   }).catch(err => console.warn('Failed to send average popup:', err));
-}
-
-function showReminder(customMessage?: string): void {
-  if (!activeTabId) return;
-
-  const totalTime = formatTimeWithSeconds(todaysTotalTimeInActiveDomain);
-
-  browser.tabs.sendMessage(activeTabId, {
-    type: 'SHOW_REMINDER',
-    customMessage: customMessage,
-    totalTime: totalTime,
-    duration: reminderDisplayMs
-  }).catch(err => console.warn('Failed to show reminder:', err));
 }
 
 async function init(): Promise<void> {
@@ -897,9 +936,8 @@ async function init(): Promise<void> {
   const settings: WebTimeSettings = settingsData.webTimeSettings || { global: {}, domains: {} };
   dayResetTime = settings.global?.dayResetTime || 0;
   inactivityThresholdMs = (settings.global?.inactivityTimeoutS ?? 30) * 1000;
-  reminderDisplayMs = (settings.global?.popupDurationS ?? 10) * 1000;
   console.log(`Day reset time loaded: ${dayResetTime}:00`);
-  console.log(`Inactivity threshold: ${inactivityThresholdMs}ms, Reminder display: ${reminderDisplayMs}ms`);
+  console.log(`Inactivity threshold: ${inactivityThresholdMs}ms`);
 
   currentDateStr = getLocalDateStrWithReset();
 
