@@ -11,19 +11,36 @@ let lastDailyTime = 0;
 let lastSessionTime: number | undefined;
 let lastSessionLimitSeconds: number | undefined;
 let blurOverlay: HTMLDivElement | null = null;
-let reminderDialog: HTMLDivElement | null = null;
-let sessionStartDialog: HTMLDivElement | null = null;
 let averagePopupDialog: HTMLDivElement | null = null;
 let blockerDialog: HTMLDivElement | null = null;
 let endSessionDialog: HTMLDivElement | null = null;
+let windDownOverlay: HTMLDivElement | null = null;
+let graceDialog: HTMLDivElement | null = null;
 let endSessionShortcut: string = 'Ctrl+E'; // default; overridden by settings
+
+// CSS reset applied to all popup/dialog root elements to prevent site styles from bleeding in
+const CSS_RESET = `
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  font-style: normal !important;
+  line-height: 1.4 !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  text-decoration: none !important;
+  text-align: left !important;
+  color: #eee !important;
+  direction: ltr !important;
+  -webkit-font-smoothing: antialiased !important;
+  box-sizing: border-box !important;
+`;
 
 // Queue of popup-show functions — at most one mandatory popup visible at a time.
 // When a popup is dismissed it calls dequeuePopup() to show the next waiting one.
 const popupQueue: Array<() => void> = [];
 
 function isAnyMandatoryPopupVisible(): boolean {
-  return sessionStartDialog !== null || averagePopupDialog !== null;
+  return averagePopupDialog !== null;
 }
 
 function dequeuePopup(): void {
@@ -164,106 +181,6 @@ function createBlurOverlay(): HTMLDivElement {
   return overlay;
 }
 
-function createReminderOverlay(message: string, totalTime: string): HTMLDivElement {
-  if (reminderDialog) return reminderDialog;
-
-  const reminderElement = document.createElement('div');
-  reminderElement.className = 'web-time-reminder-overlay';
-  reminderElement.style.cssText = `
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: #2a2a2a;
-    color: #eee;
-    padding: 24px;
-    border-radius: 8px;
-    box-shadow: 0 6px 32px rgba(0, 0, 0, 0.4);
-    z-index: 1000001;
-    pointer-events: auto;
-    min-width: 320px;
-    max-width: 400px;
-    text-align: center;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    overflow: hidden;
-  `;
-
-  reminderElement.innerHTML = `
-    <button class="web-time-close-btn" style="
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      background: none;
-      border: none;
-      color: #999;
-      font-size: 24px;
-      cursor: pointer;
-      padding: 4px 8px;
-      line-height: 1;
-      transition: color 0.2s;
-    " onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#999'">×</button>
-    <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px; color: #ccc;">
-      ${escapeHtml(message)}
-    </div>
-    <div style="font-size: 16px; color: #ccc; font-weight: 500; margin-bottom: 20px;">
-      ${totalTime} on this site today
-    </div>
-    <div style="display: flex; gap: 12px; justify-content: center; margin-bottom: 16px;">
-      <button class="web-time-snooze-btn" data-duration="3600000" style="
-        background: #444;
-        border: none;
-        color: #eee;
-        padding: 10px 20px;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 14px;
-        transition: background 0.2s;
-      ">Snooze 1hr</button>
-      <button class="web-time-snooze-btn" data-duration="tomorrow" style="
-        background: #444;
-        border: none;
-        color: #eee;
-        padding: 10px 20px;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 14px;
-        transition: background 0.2s;
-      ">Snooze till tmrw</button>
-    </div>
-    <div style="
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      height: 4px;
-      background: rgba(255, 255, 255, 0.1);
-    ">
-      <div class="web-time-progress-bar" style="
-        height: 100%;
-        background: #4a9eff;
-        width: 100%;
-        transition: width linear;
-      "></div>
-    </div>
-  `;
-
-  const buttons = reminderElement.querySelectorAll('button');
-  buttons.forEach(btn => {
-    if (btn.classList.contains('web-time-close-btn')) {
-      btn.addEventListener('click', () => hideReminderOverlay());
-    } else if (btn.classList.contains('web-time-snooze-btn')) {
-      btn.addEventListener('mouseenter', () => { (btn as HTMLButtonElement).style.background = '#555'; });
-      btn.addEventListener('mouseleave', () => { (btn as HTMLButtonElement).style.background = '#444'; });
-      btn.addEventListener('click', () => handleSnooze((btn as HTMLButtonElement).dataset.duration || '3600000'));
-    }
-  });
-
-  document.body.appendChild(reminderElement);
-  reminderDialog = reminderElement;
-  return reminderElement;
-}
-
 function buildBarChart(days: SessionStartStats['days']): string {
   const maxSeconds = Math.max(...days.map(d => d.seconds), 1);
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -288,109 +205,38 @@ function buildBarChart(days: SessionStartStats['days']): string {
   }).join('');
 }
 
-function createSessionStartOverlay(stats: SessionStartStats): HTMLDivElement {
-  if (sessionStartDialog) return sessionStartDialog;
-
-  const el = document.createElement('div');
-  el.className = 'web-time-session-start-overlay';
-  el.style.cssText = `
-    position: fixed;
-    top: 42%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: #2a2a2a;
-    color: #eee;
-    padding: 24px;
-    border-radius: 8px;
-    box-shadow: 0 6px 32px rgba(0, 0, 0, 0.5);
-    z-index: 1000001;
-    pointer-events: auto;
-    width: 300px;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  `;
-
-  const avgLabel = stats.averageSeconds > 0
-    ? `${formatTimeCompact(stats.averageSeconds)} / day average`
-    : '<span style="color: #777;">No recent history</span>';
-
-  el.innerHTML = `
-    <div style="font-size: 18px; font-weight: 600; color: #ccc; margin-bottom: 12px; text-align: center;">
-      Usage this week
-    </div>
-    <div style="margin-bottom: 12px;">
-      ${buildBarChart(stats.days)}
-    </div>
-    <div style="font-size: 14px; color: #ccc; font-weight: 500; margin-bottom: 14px; padding-top: 10px; border-top: 1px solid #3a3a3a; text-align: center;">
-      ${avgLabel}
-    </div>
-    <button class="web-time-continue-btn" style="
-      width: 100%;
-      background: #3a3a3a;
-      border: none;
-      color: #eee;
-      padding: 7px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 13px;
-      text-align: center;
-      transition: background 0.2s, opacity 0.3s;
-    ">Continue</button>
-  `;
-
-  const continueBtn = el.querySelector('.web-time-continue-btn') as HTMLButtonElement;
-  continueBtn.addEventListener('mouseenter', () => { continueBtn.style.background = '#4a4a4a'; });
-  continueBtn.addEventListener('mouseleave', () => { continueBtn.style.background = '#3a3a3a'; });
-  continueBtn.addEventListener('click', () => hideSessionStart());
-
-  document.body.appendChild(el);
-  sessionStartDialog = el;
-  return el;
-}
-
-function createAveragePopupOverlay(minutesLeft: number, averageMinutes: number): HTMLDivElement {
+function createAveragePopupOverlay(minutesLeft: number, averageMinutes: number, stats: SessionStartStats): HTMLDivElement {
   if (averagePopupDialog) return averagePopupDialog;
 
   const el = document.createElement('div');
   el.className = 'web-time-average-popup-overlay';
   el.style.cssText = `
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: #2a2a2a;
-    color: #eee;
-    padding: 24px;
-    border-radius: 8px;
-    box-shadow: 0 6px 32px rgba(0, 0, 0, 0.5);
-    z-index: 1000001;
-    pointer-events: auto;
-    min-width: 300px;
-    max-width: 380px;
-    text-align: center;
-    opacity: 0;
-    transition: opacity 0.3s ease;
+    ${CSS_RESET}
+    position: fixed !important;
+    top: 42% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    background: #2a2a2a !important;
+    padding: 24px !important;
+    border-radius: 8px !important;
+    box-shadow: 0 6px 32px rgba(0, 0, 0, 0.5) !important;
+    z-index: 1000001 !important;
+    pointer-events: auto !important;
+    width: 350px !important;
+    opacity: 0 !important;
+    transition: opacity 0.3s ease !important;
   `;
 
-  const avgHours = Math.floor(averageMinutes / 60);
-  const avgMins = averageMinutes % 60;
-  const avgLabel = avgHours > 0 && avgMins > 0
-    ? `${avgHours}h ${avgMins}m`
-    : avgHours > 0 ? `${avgHours}h` : `${avgMins}m`;
-
   const untilAvgLine = minutesLeft > 0
-    ? `You'll reach the average in ${minutesLeft} min.`
-    : `You've reached your 7-day average.`;
+    ? `${minutesLeft} min until your ${formatTimeCompact(averageMinutes * 60)} 7-day average`
+    : `You've reached your ${formatTimeCompact(averageMinutes * 60)} 7-day average`;
 
   el.innerHTML = `
-    <div style="font-size: 18px; font-weight: 600; color: #ccc; margin-bottom: 6px;">
-      Approaching your average
-    </div>
-    <div style="font-size: 16px; color: #ccc; font-weight: 500; margin-bottom: 8px;">
-      ${avgLabel} / day
-    </div>
-    <div style="font-size: 14px; color: #eee; margin-bottom: 24px;">
+    <div style="font-size: 13px; color: #aaa; margin-bottom: 14px; text-align: center !important;">
       ${untilAvgLine}
+    </div>
+    <div style="margin-bottom: 12px;">
+      ${buildBarChart(stats.days)}
     </div>
     <button class="web-time-avg-continue-btn" style="
       width: 100%;
@@ -401,6 +247,7 @@ function createAveragePopupOverlay(minutesLeft: number, averageMinutes: number):
       border-radius: 6px;
       cursor: pointer;
       font-size: 13px;
+      text-align: center !important;
       transition: background 0.2s, opacity 0.3s;
     ">Continue</button>
   `;
@@ -441,49 +288,14 @@ function showNudge(): void {
   }, Constants.OVERLAY_DURATIONS.NUDGE_MS);
 }
 
-function showSessionStart(stats: SessionStartStats): void {
+function showAveragePopup(minutesLeft: number, averageMinutes: number, stats: SessionStartStats): void {
   if (isAnyMandatoryPopupVisible()) {
-    popupQueue.push(() => showSessionStart(stats));
+    popupQueue.push(() => showAveragePopup(minutesLeft, averageMinutes, stats));
     return;
   }
 
   const blurBg = createBlurOverlay();
-  const el = createSessionStartOverlay(stats);
-
-  // Simple/closable popup — button appears immediately, no media pause
-  blurBg.style.pointerEvents = 'all';
-  blurBg.style.opacity = '1';
-  blockPageScroll(true);
-  blockKeyboard(true);
-
-  setTimeout(() => { el.style.opacity = '1'; }, 100);
-}
-
-function hideSessionStart(): void {
-  if (blurOverlay) {
-    blurOverlay.style.opacity = '0';
-    blurOverlay.style.pointerEvents = 'none';
-  }
-  blockPageScroll(false);
-  blockKeyboard(false);
-  if (sessionStartDialog) {
-    sessionStartDialog.style.opacity = '0';
-    setTimeout(() => {
-      sessionStartDialog?.parentNode?.removeChild(sessionStartDialog);
-      sessionStartDialog = null;
-      dequeuePopup();
-    }, 300);
-  }
-}
-
-function showAveragePopup(minutesLeft: number, averageMinutes: number): void {
-  if (isAnyMandatoryPopupVisible()) {
-    popupQueue.push(() => showAveragePopup(minutesLeft, averageMinutes));
-    return;
-  }
-
-  const blurBg = createBlurOverlay();
-  const el = createAveragePopupOverlay(minutesLeft, averageMinutes);
+  const el = createAveragePopupOverlay(minutesLeft, averageMinutes, stats);
 
   // Simple/closable popup — button appears immediately
   blurBg.style.pointerEvents = 'all';
@@ -510,81 +322,6 @@ function hideAveragePopup(): void {
       dequeuePopup();
     }, 300);
   }
-}
-
-function showReminderOverlay(
-  message: string,
-  totalTime: string,
-  duration: number = Constants.OVERLAY_DURATIONS.REMINDER_DISPLAY_MS
-): void {
-  const blurBg = createBlurOverlay();
-  const reminderElement = createReminderOverlay(message, totalTime);
-
-  // Half-closable popup — buttons appear after half the timer
-  blurBg.style.pointerEvents = 'all';
-  blurBg.style.opacity = '1';
-  blockPageScroll(true);
-  blockKeyboard(true);
-  pauseAllMedia();
-
-  const halfDuration = Math.round(duration / 2);
-  const allButtons = reminderElement.querySelectorAll('button');
-  allButtons.forEach(btn => {
-    (btn as HTMLElement).style.opacity = '0';
-    (btn as HTMLElement).style.pointerEvents = 'none';
-    (btn as HTMLElement).style.transition = 'opacity 0.3s ease, background 0.2s';
-  });
-  setTimeout(() => {
-    allButtons.forEach(btn => {
-      (btn as HTMLElement).style.opacity = '1';
-      (btn as HTMLElement).style.pointerEvents = 'auto';
-    });
-  }, halfDuration);
-
-  setTimeout(() => {
-    reminderElement.style.opacity = '1';
-
-    const progressBar = reminderElement.querySelector('.web-time-progress-bar') as HTMLElement | null;
-    if (progressBar) {
-      progressBar.style.transitionDuration = `${duration}ms`;
-      progressBar.style.width = '0%';
-    }
-  }, 100);
-
-  setTimeout(() => {
-    hideReminderOverlay();
-  }, duration);
-}
-
-function hideReminderOverlay(): void {
-  if (blurOverlay) {
-    blurOverlay.style.opacity = '0';
-    blurOverlay.style.pointerEvents = 'none';
-  }
-  blockPageScroll(false);
-  blockKeyboard(false);
-  if (reminderDialog) {
-    reminderDialog.style.opacity = '0';
-    setTimeout(() => {
-      if (reminderDialog && reminderDialog.parentNode) {
-        reminderDialog.parentNode.removeChild(reminderDialog);
-        reminderDialog = null;
-      }
-    }, 300);
-  }
-}
-
-function handleSnooze(duration: string): void {
-  hideReminderOverlay();
-
-  const snoozeUntil: number | 'tomorrow' = duration === 'tomorrow'
-    ? 'tomorrow'
-    : Date.now() + parseInt(duration);
-
-  browser.runtime.sendMessage({
-    type: 'SNOOZE_REMINDERS',
-    duration: snoozeUntil
-  });
 }
 
 function showBlocker(remainingSeconds: number, totalCooldownSeconds: number, cooldownCount: number, cooldownIncrementMinutes: number): void {
@@ -625,22 +362,22 @@ function showBlocker(remainingSeconds: number, totalCooldownSeconds: number, coo
   const el = document.createElement('div');
   el.className = 'web-time-blocker-overlay';
   el.style.cssText = `
-    position: fixed;
-    top: 42%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: #2a2a2a;
-    color: #eee;
-    padding: 28px;
-    border-radius: 8px;
-    box-shadow: 0 6px 32px rgba(0, 0, 0, 0.5);
-    z-index: 1000001;
-    pointer-events: auto;
-    width: 300px;
-    text-align: center;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    overflow: hidden;
+    ${CSS_RESET}
+    position: fixed !important;
+    top: 42% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    background: #2a2a2a !important;
+    padding: 28px !important;
+    border-radius: 8px !important;
+    box-shadow: 0 6px 32px rgba(0, 0, 0, 0.5) !important;
+    z-index: 1000001 !important;
+    pointer-events: auto !important;
+    width: 350px !important;
+    text-align: center !important;
+    opacity: 0 !important;
+    transition: opacity 0.3s ease !important;
+    overflow: hidden !important;
   `;
 
   el.innerHTML = `
@@ -692,6 +429,185 @@ function hideBlocker(): void {
 }
 
 // ============================================================================
+// Wind-Down Overlay — progressive darkening before session end
+// ============================================================================
+
+function showWindDown(progress: number, _remainingSeconds: number): void {
+  if (!windDownOverlay) {
+    const overlay = document.createElement('div');
+    overlay.className = 'web-time-wind-down-overlay';
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 999998;
+      pointer-events: none;
+      transition: background 1s linear;
+    `;
+
+    // Shrinking bar — starts full width, shrinks from both ends toward center
+    const barTrack = document.createElement('div');
+    barTrack.className = 'web-time-wind-down-bar-track';
+    barTrack.style.cssText = `
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.08);
+    `;
+    const barFill = document.createElement('div');
+    barFill.className = 'web-time-wind-down-bar-fill';
+    barFill.style.cssText = `
+      height: 100%;
+      margin: 0 auto;
+      width: 100%;
+      transition: width 1s linear;
+      background: #4a9eff;
+    `;
+    barTrack.appendChild(barFill);
+    overlay.appendChild(barTrack);
+
+    const timer = document.querySelector('.web-time-timer');
+    if (timer) {
+      document.body.insertBefore(overlay, timer);
+    } else {
+      document.body.appendChild(overlay);
+    }
+    windDownOverlay = overlay;
+  }
+
+  const opacity = 0.3 * progress;
+  windDownOverlay.style.background = `rgba(0, 0, 0, ${opacity})`;
+
+  // Bar shrinks from both ends: 100% → 0%
+  const barFill = windDownOverlay.querySelector('.web-time-wind-down-bar-fill') as HTMLElement | null;
+  if (barFill) {
+    const widthPct = Math.max(0, (1 - progress) * 100);
+    barFill.style.width = `${widthPct}%`;
+  }
+}
+
+function hideWindDown(): void {
+  if (windDownOverlay) {
+    windDownOverlay.parentNode?.removeChild(windDownOverlay);
+    windDownOverlay = null;
+  }
+}
+
+// ============================================================================
+// Grace Period Prompt
+// ============================================================================
+
+function showGracePrompt(graceSecs: number): void {
+  if (graceDialog) return;
+
+  hideWindDown();
+
+  const blurBg = createBlurOverlay();
+  blurBg.style.pointerEvents = 'all';
+  blurBg.style.opacity = '1';
+  blockPageScroll(true);
+  blockKeyboard(true);
+  pauseAllMedia();
+
+  const el = document.createElement('div');
+  el.className = 'web-time-grace-overlay';
+  el.style.cssText = `
+    ${CSS_RESET}
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    background: #2a2a2a !important;
+    padding: 24px !important;
+    border-radius: 8px !important;
+    box-shadow: 0 6px 32px rgba(0, 0, 0, 0.5) !important;
+    z-index: 1000002 !important;
+    pointer-events: auto !important;
+    width: 350px !important;
+    text-align: center !important;
+    opacity: 0 !important;
+    transition: opacity 0.3s ease !important;
+  `;
+  el.innerHTML = `
+    <div style="font-size: 16px; color: #ccc; margin-bottom: 6px; font-weight: 600;">
+      Session ended
+    </div>
+    <div style="font-size: 15px; color: #eee; margin-bottom: 18px; line-height: 1.4;">
+      You earned ${escapeHtml(formatTimeAdaptive(graceSecs))} of grace time. Use it?
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <button class="web-time-grace-decline" style="
+        flex: 1; background: #3a3a3a; border: none; color: #eee;
+        padding: 8px; border-radius: 6px; cursor: pointer; font-size: 13px;
+      ">End Now</button>
+      <button class="web-time-grace-accept" style="
+        flex: 1; background: #4571e7; border: none; color: #fff;
+        padding: 8px; border-radius: 6px; cursor: pointer; font-size: 13px;
+      ">Use Grace</button>
+    </div>
+  `;
+
+  document.body.appendChild(el);
+  graceDialog = el;
+  setTimeout(() => { el.style.opacity = '1'; }, 50);
+
+  const closeGrace = (): void => {
+    if (!graceDialog) return;
+    document.removeEventListener('keydown', graceKeyHandler, true);
+    graceDialog.style.opacity = '0';
+    if (blurOverlay) {
+      blurOverlay.style.opacity = '0';
+      blurOverlay.style.pointerEvents = 'none';
+    }
+    blockPageScroll(false);
+    blockKeyboard(false);
+    setTimeout(() => {
+      graceDialog?.parentNode?.removeChild(graceDialog);
+      graceDialog = null;
+    }, 300);
+  };
+
+  const acceptGrace = (): void => {
+    browser.runtime.sendMessage({ type: 'GRACE_ACCEPTED' }).catch(() => {});
+    closeGrace();
+  };
+
+  const declineGrace = (): void => {
+    browser.runtime.sendMessage({ type: 'GRACE_DECLINED' }).catch(() => {});
+    closeGrace();
+  };
+
+  const graceKeyHandler = (e: KeyboardEvent): void => {
+    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); acceptGrace(); }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); declineGrace(); }
+  };
+  document.addEventListener('keydown', graceKeyHandler, true);
+
+  el.querySelector('.web-time-grace-decline')?.addEventListener('click', declineGrace);
+  el.querySelector('.web-time-grace-accept')?.addEventListener('click', acceptGrace);
+}
+
+function hideGracePrompt(): void {
+  if (graceDialog) {
+    graceDialog.style.opacity = '0';
+    if (blurOverlay) {
+      blurOverlay.style.opacity = '0';
+      blurOverlay.style.pointerEvents = 'none';
+    }
+    blockPageScroll(false);
+    blockKeyboard(false);
+    setTimeout(() => {
+      graceDialog?.parentNode?.removeChild(graceDialog);
+      graceDialog = null;
+    }, 300);
+  }
+}
+
+// ============================================================================
 // End Session Early — keyboard shortcut + confirmation popup
 // ============================================================================
 
@@ -727,11 +643,10 @@ function isEndSessionShortcutMatch(e: KeyboardEvent): boolean {
 }
 
 function isAnyInterventionVisible(): boolean {
-  return reminderDialog !== null
-    || sessionStartDialog !== null
-    || averagePopupDialog !== null
+  return averagePopupDialog !== null
     || blockerDialog !== null
-    || endSessionDialog !== null;
+    || endSessionDialog !== null
+    || graceDialog !== null;
 }
 
 function isInTextInput(target: EventTarget | null): boolean {
@@ -759,21 +674,21 @@ function showEndSessionConfirm(): void {
   const el = document.createElement('div');
   el.className = 'web-time-end-session-overlay';
   el.style.cssText = `
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: #2a2a2a;
-    color: #eee;
-    padding: 24px;
-    border-radius: 8px;
-    box-shadow: 0 6px 32px rgba(0, 0, 0, 0.5);
-    z-index: 1000002;
-    pointer-events: auto;
-    width: 320px;
-    text-align: center;
-    opacity: 0;
-    transition: opacity 0.3s ease;
+    ${CSS_RESET}
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    background: #2a2a2a !important;
+    padding: 24px !important;
+    border-radius: 8px !important;
+    box-shadow: 0 6px 32px rgba(0, 0, 0, 0.5) !important;
+    z-index: 1000002 !important;
+    pointer-events: auto !important;
+    width: 350px !important;
+    text-align: center !important;
+    opacity: 0 !important;
+    transition: opacity 0.3s ease !important;
   `;
   el.innerHTML = `
     <div style="font-size: 16px; color: #eee; margin-bottom: 18px; line-height: 1.4;">
@@ -796,8 +711,14 @@ function showEndSessionConfirm(): void {
   // Tell background to freeze the timer while the user decides.
   browser.runtime.sendMessage({ type: 'END_SESSION_CONFIRM_OPEN' }).catch(() => {});
 
+  const confirmAndClose = (): void => {
+    browser.runtime.sendMessage({ type: 'END_SESSION_EARLY' }).catch(() => {});
+    close();
+  };
+
   const close = (): void => {
     if (!endSessionDialog) return;
+    document.removeEventListener('keydown', keyHandler, true);
     endSessionDialog.style.opacity = '0';
     if (blurOverlay) {
       blurOverlay.style.opacity = '0';
@@ -812,11 +733,14 @@ function showEndSessionConfirm(): void {
     }, 300);
   };
 
+  const keyHandler = (e: KeyboardEvent): void => {
+    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); confirmAndClose(); }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+  };
+  document.addEventListener('keydown', keyHandler, true);
+
   el.querySelector('.web-time-end-cancel')?.addEventListener('click', close);
-  el.querySelector('.web-time-end-ok')?.addEventListener('click', () => {
-    browser.runtime.sendMessage({ type: 'END_SESSION_EARLY' }).catch(() => {});
-    close();
-  });
+  el.querySelector('.web-time-end-ok')?.addEventListener('click', confirmAndClose);
 }
 
 // When this tab becomes visible (after being backgrounded/discarded), ask
@@ -863,16 +787,19 @@ function handleIncomingMessage(
     }
   } else if (message.type === "NUDGE") {
     showNudge();
-  } else if (message.type === "SHOW_REMINDER") {
-    showReminderOverlay(message.customMessage || '', message.totalTime, message.duration);
-  } else if (message.type === "SHOW_SESSION_START") {
-    showSessionStart(message.stats);
   } else if (message.type === "SHOW_AVERAGE_POPUP") {
-    showAveragePopup(message.minutesLeft, message.averageMinutes);
+    showAveragePopup(message.minutesLeft, message.averageMinutes, message.stats);
   } else if (message.type === "SHOW_BLOCKER") {
     showBlocker(message.cooldownRemainingSeconds, message.totalCooldownSeconds, message.cooldownCount, message.cooldownIncrementMinutes);
   } else if (message.type === "HIDE_BLOCKER") {
     hideBlocker();
+    hideGracePrompt();
+  } else if (message.type === "SHOW_WIND_DOWN") {
+    showWindDown(message.progress, message.remainingSeconds);
+  } else if (message.type === "HIDE_WIND_DOWN") {
+    hideWindDown();
+  } else if (message.type === "SHOW_GRACE_PROMPT") {
+    showGracePrompt(message.graceSeconds);
   }
 }
 

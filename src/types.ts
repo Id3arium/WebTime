@@ -37,21 +37,16 @@ export interface StorageData {
 
 export interface GlobalSettings {
   dayResetTime?: number; // Hour when day resets (0-23)
-  customMessage?: string; // Custom reminder message
   inactivityTimeoutS?: number; // Seconds before tab considered inactive (default: 30)
-  popupDurationS?: number; // Seconds reminder popup stays visible (default: 10)
   scalingPower?: number; // Chart bar scaling power (default: 0.8, range 0.3-1.0)
   endSessionShortcut?: string | null; // Keyboard shortcut to end session early; null = disabled, undefined = default (Ctrl+E)
 }
 
 export interface DomainSettings {
-  reminderEnabled?: boolean;
-  reminderThreshold?: number; // Minutes
-  reminderInterval?: number; // Minutes
-  nudgeIntervalMinutes?: number; // Minutes between linear nudges (default: 15)
   sessionLimitEnabled?: boolean;
   sessionLimit?: number; // Minutes — continuous usage before cooldown triggers
   cooldownIncrement?: number; // Minutes — each successive cooldown grows by this amount
+  nudgeCount?: number; // Number of phi-spaced nudges per session (0 = disabled, undefined = auto)
 }
 
 export interface WebTimeSettings {
@@ -65,9 +60,6 @@ export interface WebTimeSettings {
 
 export interface InterventionState {
   lastNudgeTime: Record<Domain, number>;
-  lastReminderTime: Record<Domain, number>;
-  snoozedUntil: Record<Domain, number | 'tomorrow'>;
-  sessionStartShown: Record<Domain, boolean>; // reset on day rollover
   averagePopupShown: Record<Domain, boolean>;  // reset on day rollover
 }
 
@@ -85,10 +77,6 @@ export interface SessionStartStats {
 export interface InterventionSettings {
   global: GlobalSettings;
   domainSettings: DomainSettings;
-  reminderEnabled: boolean;
-  reminderThreshold: number; // In seconds
-  reminderInterval: number; // In minutes
-  nudgeIntervalMinutes: number;
   averageSeconds: number; // 7-day moving average in seconds (0 if no history)
   daysWithData: number; // days with usage in last 7 days
   timeInSeconds: number;
@@ -115,11 +103,6 @@ export interface UserActiveMessage {
   type: 'USER_ACTIVE';
 }
 
-export interface SnoozeRemindersMessage {
-  type: 'SNOOZE_REMINDERS';
-  duration: number | 'tomorrow';
-}
-
 export interface SettingsUpdatedMessage {
   type: 'SETTINGS_UPDATED';
 }
@@ -128,22 +111,11 @@ export interface NudgeMessage {
   type: 'NUDGE';
 }
 
-export interface ShowReminderMessage {
-  type: 'SHOW_REMINDER';
-  customMessage?: string;
-  totalTime: string;
-  duration: number;
-}
-
-export interface ShowSessionStartMessage {
-  type: 'SHOW_SESSION_START';
-  stats: SessionStartStats;
-}
-
 export interface ShowAveragePopupMessage {
   type: 'SHOW_AVERAGE_POPUP';
   minutesLeft: number;
-  averageMinutes: number; // the actual 7-day average, for display
+  averageMinutes: number;
+  stats: SessionStartStats;
 }
 
 export interface ShowBlockerMessage {
@@ -174,22 +146,47 @@ export interface RequestBlockerStateMessage {
   type: 'REQUEST_BLOCKER_STATE';
 }
 
+export interface ShowWindDownMessage {
+  type: 'SHOW_WIND_DOWN';
+  progress: number;
+  remainingSeconds: number;
+}
+
+export interface HideWindDownMessage {
+  type: 'HIDE_WIND_DOWN';
+}
+
+export interface ShowGracePromptMessage {
+  type: 'SHOW_GRACE_PROMPT';
+  graceSeconds: number;
+}
+
+export interface GraceAcceptedMessage {
+  type: 'GRACE_ACCEPTED';
+}
+
+export interface GraceDeclinedMessage {
+  type: 'GRACE_DECLINED';
+}
+
 export type ExtensionMessage =
   | TimeUpdateMessage
   | ContentScriptReadyMessage
   | UserActiveMessage
-  | SnoozeRemindersMessage
   | SettingsUpdatedMessage
   | NudgeMessage
-  | ShowReminderMessage
-  | ShowSessionStartMessage
   | ShowAveragePopupMessage
   | ShowBlockerMessage
   | HideBlockerMessage
   | EndSessionEarlyMessage
   | EndSessionConfirmOpenMessage
   | EndSessionConfirmCloseMessage
-  | RequestBlockerStateMessage;
+  | RequestBlockerStateMessage
+  | ShowWindDownMessage
+  | HideWindDownMessage
+  | ShowGracePromptMessage
+  | GraceAcceptedMessage
+  | GraceDeclinedMessage;
 
 // ============================================
 // Chart Types
@@ -239,7 +236,6 @@ export interface PopupState {
 
 export interface OverlayDurations {
   NUDGE_MS: number;
-  REMINDER_DISPLAY_MS: number;
 }
 
 export interface ChartConfig {
@@ -268,7 +264,6 @@ export interface Colors {
 }
 
 export interface ConstantsType {
-  DEFAULT_NUDGE_INTERVAL_MINUTES: number;
   INACTIVITY_THRESHOLD_MS: number;
   ACTIVITY_CHECK_INTERVAL_MS: number;
   SAVE_INTERVAL_SECONDS: number;

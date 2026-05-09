@@ -15,7 +15,6 @@ import {
   highlightBar,
   type DomainPieData
 } from './chart-builder.js';
-import { Constants } from '../shared/constants.js';
 import { escapeHtml } from '../shared/utils.js';
 import type { ChartInstance } from '../types.js';
 
@@ -130,15 +129,6 @@ export function showDetailView(): void {
   loadSettings();
 }
 
-export function updateNudgeIntervalVisibility(): void {
-  const reminderEnabledEl = document.getElementById('reminder-enabled') as HTMLInputElement | null;
-  const nudgeIntervalOption = document.getElementById('nudge-interval-option');
-
-  if (!reminderEnabledEl || !nudgeIntervalOption) return;
-
-  nudgeIntervalOption.style.display = reminderEnabledEl.checked ? 'block' : 'none';
-}
-
 export async function loadSettings(): Promise<void> {
   try {
     const data = await browser.storage.local.get('webTimeSettings');
@@ -146,16 +136,12 @@ export async function loadSettings(): Promise<void> {
 
     const global = settings.global || {};
     const dayResetTimeEl = document.getElementById('day-reset-time') as HTMLInputElement | null;
-    const customMessageEl = document.getElementById('custom-message') as HTMLInputElement | null;
 
     if (dayResetTimeEl) dayResetTimeEl.value = String(global.dayResetTime || 0);
-    if (customMessageEl) customMessageEl.value = global.customMessage || '';
 
     const inactivityEl = document.getElementById('inactivity-timeout') as HTMLInputElement | null;
-    const popupDurationEl = document.getElementById('popup-duration') as HTMLInputElement | null;
     const chartScalingEl = document.getElementById('chart-scaling') as HTMLInputElement | null;
     if (inactivityEl) inactivityEl.value = String(global.inactivityTimeoutS ?? 30);
-    if (popupDurationEl) popupDurationEl.value = String(global.popupDurationS ?? 10);
     if (chartScalingEl) chartScalingEl.value = String(global.scalingPower ?? 0.8);
 
     // End-session shortcut: undefined = default Ctrl+E, null = disabled, string = custom
@@ -174,23 +160,6 @@ export async function loadSettings(): Promise<void> {
     }
 
     const domainSettings = settings.domains?.[AppState.selectedDomain || ''] || {};
-
-    const reminderEnabled = domainSettings.reminderEnabled || false;
-    const reminderThreshold = domainSettings.reminderThreshold || 180;
-    const reminderInterval = domainSettings.reminderInterval || 15;
-    const nudgeIntervalMinutes = domainSettings.nudgeIntervalMinutes ?? Constants.DEFAULT_NUDGE_INTERVAL_MINUTES;
-
-    const reminderEnabledEl = document.getElementById('reminder-enabled') as HTMLInputElement | null;
-    const reminderHoursEl = document.getElementById('reminder-hours') as HTMLInputElement | null;
-    const reminderMinutesEl = document.getElementById('reminder-minutes') as HTMLInputElement | null;
-    const reminderIntervalEl = document.getElementById('reminder-interval') as HTMLInputElement | null;
-    const nudgeIntervalEl = document.getElementById('nudge-interval-minutes') as HTMLInputElement | null;
-
-    if (reminderEnabledEl) reminderEnabledEl.checked = reminderEnabled;
-    if (reminderHoursEl) reminderHoursEl.value = String(Math.floor(reminderThreshold / 60));
-    if (reminderMinutesEl) reminderMinutesEl.value = String(reminderThreshold % 60);
-    if (reminderIntervalEl) reminderIntervalEl.value = String(reminderInterval);
-    if (nudgeIntervalEl) nudgeIntervalEl.value = String(nudgeIntervalMinutes);
 
     // Session limit settings — keep stored value even when disabled so the
     // user's numbers are preserved across toggles. Fall back to the HTML
@@ -212,38 +181,45 @@ export async function loadSettings(): Promise<void> {
       cooldownIncrementEl.value = String(storedCooldownIncrement);
     }
 
+    const nudgeCountEl = document.getElementById('nudge-count') as HTMLInputElement | null;
+    const nudgeCountAutoEl = document.getElementById('nudge-count-auto');
+    if (nudgeCountEl) {
+      const storedNudgeCount = domainSettings.nudgeCount;
+      if (storedNudgeCount !== undefined) {
+        nudgeCountEl.value = String(storedNudgeCount);
+      } else {
+        const limitMin = parseInt(sessionLimitEl?.value || '0') || 0;
+        if (limitMin > 0) {
+          const PHI = (1 + Math.sqrt(5)) / 2;
+          nudgeCountEl.value = String(Math.round(PHI * Math.sqrt(limitMin / 15)));
+        }
+      }
+    }
+
+    function updateNudgeRecHint(): void {
+      if (!nudgeCountAutoEl) return;
+      const limitMin = parseInt(sessionLimitEl?.value || '0') || 0;
+      if (limitMin > 0) {
+        const PHI = (1 + Math.sqrt(5)) / 2;
+        const rec = Math.round(PHI * Math.sqrt(limitMin / 15));
+        nudgeCountAutoEl.textContent = ` (rec: ${rec})`;
+      } else {
+        nudgeCountAutoEl.textContent = '';
+      }
+    }
+    updateNudgeRecHint();
+
     // Show recommended cooldown increment = 1/3 of session limit
     const currentSessionLimitForRec = parseInt(sessionLimitEl?.value || '0') || 0;
     updateCooldownRecommendation(currentSessionLimitForRec, cooldownRecommendedEl);
 
-    // Live-update recommended value as session limit changes
+    // Live-update recommendations as session limit changes
     if (sessionLimitEl) {
       sessionLimitEl.addEventListener('input', () => {
         const val = parseInt(sessionLimitEl.value) || 0;
         updateCooldownRecommendation(val, cooldownRecommendedEl);
+        updateNudgeRecHint();
       });
-    }
-
-    updateNudgeIntervalVisibility();
-
-    if (reminderMinutesEl && reminderHoursEl) {
-      reminderMinutesEl.addEventListener('input', () => {
-        let mins = parseInt(reminderMinutesEl.value) || 0;
-        let hrs = parseInt(reminderHoursEl.value) || 0;
-
-        if (mins >= 60) {
-          reminderHoursEl.value = String(hrs + Math.floor(mins / 60));
-          reminderMinutesEl.value = String(mins % 60);
-        } else if (mins < 0 && hrs > 0) {
-          reminderHoursEl.value = String(hrs - 1);
-          reminderMinutesEl.value = String(60 + mins);
-        }
-      });
-    }
-
-    const reminderEnabledElForListener = document.getElementById('reminder-enabled');
-    if (reminderEnabledElForListener) {
-      reminderEnabledElForListener.addEventListener('change', () => updateNudgeIntervalVisibility());
     }
 
   } catch (error) {
@@ -257,9 +233,7 @@ export async function saveSettings(): Promise<void> {
     const settings = data.webTimeSettings || { global: {}, domains: {} };
 
     const dayResetTimeEl = document.getElementById('day-reset-time') as HTMLInputElement | null;
-    const customMessageEl = document.getElementById('custom-message') as HTMLInputElement | null;
     const inactivityTimeoutEl = document.getElementById('inactivity-timeout') as HTMLInputElement | null;
-    const popupDurationEl = document.getElementById('popup-duration') as HTMLInputElement | null;
     const chartScalingEl = document.getElementById('chart-scaling') as HTMLInputElement | null;
 
     const scalingPower = parseFloat(chartScalingEl?.value || '0.8') || 0.8;
@@ -276,27 +250,12 @@ export async function saveSettings(): Promise<void> {
 
     settings.global = {
       dayResetTime: parseInt(dayResetTimeEl?.value || '0'),
-      customMessage: customMessageEl?.value || '',
       inactivityTimeoutS: parseInt(inactivityTimeoutEl?.value || '30') || 30,
-      popupDurationS: parseInt(popupDurationEl?.value || '10') || 10,
       scalingPower: Math.max(0.3, Math.min(1.0, scalingPower)),
       endSessionShortcut
     };
 
     if (!settings.domains) settings.domains = {};
-
-    const reminderEnabledEl = document.getElementById('reminder-enabled') as HTMLInputElement | null;
-    const reminderHoursEl = document.getElementById('reminder-hours') as HTMLInputElement | null;
-    const reminderMinutesEl = document.getElementById('reminder-minutes') as HTMLInputElement | null;
-    const reminderIntervalEl = document.getElementById('reminder-interval') as HTMLInputElement | null;
-    const nudgeIntervalEl = document.getElementById('nudge-interval-minutes') as HTMLInputElement | null;
-
-    const reminderEnabled = reminderEnabledEl?.checked || false;
-    const reminderHours = parseInt(reminderHoursEl?.value || '0') || 0;
-    const reminderMinutes = parseInt(reminderMinutesEl?.value || '0') || 0;
-    const reminderThreshold = (reminderHours * 60) + reminderMinutes;
-    const reminderInterval = parseInt(reminderIntervalEl?.value || '15') || 15;
-    const nudgeIntervalMinutes = parseInt(nudgeIntervalEl?.value || String(Constants.DEFAULT_NUDGE_INTERVAL_MINUTES)) || Constants.DEFAULT_NUDGE_INTERVAL_MINUTES;
 
     const sessionLimitEnabledEl = document.getElementById('session-limit-enabled') as HTMLInputElement | null;
     const sessionLimitEl = document.getElementById('session-limit-minutes') as HTMLInputElement | null;
@@ -306,18 +265,18 @@ export async function saveSettings(): Promise<void> {
     // checkbox, so toggling off then on preserves the user's numbers.
     const sessionLimit = parseInt(sessionLimitEl?.value || '') || 0;
     const cooldownIncrement = parseInt(cooldownIncrementEl?.value || '') || 0;
+    const nudgeCountEl = document.getElementById('nudge-count') as HTMLInputElement | null;
+    const nudgeCountRaw = nudgeCountEl?.value;
+    const nudgeCount = nudgeCountRaw !== undefined && nudgeCountRaw !== '' ? parseInt(nudgeCountRaw) : undefined;
 
-    const hasAnySettings = reminderEnabled || sessionLimitEnabled || sessionLimit > 0 || cooldownIncrement > 0;
+    const hasAnySettings = sessionLimitEnabled || sessionLimit > 0 || cooldownIncrement > 0;
 
     if (hasAnySettings && AppState.selectedDomain) {
       settings.domains[AppState.selectedDomain] = {
-        reminderEnabled,
-        reminderThreshold,
-        reminderInterval,
-        nudgeIntervalMinutes,
         sessionLimitEnabled,
         sessionLimit: sessionLimit > 0 ? sessionLimit : undefined,
-        cooldownIncrement: cooldownIncrement > 0 ? cooldownIncrement : undefined
+        cooldownIncrement: cooldownIncrement > 0 ? cooldownIncrement : undefined,
+        nudgeCount: nudgeCount !== undefined && !isNaN(nudgeCount) ? nudgeCount : undefined
       };
     } else if (AppState.selectedDomain) {
       if (settings.domains[AppState.selectedDomain]) {
@@ -752,7 +711,6 @@ export function setupDetailViewScrolling(
 export const UIManager = {
   showGeneralView,
   showDetailView,
-  updateNudgeIntervalVisibility,
   loadSettings,
   saveSettings,
   renderGeneralView,

@@ -1,6 +1,10 @@
 // Pure functions for session-limit / carryover math.
 // No browser APIs — testable in isolation with `node --test`.
 
+const PHI = (1 + Math.sqrt(5)) / 2;
+
+export const WIND_DOWN_DURATION = 60;
+
 export interface SessionTimerState {
   /** Daily total seconds for this domain. */
   dailyTotal: number;
@@ -102,5 +106,50 @@ export function naturalCooldown(opts: {
     newCarryover: 0,
     cooldownSeconds,
     sessionNum
+  };
+}
+
+/**
+ * Compute phi-based nudge times within a session.
+ * Returns sorted array of session-relative seconds (0 = session start).
+ * Nudges accelerate toward the session end (sparse early, frequent late).
+ */
+export function computePhiNudgeTimes(effectiveLimit: number, overrideCount?: number): number[] {
+  if (effectiveLimit <= 0) return [];
+
+  const numNudges = overrideCount !== undefined ? overrideCount : Math.round(PHI * Math.sqrt(effectiveLimit / 60 / 15));
+  if (numNudges <= 0) return [];
+
+  const nudgeTimes: number[] = [];
+  for (let i = 1; i <= numNudges; i++) {
+    const timeBeforeEnd = effectiveLimit / Math.pow(PHI, i);
+    const nudgeTime = Math.round(effectiveLimit - timeBeforeEnd);
+    if (nudgeTime >= 60 && nudgeTime <= effectiveLimit - WIND_DOWN_DURATION) {
+      nudgeTimes.push(nudgeTime);
+    }
+  }
+
+  nudgeTimes.sort((a, b) => a - b);
+  return nudgeTimes;
+}
+
+/** 15 seconds of grace per 5 minutes of effective session length (~5% back). */
+export function computeGraceSeconds(effectiveLimit: number): number {
+  return Math.floor(effectiveLimit / 300) * 15;
+}
+
+export function isInWindDown(
+  sessionTime: number,
+  effectiveLimit: number
+): { active: boolean; progress: number; remaining: number } {
+  const windDownStart = effectiveLimit - WIND_DOWN_DURATION;
+  if (sessionTime < windDownStart || effectiveLimit < WIND_DOWN_DURATION) {
+    return { active: false, progress: 0, remaining: effectiveLimit - sessionTime };
+  }
+  const elapsed = sessionTime - windDownStart;
+  return {
+    active: true,
+    progress: Math.min(1, elapsed / WIND_DOWN_DURATION),
+    remaining: Math.max(0, effectiveLimit - sessionTime)
   };
 }
