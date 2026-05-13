@@ -227,12 +227,13 @@ function createAveragePopupOverlay(minutesLeft: number, averageMinutes: number, 
     transition: opacity 0.3s ease !important;
   `;
 
+  const avg = formatTimeCompact(averageMinutes * 60);
   const untilAvgLine = minutesLeft > 0
-    ? `${minutesLeft} min until your ${formatTimeCompact(averageMinutes * 60)} 7-day average`
-    : `You've reached your ${formatTimeCompact(averageMinutes * 60)} 7-day average`;
+    ? `${minutesLeft} min until your 7-day average (${avg})`
+    : `You've reached your 7-day average (${avg})`;
 
   el.innerHTML = `
-    <div style="font-size: 13px; color: #aaa; margin-bottom: 14px; text-align: center !important;">
+    <div style="font-size: 16px; color: #ccc; margin-bottom: 14px; text-align: center !important; font-weight: 600;">
       ${untilAvgLine}
     </div>
     <div style="margin-bottom: 12px;">
@@ -273,12 +274,15 @@ function showNudge(): void {
   const timer = document.querySelector('.web-time-timer') as HTMLElement | null;
   if (timer) {
     timer.style.transformOrigin = 'top right';
-    timer.style.transition = 'transform 0.3s ease-in-out';
-    timer.style.transform = 'scale(4.20)';
+    timer.style.transition = `transform ${Constants.OVERLAY_DURATIONS.NUDGE_MS / 2}ms ease-in-out`;
+    // Force the browser to register the transition before applying scale
+    requestAnimationFrame(() => {
+      timer.style.transform = 'scale(4.20)';
 
-    setTimeout(() => {
-      timer.style.transform = 'scale(1)';
-    }, Constants.OVERLAY_DURATIONS.NUDGE_MS / 2);
+      setTimeout(() => {
+        timer.style.transform = 'scale(1)';
+      }, Constants.OVERLAY_DURATIONS.NUDGE_MS / 2);
+    });
   }
 
   setTimeout(() => {
@@ -665,6 +669,16 @@ function showEndSessionConfirm(): void {
   const remaining = Math.max(0, lastSessionLimitSeconds - lastSessionTime);
   if (remaining <= 0) return; // already at boundary
 
+  // Pause playing media and track them for resume on cancel
+  const playingMedia: HTMLMediaElement[] = [];
+  document.querySelectorAll('video, audio').forEach(el => {
+    const media = el as HTMLMediaElement;
+    if (!media.paused) {
+      media.pause();
+      playingMedia.push(media);
+    }
+  });
+
   const blurBg = createBlurOverlay();
   blurBg.style.pointerEvents = 'all';
   blurBg.style.opacity = '1';
@@ -713,10 +727,10 @@ function showEndSessionConfirm(): void {
 
   const confirmAndClose = (): void => {
     browser.runtime.sendMessage({ type: 'END_SESSION_EARLY' }).catch(() => {});
-    close();
+    close(false);
   };
 
-  const close = (): void => {
+  const close = (resumeMedia: boolean = true): void => {
     if (!endSessionDialog) return;
     document.removeEventListener('keydown', keyHandler, true);
     endSessionDialog.style.opacity = '0';
@@ -726,6 +740,9 @@ function showEndSessionConfirm(): void {
     }
     blockPageScroll(false);
     blockKeyboard(false);
+    if (resumeMedia) {
+      playingMedia.forEach(m => m.play().catch(() => {}));
+    }
     browser.runtime.sendMessage({ type: 'END_SESSION_CONFIRM_CLOSE' }).catch(() => {});
     setTimeout(() => {
       endSessionDialog?.parentNode?.removeChild(endSessionDialog);
@@ -735,11 +752,11 @@ function showEndSessionConfirm(): void {
 
   const keyHandler = (e: KeyboardEvent): void => {
     if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); confirmAndClose(); }
-    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(true); }
   };
   document.addEventListener('keydown', keyHandler, true);
 
-  el.querySelector('.web-time-end-cancel')?.addEventListener('click', close);
+  el.querySelector('.web-time-end-cancel')?.addEventListener('click', () => close(true));
   el.querySelector('.web-time-end-ok')?.addEventListener('click', confirmAndClose);
 }
 
