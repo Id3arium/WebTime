@@ -67,6 +67,9 @@ const phiNudgeFired: Record<Domain, Set<number>> = {};
 const windDownActive: Record<Domain, boolean> = {};
 // Whether a grace extension is currently active (boundary was extended by grace)
 const graceActive: Record<Domain, boolean> = {};
+// Pending cooldown params stored when grace fires — used when grace expires so we
+// don't recompute (which would give wrong session number / create a "double session" feel)
+const gracePendingCooldown: Record<Domain, { cooldownSeconds: number; sessionNum: number; incrementMinutes: number }> = {};
 
 // Cache previous intervention settings per domain to detect actual changes
 const previousInterventionSettings: Record<Domain, string> = {};
@@ -218,6 +221,7 @@ function incrementTimer(): void {
     for (const domain of Object.keys(phiNudgeFired)) delete phiNudgeFired[domain];
     for (const domain of Object.keys(windDownActive)) delete windDownActive[domain];
     for (const domain of Object.keys(graceActive)) delete graceActive[domain];
+    for (const domain of Object.keys(gracePendingCooldown)) delete gracePendingCooldown[domain];
     console.log("New day, reset timer.");
   }
   updateTimerDisplay(todaysTotalTimeInActiveDomain);
@@ -466,10 +470,11 @@ function handleMessageReceived(
   if (message.type === "GRACE_ACCEPTED" && sender.tab?.url) {
     const domain = extractDomain(sender.tab.url);
     if (domain && graceActive[domain]) {
-      // Grace already extended the boundary in checkSessionLimit — just hide the prompt
-      delete graceActive[domain];
+      // Grace already extended the boundary in checkSessionLimit — keep graceActive
+      // so that when the extended boundary is hit, we use the stored pending cooldown
+      // (same session number, same cooldown duration — avoids "double session" feel).
       sendMessageToAllTabsOfDomain(domain, { type: 'HIDE_BLOCKER' as const });
-      console.log(`Grace accepted for ${domain}`);
+      console.log(`Grace accepted for ${domain}, session continues until extended boundary`);
     }
   }
 
@@ -477,8 +482,22 @@ function handleMessageReceived(
     const domain = extractDomain(sender.tab.url);
     if (domain) {
       delete graceActive[domain];
-      // Revert the boundary extension and trigger normal cooldown
-      void triggerNormalCooldown(domain);
+      const pending = gracePendingCooldown[domain];
+      delete gracePendingCooldown[domain];
+      if (pending) {
+        cooldownEndTime[domain] = Date.now() + pending.cooldownSeconds * 1000;
+        delete carryoverSeconds[domain];
+        delete phiNudgeFired[domain];
+        delete windDownActive[domain];
+        // Next session starts baseLimit after current daily total (timer frozen during cooldown)
+        const baseLimit = cachedDomainSessionLimit[domain]?.sessionLimitSeconds || 0;
+        nextSessionBoundary[domain] = todaysTotalTimeInActiveDomain + baseLimit;
+        sendBlockerToAllTabsOfDomain(domain, pending.cooldownSeconds, pending.cooldownSeconds, pending.sessionNum, pending.incrementMinutes);
+        startCooldownTicker(domain, pending.cooldownSeconds, pending.sessionNum, pending.incrementMinutes);
+        updateTimerDisplay(todaysTotalTimeInActiveDomain);
+      } else {
+        void triggerNormalCooldown(domain);
+      }
     }
   }
 
@@ -623,6 +642,23 @@ function checkPhiNudges(settings: InterventionSettings): void {
 
 const AVERAGE_POPUP_MIN_DAYS = 4; // require at least this many days of history
 
+function persistAveragePopupShown(): void {
+  browser.storage.local.set({
+    webTimeAveragePopupShown: {
+      date: currentDateStr,
+      domains: interventionState.averagePopupShown
+    }
+  });
+}
+
+async function loadAveragePopupShown(): Promise<void> {
+  const data = await browser.storage.local.get('webTimeAveragePopupShown');
+  const stored = data.webTimeAveragePopupShown;
+  if (stored && stored.date === currentDateStr && stored.domains) {
+    interventionState.averagePopupShown = stored.domains;
+  }
+}
+
 function checkAveragePopup(settings: InterventionSettings): void {
   const { averageSeconds, daysWithData, timeInSeconds } = settings;
 
@@ -635,6 +671,7 @@ function checkAveragePopup(settings: InterventionSettings): void {
   if (timeInSeconds < averagePopupThreshold) return;
 
   interventionState.averagePopupShown[trackedTabDomain] = true;
+  persistAveragePopupShown();
 
   const minutesLeft = Math.round((averageSeconds - timeInSeconds) / 60);
   const averageMinutes = Math.round(averageSeconds / 60);
@@ -853,16 +890,47 @@ function checkSessionLimit(settings: InterventionSettings): boolean {
 
   if (todaysTotalTimeInActiveDomain < nextSessionBoundary[domain]) return false;
 
-  // If grace is already active (user is in a grace-extended period), trigger normal cooldown
+  // If grace is already active (user is in a grace-extended period), trigger the
+  // cooldown that was pending when grace fired — don't recalculate (avoids "double session" feel)
   if (graceActive[domain]) {
     delete graceActive[domain];
-    void triggerNormalCooldown(domain);
+    const pending = gracePendingCooldown[domain];
+    delete gracePendingCooldown[domain];
+    if (pending) {
+      cooldownEndTime[domain] = Date.now() + pending.cooldownSeconds * 1000;
+      delete carryoverSeconds[domain];
+      delete phiNudgeFired[domain];
+      delete windDownActive[domain];
+      // Next session starts after current boundary, aligned to baseLimit
+      nextSessionBoundary[domain] = nextSessionBoundary[domain] + sessionLimitSeconds;
+      sendBlockerToAllTabsOfDomain(domain, pending.cooldownSeconds, pending.cooldownSeconds, pending.sessionNum, pending.incrementMinutes);
+      startCooldownTicker(domain, pending.cooldownSeconds, pending.sessionNum, pending.incrementMinutes);
+      updateTimerDisplay(todaysTotalTimeInActiveDomain);
+      console.log(`Grace expired for ${domain}, cooldown triggered (session ${pending.sessionNum}, ${pending.cooldownSeconds}s)`);
+    } else {
+      void triggerNormalCooldown(domain);
+    }
     return true;
   }
 
   // Check if user has earned grace from a previous early end
   const grace = graceSeconds[domain] || 0;
   if (grace > 0) {
+    // Compute what the cooldown WOULD be at this boundary (before grace extends it)
+    const priorCO = carryoverSeconds[domain] || 0;
+    const pendingResult = naturalCooldown({
+      baseLimit: sessionLimitSeconds,
+      boundary: nextSessionBoundary[domain],
+      priorCarryover: priorCO,
+      cooldownIncrement: cooldownIncrementSeconds,
+    });
+    const incMin = Math.round(cooldownIncrementSeconds / 60);
+    gracePendingCooldown[domain] = {
+      cooldownSeconds: pendingResult.cooldownSeconds,
+      sessionNum: pendingResult.sessionNum,
+      incrementMinutes: incMin
+    };
+
     // Extend boundary by grace amount and show prompt
     nextSessionBoundary[domain] += grace;
     delete graceSeconds[domain];
@@ -942,6 +1010,7 @@ async function init(): Promise<void> {
   currentDateStr = getLocalDateStrWithReset();
 
   await loadTimeData();
+  await loadAveragePopupShown();
 
   const trackedTabs = await browser.tabs.query({ url: ["http://*/*", "https://*/*"] });
   trackedTabs.forEach((tab) => {
