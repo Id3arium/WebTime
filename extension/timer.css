@@ -15,7 +15,7 @@
   z-index: 1000002 !important;
   border: 1px solid grey !important;
   line-height: 1 !important;
-  transition: opacity 0.2s ease !important;
+  transition: opacity 0.2s ease;
   cursor: default !important;
   box-sizing: border-box !important;
 }
