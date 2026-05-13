@@ -1,7 +1,7 @@
 import type { ConstantsType, OverlayDurations, ChartConfig, Colors } from '../types.js';
 
 const OVERLAY_DURATIONS: OverlayDurations = {
-  NUDGE_MS: 1000
+  NUDGE_MS: 700
 };
 
 const CHART_CONFIG: ChartConfig = {
