@@ -15,7 +15,6 @@ let averagePopupDialog: HTMLDivElement | null = null;
 let blockerDialog: HTMLDivElement | null = null;
 let endSessionDialog: HTMLDivElement | null = null;
 let windDownOverlay: HTMLDivElement | null = null;
-let graceDialog: HTMLDivElement | null = null;
 let endSessionShortcut: string = 'Ctrl+E'; // default; overridden by settings
 
 // CSS reset applied to all popup/dialog root elements to prevent site styles from bleeding in
@@ -501,115 +500,6 @@ function hideWindDown(): void {
   }
 }
 
-// ============================================================================
-// Grace Period Prompt
-// ============================================================================
-
-function showGracePrompt(graceSecs: number): void {
-  if (graceDialog) return;
-
-  hideWindDown();
-
-  const blurBg = createBlurOverlay();
-  blurBg.style.pointerEvents = 'all';
-  blurBg.style.opacity = '1';
-  blockPageScroll(true);
-  blockKeyboard(true);
-  pauseAllMedia();
-
-  const el = document.createElement('div');
-  el.className = 'web-time-grace-overlay';
-  el.style.cssText = `
-    ${CSS_RESET}
-    position: fixed !important;
-    top: 50% !important;
-    left: 50% !important;
-    transform: translate(-50%, -50%) !important;
-    background: #2a2a2a !important;
-    padding: 24px !important;
-    border-radius: 8px !important;
-    box-shadow: 0 6px 32px rgba(0, 0, 0, 0.5) !important;
-    z-index: 1000002 !important;
-    pointer-events: auto !important;
-    width: 350px !important;
-    text-align: center !important;
-    opacity: 0 !important;
-    transition: opacity 0.3s ease !important;
-  `;
-  el.innerHTML = `
-    <div style="font-size: 16px; color: #ccc; margin-bottom: 6px; font-weight: 600;">
-      Session ended
-    </div>
-    <div style="font-size: 15px; color: #eee; margin-bottom: 18px; line-height: 1.4;">
-      You earned ${escapeHtml(formatTimeAdaptive(graceSecs))} of grace time. Use it?
-    </div>
-    <div style="display: flex; gap: 8px;">
-      <button class="web-time-grace-decline" style="
-        flex: 1; background: #3a3a3a; border: none; color: #eee;
-        padding: 8px; border-radius: 6px; cursor: pointer; font-size: 13px;
-      ">End Now</button>
-      <button class="web-time-grace-accept" style="
-        flex: 1; background: #4571e7; border: none; color: #fff;
-        padding: 8px; border-radius: 6px; cursor: pointer; font-size: 13px;
-      ">Use Grace</button>
-    </div>
-  `;
-
-  document.body.appendChild(el);
-  graceDialog = el;
-  setTimeout(() => { el.style.opacity = '1'; }, 50);
-
-  const closeGrace = (): void => {
-    if (!graceDialog) return;
-    document.removeEventListener('keydown', graceKeyHandler, true);
-    graceDialog.style.opacity = '0';
-    if (blurOverlay) {
-      blurOverlay.style.opacity = '0';
-      blurOverlay.style.pointerEvents = 'none';
-    }
-    blockPageScroll(false);
-    blockKeyboard(false);
-    setTimeout(() => {
-      graceDialog?.parentNode?.removeChild(graceDialog);
-      graceDialog = null;
-    }, 300);
-  };
-
-  const acceptGrace = (): void => {
-    browser.runtime.sendMessage({ type: 'GRACE_ACCEPTED' }).catch(() => {});
-    closeGrace();
-  };
-
-  const declineGrace = (): void => {
-    browser.runtime.sendMessage({ type: 'GRACE_DECLINED' }).catch(() => {});
-    closeGrace();
-  };
-
-  const graceKeyHandler = (e: KeyboardEvent): void => {
-    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); acceptGrace(); }
-    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); declineGrace(); }
-  };
-  document.addEventListener('keydown', graceKeyHandler, true);
-
-  el.querySelector('.web-time-grace-decline')?.addEventListener('click', declineGrace);
-  el.querySelector('.web-time-grace-accept')?.addEventListener('click', acceptGrace);
-}
-
-function hideGracePrompt(): void {
-  if (graceDialog) {
-    graceDialog.style.opacity = '0';
-    if (blurOverlay) {
-      blurOverlay.style.opacity = '0';
-      blurOverlay.style.pointerEvents = 'none';
-    }
-    blockPageScroll(false);
-    blockKeyboard(false);
-    setTimeout(() => {
-      graceDialog?.parentNode?.removeChild(graceDialog);
-      graceDialog = null;
-    }, 300);
-  }
-}
 
 // ============================================================================
 // End Session Early — keyboard shortcut + confirmation popup
@@ -650,7 +540,7 @@ function isAnyInterventionVisible(): boolean {
   return averagePopupDialog !== null
     || blockerDialog !== null
     || endSessionDialog !== null
-    || graceDialog !== null;
+;
 }
 
 function isInTextInput(target: EventTarget | null): boolean {
@@ -810,13 +700,10 @@ function handleIncomingMessage(
     showBlocker(message.cooldownRemainingSeconds, message.totalCooldownSeconds, message.cooldownCount, message.cooldownIncrementMinutes);
   } else if (message.type === "HIDE_BLOCKER") {
     hideBlocker();
-    hideGracePrompt();
   } else if (message.type === "SHOW_WIND_DOWN") {
     showWindDown(message.progress, message.remainingSeconds);
   } else if (message.type === "HIDE_WIND_DOWN") {
     hideWindDown();
-  } else if (message.type === "SHOW_GRACE_PROMPT") {
-    showGracePrompt(message.graceSeconds);
   }
 }
 
