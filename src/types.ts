@@ -156,19 +156,6 @@ export interface HideWindDownMessage {
   type: 'HIDE_WIND_DOWN';
 }
 
-export interface ShowGracePromptMessage {
-  type: 'SHOW_GRACE_PROMPT';
-  graceSeconds: number;
-}
-
-export interface GraceAcceptedMessage {
-  type: 'GRACE_ACCEPTED';
-}
-
-export interface GraceDeclinedMessage {
-  type: 'GRACE_DECLINED';
-}
-
 export type ExtensionMessage =
   | TimeUpdateMessage
   | ContentScriptReadyMessage
@@ -183,10 +170,7 @@ export type ExtensionMessage =
   | EndSessionConfirmCloseMessage
   | RequestBlockerStateMessage
   | ShowWindDownMessage
-  | HideWindDownMessage
-  | ShowGracePromptMessage
-  | GraceAcceptedMessage
-  | GraceDeclinedMessage;
+  | HideWindDownMessage;
 
 // ============================================
 // Chart Types
