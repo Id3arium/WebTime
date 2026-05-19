@@ -508,30 +508,25 @@ function handleMessageReceived(
 
         if (!settingsActuallyChanged) continue;
 
-        // Recompute boundary anchored to current daily total + new limit.
-        // Drop carryover (it was relative to old limit). Only for the active
-        // domain do we need the live boundary cached; for inactive domains,
-        // wiping the boundary is fine — checkSessionLimit will recompute when
-        // the user returns to that domain.
-        delete carryoverSeconds[domain];
         const slEnabled = domainCfg?.sessionLimitEnabled || false;
         const newLimitSeconds = slEnabled ? (domainCfg?.sessionLimit || 0) * 60 : 0;
-        // Update the cached session limit so updateTimerDisplay uses the new value
         cachedDomainSessionLimit[domain] = { sessionLimitSeconds: newLimitSeconds };
+
         if (newLimitSeconds > 0 && domain === trackedTabDomain) {
+          const carryover = carryoverSeconds[domain] || 0;
           nextSessionBoundary[domain] = nextBoundary(
             todaysTotalTimeInActiveDomain,
             newLimitSeconds
-          );
+          ) + carryover;
           console.log(
-            `Session boundary recomputed for ${domain}: ` +
+            `Session limit changed for ${domain}: ` +
             `next trigger at ${nextSessionBoundary[domain]}s ` +
-            `(daily=${todaysTotalTimeInActiveDomain}s, limit=${newLimitSeconds}s)`
+            `(daily=${todaysTotalTimeInActiveDomain}s, limit=${newLimitSeconds}s, carryover=${carryover}s)`
           );
-        } else {
+        } else if (newLimitSeconds <= 0) {
           delete nextSessionBoundary[domain];
+          delete carryoverSeconds[domain];
         }
-        console.log(`Intervention settings changed for ${domain}, session state reset`);
       }
     });
   }
