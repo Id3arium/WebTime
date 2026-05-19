@@ -621,9 +621,10 @@ async function loadAveragePopupShown(): Promise<void> {
 }
 
 function checkAveragePopup(settings: InterventionSettings): void {
-  const { averageSeconds, daysWithData, timeInSeconds } = settings;
+  const { averageSeconds, daysWithData, timeInSeconds, sessionLimitSeconds } = settings;
 
   if (!trackedTabDomain) return;
+  if (sessionLimitSeconds <= 0) return;
   if (averageSeconds === 0) return;
   if (daysWithData < AVERAGE_POPUP_MIN_DAYS) return;
   if (interventionState.averagePopupShown[trackedTabDomain]) return;
