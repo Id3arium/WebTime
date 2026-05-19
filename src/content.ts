@@ -10,6 +10,7 @@ let showSessionTime = false;  // global toggle: false = daily time, true = sessi
 let lastDailyTime = 0;
 let lastSessionTime: number | undefined;
 let lastSessionLimitSeconds: number | undefined;
+let lastSessionNum: number | undefined;
 let blurOverlay: HTMLDivElement | null = null;
 let averagePopupDialog: HTMLDivElement | null = null;
 let blockerDialog: HTMLDivElement | null = null;
@@ -596,7 +597,8 @@ function showEndSessionConfirm(): void {
   `;
   el.innerHTML = `
     <div style="font-size: 16px; color: #eee; margin-bottom: 18px; line-height: 1.4;">
-      End session early and carry over the remaining ${escapeHtml(formatTimeAdaptive(remaining))}?
+      End session ${lastSessionNum ?? ''}?<br>
+      ${escapeHtml(formatTimeAdaptive(Math.floor(remaining * 1.1)))} will be added to next session
     </div>
     <div style="display: flex; gap: 8px;">
       <button class="web-time-end-cancel" style="
@@ -683,6 +685,7 @@ function handleIncomingMessage(
     lastDailyTime = message.time;
     lastSessionTime = message.sessionTime;
     lastSessionLimitSeconds = message.sessionLimitSeconds;
+    lastSessionNum = message.sessionNum;
     // Note: don't reset showSessionTime here. The toggle is a global preference
     // and updateTimerText() already falls back to daily display when session
     // data is unavailable for this tab (e.g. domain has no session limit, or

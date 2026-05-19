@@ -246,7 +246,7 @@ function stopTimer(): void {
 
 function updateTimerDisplay(updatedTime: number): void {
   // Include session time info if a session limit is configured for this domain
-  const message: { type: string; time: number; sessionTime?: number; sessionLimitSeconds?: number } = {
+  const message: { type: string; time: number; sessionTime?: number; sessionLimitSeconds?: number; sessionNum?: number } = {
     type: "TIME_UPDATE",
     time: updatedTime
   };
@@ -265,6 +265,7 @@ function updateTimerDisplay(updatedTime: number): void {
       });
       message.sessionTime = display.sessionTime;
       message.sessionLimitSeconds = display.sessionLimitSeconds;
+      message.sessionNum = Math.round((boundary - carryover) / baseLimitSec);
       console.log(
         `[timer] domain=${trackedTabDomain} daily=${updatedTime}s ` +
         `boundary=${boundary}s base=${baseLimitSec}s carryover=${carryover}s ` +
@@ -738,6 +739,7 @@ function startCooldownTicker(domain: Domain, totalCooldownSeconds: number, sessi
       delete windDownActive[domain];
       delete graceAppliedThisSession[domain];
       sendHideBlockerToAllTabsOfDomain(domain);
+      sendMessageToAllTabsOfDomain(domain, { type: 'HIDE_WIND_DOWN' });
       // Push a fresh timer update so all tabs of this domain immediately show
       // the new session's full extended length (sessionTime=0, limit=base+carry).
       if (trackedTabDomain === domain) {
@@ -788,17 +790,18 @@ async function endSessionEarly(): Promise<void> {
   nextSessionBoundary[domain] = result.newBoundary;
   carryoverSeconds[domain] = result.newCarryover;
 
-  // Earn grace for the next session (only from ending early, not during a grace-extended session)
+  // Earn grace for the next session (only from ending early, not during a grace-extended session).
+  // Grace scales with remaining time given up — ending early with 5 min left earns more than 10s left.
   if (!graceAppliedThisSession[domain]) {
-    const effectiveLimit = sessionLimitSeconds + priorCarryover;
-    graceSeconds[domain] = computeGraceSeconds(effectiveLimit);
-    console.log(`Grace earned for next session: ${graceSeconds[domain]}s`);
+    graceSeconds[domain] = computeGraceSeconds(result.newCarryover);
+    console.log(`Grace earned for next session: ${graceSeconds[domain]}s (gave up ${result.newCarryover}s)`);
   }
 
   delete phiNudgeFired[domain];
   delete windDownActive[domain];
   delete graceAppliedThisSession[domain];
 
+  sendMessageToAllTabsOfDomain(domain, { type: 'HIDE_WIND_DOWN' });
   sendBlockerToAllTabsOfDomain(domain, result.cooldownSeconds, result.cooldownSeconds, result.sessionNum, incrementMinutes);
   startCooldownTicker(domain, result.cooldownSeconds, result.sessionNum, incrementMinutes);
   updateTimerDisplay(todaysTotalTimeInActiveDomain);
@@ -860,6 +863,7 @@ function checkSessionLimit(settings: InterventionSettings): boolean {
   delete graceAppliedThisSession[domain];
   nextSessionBoundary[domain] = result.newBoundary;
 
+  sendMessageToAllTabsOfDomain(domain, { type: 'HIDE_WIND_DOWN' });
   sendBlockerToAllTabsOfDomain(domain, result.cooldownSeconds, result.cooldownSeconds, result.sessionNum, incrementMinutes);
   startCooldownTicker(domain, result.cooldownSeconds, result.sessionNum, incrementMinutes);
   updateTimerDisplay(todaysTotalTimeInActiveDomain);
