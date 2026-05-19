@@ -190,35 +190,28 @@ test('phiNudges: no nudge in last 60s (wind-down territory)', () => {
   }
 });
 
-// --- computeGraceSeconds ---
+// --- computeGraceSeconds (10% of remaining time) ---
 
-test('grace: 0 session gives 0 grace', () => {
+test('grace: 0 remaining gives 0 grace', () => {
   assert.equal(computeGraceSeconds(0), 0);
 });
 
-test('grace: under 5 min gives 0 grace', () => {
-  assert.equal(computeGraceSeconds(4 * M), 0);
-  assert.equal(computeGraceSeconds(299), 0);
+test('grace: 10s remaining gives 1s', () => {
+  assert.equal(computeGraceSeconds(10), 1);
 });
 
-test('grace: 5 min gives 15s', () => {
-  assert.equal(computeGraceSeconds(5 * M), 15);
+test('grace: 5 min remaining gives 30s', () => {
+  assert.equal(computeGraceSeconds(5 * M), 30);
 });
 
-test('grace: 15 min gives 45s', () => {
-  assert.equal(computeGraceSeconds(15 * M), 45);
+test('grace: 10 min remaining gives 60s', () => {
+  assert.equal(computeGraceSeconds(10 * M), 60);
 });
 
-test('grace: 30 min gives 90s', () => {
-  assert.equal(computeGraceSeconds(30 * M), 90);
-});
-
-test('grace: 45 min gives 135s', () => {
-  assert.equal(computeGraceSeconds(45 * M), 135);
-});
-
-test('grace: 7 min (not a multiple of 5) gives 15s', () => {
-  assert.equal(computeGraceSeconds(7 * M), 15);
+test('grace: floors fractional seconds', () => {
+  assert.equal(computeGraceSeconds(7), 0);
+  assert.equal(computeGraceSeconds(15), 1);
+  assert.equal(computeGraceSeconds(99), 9);
 });
 
 // --- isInWindDown ---
@@ -229,8 +222,13 @@ test('windDown: not active when far from end', () => {
   assert.equal(r.progress, 0);
 });
 
-test('windDown: not active if effectiveLimit <= WIND_DOWN_DURATION', () => {
+test('windDown: active when effectiveLimit equals WIND_DOWN_DURATION', () => {
   const r = isInWindDown(50, 60);
+  assert.equal(r.active, true);
+});
+
+test('windDown: not active if effectiveLimit < WIND_DOWN_DURATION', () => {
+  const r = isInWindDown(20, 30);
   assert.equal(r.active, false);
 });
 
