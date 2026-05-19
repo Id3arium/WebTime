@@ -133,9 +133,9 @@ export function computePhiNudgeTimes(effectiveLimit: number, overrideCount?: num
   return nudgeTimes;
 }
 
-/** 15 seconds of grace per 5 minutes of effective session length (~5% back). */
-export function computeGraceSeconds(effectiveLimit: number): number {
-  return Math.floor(effectiveLimit / 300) * 15;
+/** 10% of remaining time is earned as grace for the next session. */
+export function computeGraceSeconds(remainingSeconds: number): number {
+  return Math.floor(remainingSeconds * 0.1);
 }
 
 export function isInWindDown(
