@@ -13,6 +13,7 @@ let lastSessionLimitSeconds: number | undefined;
 let lastSessionNum: number | undefined;
 let blurOverlay: HTMLDivElement | null = null;
 let averagePopupDialog: HTMLDivElement | null = null;
+let averagePopupPausedMedia: HTMLMediaElement[] = [];
 let blockerDialog: HTMLDivElement | null = null;
 let endSessionDialog: HTMLDivElement | null = null;
 let windDownOverlay: HTMLDivElement | null = null;
@@ -48,15 +49,9 @@ function dequeuePopup(): void {
   if (next) next();
 }
 
-function blockPageScroll(block: boolean): void {
-  if (block) {
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
-  } else {
-    document.body.style.overflow = '';
-    document.documentElement.style.overflow = '';
-  }
-}
+// Scroll blocking is handled by the blur overlay's wheel/touchmove event handlers
+// when pointer-events is set to 'all'. No need to touch document.body.style.overflow,
+// which can interfere with site layout and cause scroll/loading bugs.
 
 /** Block keyboard events from reaching the page (e.g. space/k to play/pause on YT) */
 function blockKeyboardHandler(e: KeyboardEvent): void {
@@ -83,13 +78,18 @@ function blockKeyboard(block: boolean): void {
   }
 }
 
-function pauseAllMedia(): void {
+/** Pause every playing <video>/<audio> and return the ones that were paused,
+ *  so callers that want to resume on close can. */
+function pauseAllMedia(): HTMLMediaElement[] {
+  const paused: HTMLMediaElement[] = [];
   document.querySelectorAll('video, audio').forEach(el => {
     const media = el as HTMLMediaElement;
     if (!media.paused) {
       media.pause();
+      paused.push(media);
     }
   });
+  return paused;
 }
 
 function formatCountdown(seconds: number): string {
@@ -137,17 +137,19 @@ function formatTimeAdaptive(timeInSeconds: number): string {
 
 function updateTimerText(): void {
   if (!timerText) return;
+  let text: string;
   if (showSessionTime && lastSessionTime !== undefined && lastSessionLimitSeconds && lastSessionLimitSeconds > 0) {
     const remaining = Math.max(0, lastSessionLimitSeconds - lastSessionTime);
-    timerText.textContent = `⏱ ${formatTimeAdaptive(remaining)}`;
+    text = `⏱ ${formatTimeAdaptive(remaining)}`;
   } else {
-    timerText.textContent = formatTimeAdaptive(lastDailyTime);
+    text = formatTimeAdaptive(lastDailyTime);
+  }
+  if (timerText.textContent !== text) {
+    timerText.textContent = text;
   }
 }
 
-function createBlurOverlay(): HTMLDivElement {
-  if (blurOverlay) return blurOverlay;
-
+function createBlurOverlay(): void {
   const overlay = document.createElement('div');
   overlay.className = 'web-time-blur-overlay';
   overlay.style.cssText = `
@@ -164,21 +166,27 @@ function createBlurOverlay(): HTMLDivElement {
     opacity: 0;
     transition: opacity 0.3s ease;
     overflow: hidden;
+    visibility: hidden;
   `;
 
-  // Block scrolling when overlay is active
   overlay.addEventListener('wheel', (e) => { e.preventDefault(); }, { passive: false });
   overlay.addEventListener('touchmove', (e) => { e.preventDefault(); }, { passive: false });
 
-  const timer = document.querySelector('.web-time-timer');
-  if (timer) {
-    document.body.insertBefore(overlay, timer);
-  } else {
-    document.body.appendChild(overlay);
-  }
-
+  document.body.appendChild(overlay);
   blurOverlay = overlay;
-  return overlay;
+}
+
+function showBlurOverlay(): HTMLDivElement {
+  if (!blurOverlay) createBlurOverlay();
+  blurOverlay!.style.visibility = 'visible';
+  return blurOverlay!;
+}
+
+function hideBlurOverlay(): void {
+  if (!blurOverlay) return;
+  blurOverlay.style.opacity = '0';
+  blurOverlay.style.pointerEvents = 'none';
+  blurOverlay.style.visibility = 'hidden';
 }
 
 function buildBarChart(days: SessionStartStats['days']): string {
@@ -258,24 +266,29 @@ function createAveragePopupOverlay(minutesLeft: number, averageMinutes: number, 
   continueBtn.addEventListener('mouseleave', () => { continueBtn.style.background = '#3a3a3a'; });
   continueBtn.addEventListener('click', () => hideAveragePopup());
 
-  document.body.appendChild(el);
+  blurOverlay!.appendChild(el);
   averagePopupDialog = el;
   return el;
 }
 
 function showNudge(): void {
-  const overlay = createBlurOverlay();
+  const overlay = showBlurOverlay();
   overlay.style.pointerEvents = 'all';
   overlay.style.opacity = '1';
-  blockPageScroll(true);
-  // Note: do NOT block keyboard for nudges. They last <1s and blocking
-  // keys for that brief window feels like an unresponsiveness bug.
+
+  const playingMedia: HTMLMediaElement[] = [];
+  document.querySelectorAll('video, audio').forEach(el => {
+    const media = el as HTMLMediaElement;
+    if (!media.paused) {
+      media.pause();
+      playingMedia.push(media);
+    }
+  });
 
   const timer = document.querySelector('.web-time-timer') as HTMLElement | null;
   if (timer) {
     timer.style.transformOrigin = 'top right';
     timer.style.transition = `transform ${Constants.OVERLAY_DURATIONS.NUDGE_MS / 2}ms ease-in-out`;
-    // Force the browser to register the transition before applying scale
     requestAnimationFrame(() => {
       timer.style.transform = 'scale(4.20)';
 
@@ -286,9 +299,8 @@ function showNudge(): void {
   }
 
   setTimeout(() => {
-    overlay.style.opacity = '0';
-    overlay.style.pointerEvents = 'none';
-    blockPageScroll(false);
+    hideBlurOverlay();
+    playingMedia.forEach(m => m.play().catch(() => {}));
   }, Constants.OVERLAY_DURATIONS.NUDGE_MS);
 }
 
@@ -298,26 +310,24 @@ function showAveragePopup(minutesLeft: number, averageMinutes: number, stats: Se
     return;
   }
 
-  const blurBg = createBlurOverlay();
+  const blurBg = showBlurOverlay();
   const el = createAveragePopupOverlay(minutesLeft, averageMinutes, stats);
 
-  // Simple/closable popup — button appears immediately
   blurBg.style.pointerEvents = 'all';
   blurBg.style.opacity = '1';
-  blockPageScroll(true);
+
   blockKeyboard(true);
-  pauseAllMedia();
+  averagePopupPausedMedia = pauseAllMedia();
 
   setTimeout(() => { el.style.opacity = '1'; }, 100);
 }
 
 function hideAveragePopup(): void {
-  if (blurOverlay) {
-    blurOverlay.style.opacity = '0';
-    blurOverlay.style.pointerEvents = 'none';
-  }
-  blockPageScroll(false);
+  hideBlurOverlay();
+
   blockKeyboard(false);
+  averagePopupPausedMedia.forEach(m => m.play().catch(() => {}));
+  averagePopupPausedMedia = [];
   if (averagePopupDialog) {
     averagePopupDialog.style.opacity = '0';
     setTimeout(() => {
@@ -331,10 +341,10 @@ function hideAveragePopup(): void {
 function showBlocker(remainingSeconds: number, totalCooldownSeconds: number, cooldownCount: number, cooldownIncrementMinutes: number): void {
   pauseAllMedia();
 
-  const blurBg = createBlurOverlay();
+  const blurBg = showBlurOverlay();
   blurBg.style.pointerEvents = 'all';
   blurBg.style.opacity = '1';
-  blockPageScroll(true);
+
   blockKeyboard(true);
 
   if (blockerDialog) {
@@ -411,17 +421,14 @@ function showBlocker(remainingSeconds: number, totalCooldownSeconds: number, coo
     </div>
   `;
 
-  document.body.appendChild(el);
+  blurOverlay!.appendChild(el);
   blockerDialog = el;
   setTimeout(() => { el.style.opacity = '1'; }, 50);
 }
 
 function hideBlocker(): void {
-  if (blurOverlay) {
-    blurOverlay.style.opacity = '0';
-    blurOverlay.style.pointerEvents = 'none';
-  }
-  blockPageScroll(false);
+  hideBlurOverlay();
+
   blockKeyboard(false);
   if (blockerDialog) {
     blockerDialog.style.opacity = '0';
@@ -436,57 +443,53 @@ function hideBlocker(): void {
 // Wind-Down Overlay — progressive darkening before session end
 // ============================================================================
 
+function createWindDownOverlay(): void {
+  const overlay = document.createElement('div');
+  overlay.className = 'web-time-wind-down-overlay';
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 999998;
+    pointer-events: none;
+    transition: background 1s linear;
+    visibility: hidden;
+  `;
+
+  const barTrack = document.createElement('div');
+  barTrack.className = 'web-time-wind-down-bar-track';
+  barTrack.style.cssText = `
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.08);
+  `;
+  const barFill = document.createElement('div');
+  barFill.className = 'web-time-wind-down-bar-fill';
+  barFill.style.cssText = `
+    height: 100%;
+    margin: 0 auto;
+    width: 100%;
+    transition: width 1s linear;
+    background: #4a9eff;
+  `;
+  barTrack.appendChild(barFill);
+  overlay.appendChild(barTrack);
+  document.body.appendChild(overlay);
+  windDownOverlay = overlay;
+}
+
 function showWindDown(progress: number, _remainingSeconds: number): void {
-  if (!windDownOverlay) {
-    const overlay = document.createElement('div');
-    overlay.className = 'web-time-wind-down-overlay';
-    overlay.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 999998;
-      pointer-events: none;
-      transition: background 1s linear;
-    `;
+  if (!windDownOverlay) return;
 
-    // Shrinking bar — starts full width, shrinks from both ends toward center
-    const barTrack = document.createElement('div');
-    barTrack.className = 'web-time-wind-down-bar-track';
-    barTrack.style.cssText = `
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 4px;
-      background: rgba(255, 255, 255, 0.08);
-    `;
-    const barFill = document.createElement('div');
-    barFill.className = 'web-time-wind-down-bar-fill';
-    barFill.style.cssText = `
-      height: 100%;
-      margin: 0 auto;
-      width: 100%;
-      transition: width 1s linear;
-      background: #4a9eff;
-    `;
-    barTrack.appendChild(barFill);
-    overlay.appendChild(barTrack);
-
-    const timer = document.querySelector('.web-time-timer');
-    if (timer) {
-      document.body.insertBefore(overlay, timer);
-    } else {
-      document.body.appendChild(overlay);
-    }
-    windDownOverlay = overlay;
-  }
-
+  windDownOverlay.style.visibility = 'visible';
   const opacity = 0.3 * progress;
   windDownOverlay.style.background = `rgba(0, 0, 0, ${opacity})`;
 
-  // Bar shrinks from both ends: 100% → 0%
   const barFill = windDownOverlay.querySelector('.web-time-wind-down-bar-fill') as HTMLElement | null;
   if (barFill) {
     const widthPct = Math.max(0, (1 - progress) * 100);
@@ -495,9 +498,12 @@ function showWindDown(progress: number, _remainingSeconds: number): void {
 }
 
 function hideWindDown(): void {
-  if (windDownOverlay) {
-    windDownOverlay.parentNode?.removeChild(windDownOverlay);
-    windDownOverlay = null;
+  if (!windDownOverlay) return;
+  windDownOverlay.style.visibility = 'hidden';
+  windDownOverlay.style.background = 'rgba(0, 0, 0, 0)';
+  const barFill = windDownOverlay.querySelector('.web-time-wind-down-bar-fill') as HTMLElement | null;
+  if (barFill) {
+    barFill.style.width = '100%';
   }
 }
 
@@ -570,10 +576,10 @@ function showEndSessionConfirm(): void {
     }
   });
 
-  const blurBg = createBlurOverlay();
+  const blurBg = showBlurOverlay();
   blurBg.style.pointerEvents = 'all';
   blurBg.style.opacity = '1';
-  blockPageScroll(true);
+
   blockKeyboard(true);
 
   const el = document.createElement('div');
@@ -611,7 +617,7 @@ function showEndSessionConfirm(): void {
       ">OK</button>
     </div>
   `;
-  document.body.appendChild(el);
+  blurOverlay!.appendChild(el);
   endSessionDialog = el;
   setTimeout(() => { el.style.opacity = '1'; }, 50);
   // Tell background to freeze the timer while the user decides.
@@ -626,11 +632,8 @@ function showEndSessionConfirm(): void {
     if (!endSessionDialog) return;
     document.removeEventListener('keydown', keyHandler, true);
     endSessionDialog.style.opacity = '0';
-    if (blurOverlay) {
-      blurOverlay.style.opacity = '0';
-      blurOverlay.style.pointerEvents = 'none';
-    }
-    blockPageScroll(false);
+    hideBlurOverlay();
+  
     blockKeyboard(false);
     if (resumeMedia) {
       playingMedia.forEach(m => m.play().catch(() => {}));
@@ -726,6 +729,8 @@ function init(): void {
   console.log("initTimer()");
 
   createTimerElement();
+  createBlurOverlay();
+  createWindDownOverlay();
   browser.runtime.onMessage.addListener(handleIncomingMessage);
 
   // Load persisted timer toggle state
