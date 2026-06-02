@@ -1,14 +1,16 @@
 import { Constants } from './shared/constants.js';
 import { extractDomain, getLocalDateStr, log, compute7DayStats } from './shared/utils.js';
 import {
-  nextBoundary,
-  computeTimerDisplay,
-  endSessionEarly as computeEndSessionEarly,
-  naturalCooldown,
-  computePhiNudgeTimes,
-  computeGraceSeconds,
-  isInWindDown,
-} from './shared/session-math.js';
+  type ActiveSession,
+  startSession,
+  displayFor,
+  naturalEnd,
+  endEarly as computeEndEarly,
+  changeLength,
+  nextNudgeToFire,
+  markNudgeFired,
+  windDownState,
+} from './shared/session-model.js';
 import type {
   TimeHistory,
   Domain,
@@ -44,28 +46,24 @@ let interventionState: InterventionState = {
   averagePopupShown: {}
 };
 
-// Session limit state — derived from todaysTotalTimeInActiveDomain, not a parallel counter.
-// nextSessionBoundary[domain] = the absolute daily-seconds threshold at which the next
-// session boundary will fire for that domain. Trigger is `>=` so missed ticks are safe.
-// cooldownEndTime[domain] = ms epoch when the active cooldown ends (absent = not in cooldown).
-// cooldownTickers[domain] = the 1s setInterval that drives the blocker countdown UI.
-const nextSessionBoundary: Record<Domain, number> = {};
-// Extra seconds added to the *current* session because the previous session
-// ended early. The current session's effective length is (baseLimit + carryover).
-// Cleared when a normal cooldown fires (next session is aligned again) or on
-// day rollover / domain switch / settings change.
-const carryoverSeconds: Record<Domain, number> = {};
+// Session limit state.
+//
+// `sessions[domain]` is the single source of truth for the *current* session of
+// that domain: its start anchor (daily seconds when it began), base length,
+// carryover, grace, and which nudges have fired. All session math (remaining,
+// nudges, wind-down) derives from it via the pure helpers in session-model.ts.
+// A domain has no entry until its first session is started (lazily, on the
+// first tick / settings change while it's the tracked domain).
+const sessions: Record<Domain, ActiveSession> = {};
+
+// Inter-session / UI state — deliberately NOT on the session object, since it
+// describes the gap *between* sessions or transient overlay state:
+//   cooldownEndTime[domain] = ms epoch when the active cooldown ends (absent = not in cooldown).
+//   cooldownTickers[domain] = the 1s setInterval that drives the blocker countdown UI.
+//   windDownActive[domain]  = whether the wind-down overlay is currently shown.
 const cachedDomainSessionLimit: Record<Domain, { sessionLimitSeconds: number }> = {};
 const cooldownEndTime: Record<Domain, number> = {};
 const cooldownTickers: Record<Domain, ReturnType<typeof setInterval>> = {};
-
-// Grace period: seconds earned from ending a session early, used at the next boundary
-const graceSeconds: Record<Domain, number> = {};
-// Whether grace was auto-applied to the current session (prevents compounding)
-const graceAppliedThisSession: Record<Domain, boolean> = {};
-// Which phi nudge times (session-relative) have already fired this session
-const phiNudgeFired: Record<Domain, Set<number>> = {};
-// Whether the wind-down overlay is currently active for a domain
 const windDownActive: Record<Domain, boolean> = {};
 
 // Cache previous intervention settings per domain to detect actual changes
@@ -75,7 +73,20 @@ const previousInterventionSettings: Record<Domain, string> = {};
 // Freezes the timer (no daily increment) so the user has time to decide.
 let endSessionConfirmOpen = false;
 
-// nextBoundary moved to shared/session-math.ts as `nextBoundary`
+/**
+ * Get the current session for a domain, lazily starting one anchored at the
+ * current daily total if none exists yet. Runs on the first tick after a domain
+ * switch / extension load / settings change. `baseLength` is the live limit in
+ * seconds; callers only invoke this when baseLength > 0.
+ */
+function getOrStartSession(domain: Domain, dailyTotal: number, baseLength: number): ActiveSession {
+  let s = sessions[domain];
+  if (!s) {
+    s = startSession({ dailyTotal, baseLength });
+    sessions[domain] = s;
+  }
+  return s;
+}
 
 function clearAllCooldowns(): void {
   for (const domain of Object.keys(cooldownTickers)) {
@@ -210,14 +221,11 @@ function incrementTimer(): void {
       lastNudgeTime: {},
       averagePopupShown: {}
     };
-    // Reset session limit state on day rollover
+    // Reset session limit state on day rollover. The session object collapses
+    // what used to be seven parallel maps into one delete.
     clearAllCooldowns();
-    for (const domain of Object.keys(nextSessionBoundary)) delete nextSessionBoundary[domain];
-    for (const domain of Object.keys(carryoverSeconds)) delete carryoverSeconds[domain];
-    for (const domain of Object.keys(graceSeconds)) delete graceSeconds[domain];
-    for (const domain of Object.keys(phiNudgeFired)) delete phiNudgeFired[domain];
+    for (const domain of Object.keys(sessions)) delete sessions[domain];
     for (const domain of Object.keys(windDownActive)) delete windDownActive[domain];
-    for (const domain of Object.keys(graceAppliedThisSession)) delete graceAppliedThisSession[domain];
     console.log("New day, reset timer.");
   }
   updateTimerDisplay(todaysTotalTimeInActiveDomain);
@@ -255,20 +263,15 @@ function updateTimerDisplay(updatedTime: number): void {
     const data = cachedDomainSessionLimit[trackedTabDomain];
     const baseLimitSec = data?.sessionLimitSeconds || 0;
     if (baseLimitSec > 0) {
-      const boundary = nextSessionBoundary[trackedTabDomain] ?? nextBoundary(updatedTime, baseLimitSec);
-      const carryover = carryoverSeconds[trackedTabDomain] || 0;
-      const display = computeTimerDisplay({
-        dailyTotal: updatedTime,
-        baseLimit: baseLimitSec,
-        boundary,
-        carryover,
-      });
+      const session = getOrStartSession(trackedTabDomain, updatedTime, baseLimitSec);
+      const display = displayFor(session, updatedTime);
       message.sessionTime = display.sessionTime;
       message.sessionLimitSeconds = display.sessionLimitSeconds;
-      message.sessionNum = Math.round((boundary - carryover) / baseLimitSec);
+      message.sessionNum = session.sessionNum;
       console.log(
         `[timer] domain=${trackedTabDomain} daily=${updatedTime}s ` +
-        `boundary=${boundary}s base=${baseLimitSec}s carryover=${carryover}s ` +
+        `start=${session.startDaily}s base=${session.baseLength}s ` +
+        `carryover=${session.carryover}s grace=${session.graceSeconds}s ` +
         `effLimit=${display.sessionLimitSeconds}s sessionTime=${display.sessionTime}s ` +
         `→ remaining=${display.remaining}s`
       );
@@ -321,13 +324,13 @@ function handleDomainSwitch(url: string): void {
 
   const todayData = timeHistory[currentDateStr] || {};
   todaysTotalTimeInActiveDomain = todayData[trackedTabDomain] || 0;
-  // NOTE: We deliberately do NOT clear nextSessionBoundary or carryoverSeconds
-  // here. The previous version cleared them on every domain switch to handle
+  // NOTE: We deliberately do NOT clear the session for this domain here. An
+  // earlier version reset session state on every domain switch to handle
   // settings changes made for an inactive domain — but that wiped legitimate
-  // mid-cooldown carryover state when the user briefly switched away and back.
-  // Settings changes are now handled directly in the SETTINGS_UPDATED handler,
-  // which clears the relevant state for the changed domain. So domain switches
-  // can safely preserve session/cooldown state across tabs of the same domain.
+  // mid-cooldown carryover/grace state when the user briefly switched away and
+  // back. Settings changes are handled in the SETTINGS_UPDATED handler, which
+  // touches only the changed domain. So domain switches safely preserve the
+  // session object across tabs of the same domain.
   console.log(`Switched to domain: ${trackedTabDomain}, time: ${todaysTotalTimeInActiveDomain}`);
   updateTimerDisplay(todaysTotalTimeInActiveDomain);
 }
@@ -510,22 +513,57 @@ function handleMessageReceived(
 
         const slEnabled = domainCfg?.sessionLimitEnabled || false;
         const newLimitSeconds = slEnabled ? (domainCfg?.sessionLimit || 0) * 60 : 0;
+        const cooldownIncrementSeconds = slEnabled ? (domainCfg?.cooldownIncrement || 0) * 60 : 0;
         cachedDomainSessionLimit[domain] = { sessionLimitSeconds: newLimitSeconds };
 
-        if (newLimitSeconds > 0 && domain === trackedTabDomain) {
-          const carryover = carryoverSeconds[domain] || 0;
-          nextSessionBoundary[domain] = nextBoundary(
-            todaysTotalTimeInActiveDomain,
-            newLimitSeconds
-          ) + carryover;
+        if (newLimitSeconds <= 0) {
+          // Session limit turned off — drop the session entirely.
+          delete sessions[domain];
+          delete windDownActive[domain];
+          continue;
+        }
+
+        if (domain !== trackedTabDomain) {
+          // Inactive domain: don't mutate a live session it isn't running. Its
+          // session (if any) re-derives lazily next time it becomes tracked.
+          continue;
+        }
+
+        const existing = sessions[domain];
+        if (!existing) {
+          // No session yet — it'll start lazily on the next tick at the new limit.
+          continue;
+        }
+
+        // Live length change. Anchored to startDaily, so elapsed time is
+        // preserved: shrinking the limit by N shrinks remaining by N.
+        const { session: updated, expired } = changeLength(existing, {
+          dailyTotal: todaysTotalTimeInActiveDomain,
+          newBaseLength: newLimitSeconds,
+        });
+        sessions[domain] = updated;
+
+        if (expired) {
+          // The new (shorter) limit puts the user at/past the end → end now.
+          // Treat it as a natural end of the (now-expired) session.
+          const result = naturalEnd(updated, {
+            dailyTotal: todaysTotalTimeInActiveDomain,
+            cooldownIncrement: cooldownIncrementSeconds,
+          });
+          fireCooldown(domain, result.nextSession, result.cooldownSeconds, cooldownIncrementSeconds, updated.sessionNum);
+          console.log(
+            `Session limit shrunk past elapsed for ${domain}: session ended immediately ` +
+            `(daily=${todaysTotalTimeInActiveDomain}s, newLimit=${newLimitSeconds}s)`
+          );
+        } else {
+          const display = displayFor(updated, todaysTotalTimeInActiveDomain);
+          updateTimerDisplay(todaysTotalTimeInActiveDomain);
           console.log(
             `Session limit changed for ${domain}: ` +
-            `next trigger at ${nextSessionBoundary[domain]}s ` +
-            `(daily=${todaysTotalTimeInActiveDomain}s, limit=${newLimitSeconds}s, carryover=${carryover}s)`
+            `effLimit=${display.sessionLimitSeconds}s remaining=${display.remaining}s ` +
+            `(daily=${todaysTotalTimeInActiveDomain}s, base=${newLimitSeconds}s, ` +
+            `carryover=${updated.carryover}s, grace=${updated.graceSeconds}s)`
           );
-        } else if (newLimitSeconds <= 0) {
-          delete nextSessionBoundary[domain];
-          delete carryoverSeconds[domain];
         }
       }
     });
@@ -579,25 +617,17 @@ function checkPhiNudges(settings: InterventionSettings): void {
   if (sessionLimitSeconds <= 0 || !trackedTabDomain) return;
 
   const domain = trackedTabDomain;
-  const boundary = nextSessionBoundary[domain] ?? nextBoundary(todaysTotalTimeInActiveDomain, sessionLimitSeconds);
-  const carryover = carryoverSeconds[domain] || 0;
-  const display = computeTimerDisplay({
-    dailyTotal: todaysTotalTimeInActiveDomain,
-    baseLimit: sessionLimitSeconds,
-    boundary,
-    carryover,
-  });
+  const session = getOrStartSession(domain, todaysTotalTimeInActiveDomain, sessionLimitSeconds);
 
-  const nudgeTimes = computePhiNudgeTimes(display.sessionLimitSeconds, settings.domainSettings.nudgeCount);
-  if (!phiNudgeFired[domain]) phiNudgeFired[domain] = new Set();
-
-  for (const nudgeTime of nudgeTimes) {
-    if (display.sessionTime === nudgeTime && !phiNudgeFired[domain].has(nudgeTime)) {
-      sendNudge();
-      phiNudgeFired[domain].add(nudgeTime);
-      console.log(`φ-nudge at ${Math.round(nudgeTime / 60)}min into session (${display.remaining}s remaining)`);
-      break;
-    }
+  // Catch-up selection: the latest unfired nudge at/before now. Robust to both
+  // skipped ticks and live length changes — a nudge that moved behind us after a
+  // shrink just fires once here.
+  const nudgeTime = nextNudgeToFire(session, todaysTotalTimeInActiveDomain, settings.domainSettings.nudgeCount);
+  if (nudgeTime !== null) {
+    sendNudge();
+    sessions[domain] = markNudgeFired(session, nudgeTime);
+    const remaining = displayFor(sessions[domain], todaysTotalTimeInActiveDomain).remaining;
+    console.log(`φ-nudge at ${Math.round(nudgeTime / 60)}min into session (${remaining}s remaining)`);
   }
 }
 
@@ -659,16 +689,8 @@ function checkWindDown(settings: InterventionSettings): void {
   const domain = trackedTabDomain;
   if ((cooldownEndTime[domain] || 0) > Date.now()) return;
 
-  const boundary = nextSessionBoundary[domain] ?? nextBoundary(todaysTotalTimeInActiveDomain, sessionLimitSeconds);
-  const carryover = carryoverSeconds[domain] || 0;
-  const display = computeTimerDisplay({
-    dailyTotal: todaysTotalTimeInActiveDomain,
-    baseLimit: sessionLimitSeconds,
-    boundary,
-    carryover,
-  });
-
-  const wd = isInWindDown(display.sessionTime, display.sessionLimitSeconds);
+  const session = getOrStartSession(domain, todaysTotalTimeInActiveDomain, sessionLimitSeconds);
+  const wd = windDownState(session, todaysTotalTimeInActiveDomain);
 
   if (wd.active && !windDownActive[domain]) {
     windDownActive[domain] = true;
@@ -731,9 +753,9 @@ function startCooldownTicker(domain: Domain, totalCooldownSeconds: number, sessi
       clearInterval(cooldownTickers[domain]);
       delete cooldownTickers[domain];
       delete cooldownEndTime[domain];
-      delete phiNudgeFired[domain];
       delete windDownActive[domain];
-      delete graceAppliedThisSession[domain];
+      // The next session was already created when the cooldown was fired and
+      // anchored at the daily total of that moment — nothing to start here.
       sendHideBlockerToAllTabsOfDomain(domain);
       sendMessageToAllTabsOfDomain(domain, { type: 'HIDE_WIND_DOWN' });
       // Push a fresh timer update so all tabs of this domain immediately show
@@ -749,10 +771,35 @@ function startCooldownTicker(domain: Domain, totalCooldownSeconds: number, sessi
 }
 
 /**
- * End the current session early. The unused time in the current session is
- * "carried over" so the next session lasts (limit + carryover) instead of
- * just limit. The cooldown that triggers now is for the current session
- * number — sessionNum doesn't change as a result of ending early.
+ * Begin a cooldown for `domain`: store the next session, start the blocker UI
+ * countdown, and notify all tabs. `nextSession` is the session the user enters
+ * once the cooldown expires (already anchored at the current daily total).
+ * `endedSessionNum` is the number of the session that just ended — it drives the
+ * blocker's displayed count. Shared by natural end, early end, and shrink-past.
+ */
+function fireCooldown(
+  domain: Domain,
+  nextSession: ActiveSession,
+  cooldownSeconds: number,
+  cooldownIncrementSeconds: number,
+  endedSessionNum: number
+): void {
+  const incrementMinutes = Math.round(cooldownIncrementSeconds / 60);
+
+  cooldownEndTime[domain] = Date.now() + cooldownSeconds * 1000;
+  sessions[domain] = nextSession;
+  delete windDownActive[domain];
+
+  sendMessageToAllTabsOfDomain(domain, { type: 'HIDE_WIND_DOWN' });
+  sendBlockerToAllTabsOfDomain(domain, cooldownSeconds, cooldownSeconds, endedSessionNum, incrementMinutes);
+  startCooldownTicker(domain, cooldownSeconds, endedSessionNum, incrementMinutes);
+  updateTimerDisplay(todaysTotalTimeInActiveDomain);
+}
+
+/**
+ * End the current session early. The unused time is "carried over" so the next
+ * session lasts (limit + carryover), and 10% of it is earned as grace baked
+ * into that next session. The cooldown is for the session that just ended.
  */
 async function endSessionEarly(): Promise<void> {
   if (!trackedTabDomain) return;
@@ -766,45 +813,19 @@ async function endSessionEarly(): Promise<void> {
   const { sessionLimitSeconds, cooldownIncrementSeconds } = settings;
   if (sessionLimitSeconds <= 0) return;
 
-  if (nextSessionBoundary[domain] === undefined) {
-    nextSessionBoundary[domain] = nextBoundary(todaysTotalTimeInActiveDomain, sessionLimitSeconds);
-  }
-  const priorCarryover = carryoverSeconds[domain] || 0;
+  const session = getOrStartSession(domain, todaysTotalTimeInActiveDomain, sessionLimitSeconds);
 
-  const result = computeEndSessionEarly({
+  const result = computeEndEarly(session, {
     dailyTotal: todaysTotalTimeInActiveDomain,
-    baseLimit: sessionLimitSeconds,
-    boundary: nextSessionBoundary[domain],
-    priorCarryover,
     cooldownIncrement: cooldownIncrementSeconds,
   });
-  if (!result) return; // no carryover to claim — normal cooldown will fire
+  if (!result) return; // no time left to claim — normal cooldown will fire on its own
 
-  const incrementMinutes = Math.round(cooldownIncrementSeconds / 60);
-
-  cooldownEndTime[domain] = Date.now() + result.cooldownSeconds * 1000;
-  nextSessionBoundary[domain] = result.newBoundary;
-  carryoverSeconds[domain] = result.newCarryover;
-
-  // Earn grace for the next session (only from ending early, not during a grace-extended session).
-  // Grace scales with remaining time given up — ending early with 5 min left earns more than 10s left.
-  if (!graceAppliedThisSession[domain]) {
-    graceSeconds[domain] = computeGraceSeconds(result.newCarryover);
-    console.log(`Grace earned for next session: ${graceSeconds[domain]}s (gave up ${result.newCarryover}s)`);
-  }
-
-  delete phiNudgeFired[domain];
-  delete windDownActive[domain];
-  delete graceAppliedThisSession[domain];
-
-  sendMessageToAllTabsOfDomain(domain, { type: 'HIDE_WIND_DOWN' });
-  sendBlockerToAllTabsOfDomain(domain, result.cooldownSeconds, result.cooldownSeconds, result.sessionNum, incrementMinutes);
-  startCooldownTicker(domain, result.cooldownSeconds, result.sessionNum, incrementMinutes);
-  updateTimerDisplay(todaysTotalTimeInActiveDomain);
+  fireCooldown(domain, result.nextSession, result.cooldownSeconds, cooldownIncrementSeconds, session.sessionNum);
   console.log(
-    `Session ${result.sessionNum} ended early for ${domain} ` +
-    `(daily=${todaysTotalTimeInActiveDomain}s, carryoverToNext=${result.newCarryover}s, ` +
-    `cooldown=${result.cooldownSeconds}s, nextBoundary=${result.newBoundary}s)`
+    `Session ${session.sessionNum} ended early for ${domain} ` +
+    `(daily=${todaysTotalTimeInActiveDomain}s, carryoverToNext=${result.nextSession.carryover}s, ` +
+    `graceEarned=${result.graceEarned}s, cooldown=${result.cooldownSeconds}s)`
   );
 }
 
@@ -819,54 +840,27 @@ function checkSessionLimit(settings: InterventionSettings): boolean {
   // short-circuit any other intervention work just in case.
   if ((cooldownEndTime[domain] || 0) > Date.now()) return true;
 
-  // Lazily initialize the next boundary for this domain. This runs once on
-  // the first tick after a domain switch / extension load / settings change.
-  if (nextSessionBoundary[domain] === undefined) {
-    nextSessionBoundary[domain] = nextBoundary(todaysTotalTimeInActiveDomain, sessionLimitSeconds);
-  }
+  // Lazily start the session for this domain. Runs once on the first tick after
+  // a domain switch / extension load / settings change.
+  const session = getOrStartSession(domain, todaysTotalTimeInActiveDomain, sessionLimitSeconds);
 
-  if (todaysTotalTimeInActiveDomain < nextSessionBoundary[domain]) return false;
+  // Not at the end yet → session continues. Grace and carryover are already
+  // baked into the session's effective length, so there's no mid-session
+  // "extend the boundary" step anymore.
+  if (displayFor(session, todaysTotalTimeInActiveDomain).remaining > 0) return false;
 
-  // Check if user has earned grace from a previous early end — auto-apply it
-  // by silently extending the boundary. No prompt, no extra session.
-  const grace = graceSeconds[domain] || 0;
-  if (grace > 0) {
-    nextSessionBoundary[domain] += grace;
-    delete graceSeconds[domain];
-    graceAppliedThisSession[domain] = true;
-    // Hide wind-down since we're extending
-    delete windDownActive[domain];
-    sendMessageToAllTabsOfDomain(domain, { type: 'HIDE_WIND_DOWN' });
-    updateTimerDisplay(todaysTotalTimeInActiveDomain);
-    console.log(`Grace auto-applied for ${domain}: boundary extended by ${grace}s`);
-    return false; // session continues — not at boundary yet
-  }
-
-  // No grace available — normal cooldown
-  const priorCarryover = carryoverSeconds[domain] || 0;
-  const result = naturalCooldown({
-    baseLimit: sessionLimitSeconds,
-    boundary: nextSessionBoundary[domain],
-    priorCarryover,
+  // Reached the end — natural cooldown. Carryover is consumed; next session is
+  // a clean baseLength session anchored at the current daily total.
+  const result = naturalEnd(session, {
+    dailyTotal: todaysTotalTimeInActiveDomain,
     cooldownIncrement: cooldownIncrementSeconds,
   });
-  const incrementMinutes = Math.round(cooldownIncrementSeconds / 60);
 
-  cooldownEndTime[domain] = Date.now() + result.cooldownSeconds * 1000;
-  delete carryoverSeconds[domain];
-  delete phiNudgeFired[domain];
-  delete windDownActive[domain];
-  delete graceAppliedThisSession[domain];
-  nextSessionBoundary[domain] = result.newBoundary;
-
-  sendMessageToAllTabsOfDomain(domain, { type: 'HIDE_WIND_DOWN' });
-  sendBlockerToAllTabsOfDomain(domain, result.cooldownSeconds, result.cooldownSeconds, result.sessionNum, incrementMinutes);
-  startCooldownTicker(domain, result.cooldownSeconds, result.sessionNum, incrementMinutes);
-  updateTimerDisplay(todaysTotalTimeInActiveDomain);
+  fireCooldown(domain, result.nextSession, result.cooldownSeconds, cooldownIncrementSeconds, session.sessionNum);
   console.log(
-    `Session ${result.sessionNum} limit reached for ${domain} ` +
+    `Session ${session.sessionNum} limit reached for ${domain} ` +
     `(daily=${todaysTotalTimeInActiveDomain}s, cooldown=${result.cooldownSeconds}s, ` +
-    `nextBoundary=${result.newBoundary}s)`
+    `nextSession=${result.nextSession.sessionNum})`
   );
   return true;
 }
