@@ -45,7 +45,7 @@ export interface GlobalSettings {
 export interface DomainSettings {
   sessionLimitEnabled?: boolean;
   sessionLimit?: number; // Minutes — continuous usage before cooldown triggers
-  cooldownIncrement?: number; // Minutes — each successive cooldown grows by this amount
+  cooldownIncrement?: number; // Minutes (may be fractional, e.g. 3.5 = 3m30s) — each successive cooldown grows by this amount
   nudgeCount?: number; // Number of phi-spaced nudges per session (0 = disabled, undefined = auto)
 }
 
@@ -124,7 +124,7 @@ export interface ShowBlockerMessage {
   cooldownRemainingSeconds: number;
   totalCooldownSeconds: number;
   cooldownCount: number; // how many cooldowns triggered today
-  cooldownIncrementMinutes: number; // the per-cooldown increment in minutes
+  cooldownIncrementSeconds: number; // the per-cooldown increment in seconds (may include a sub-minute part)
 }
 
 export interface HideBlockerMessage {

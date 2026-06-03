@@ -36,6 +36,13 @@ export interface ActiveSession {
    * The only "I already did this" bookkeeping the session needs.
    */
   firedNudges: number[];
+  /**
+   * Per-session random seed for nudge jitter. Generated fresh at birth, so each
+   * session's nudge times are unpredictable across sessions but STABLE within
+   * one (the same seed → the same times every tick, which the catch-up matcher
+   * relies on). Pure functions never call Math.random — only startSession does.
+   */
+  nudgeSeed: number;
 }
 
 /** Total allowed length of this session. */
@@ -84,6 +91,8 @@ export function startSession(opts: {
     carryover: opts.carryover ?? 0,
     graceSeconds: opts.graceSeconds ?? 0,
     firedNudges: [],
+    // Fresh randomness every session — the single Math.random call in this module.
+    nudgeSeed: Math.floor(Math.random() * 0x7fffffff),
   };
 }
 
@@ -185,22 +194,61 @@ export function computeGraceSeconds(remainingSeconds: number): number {
 // ---------------------------------------------------------------------------
 // Nudges — recomputed per tick from the live effectiveLength, with catch-up.
 // No precomputed schedule to invalidate.
+//
+// Spacing: each nudge sits at `eff - eff/DECAY^i`, so the *remaining* time
+// shrinks by a constant factor (DECAY) each nudge — sparse early, accelerating
+// toward the end. DECAY=1.8 is between φ (gentle) and 2.0 (halving).
+//
+// Two guards keep the tail from getting annoying:
+//   - NUDGE_MIN_GAP: no two nudges closer than this (self-caps the count; a
+//     larger requested count just gets pruned down to what fits).
+//   - the wind-down window: no nudge inside the final WIND_DOWN_DURATION.
+//
+// Jitter: each time is nudged by up to ±NUDGE_JITTER seconds so the schedule
+// isn't perfectly predictable. The jitter is DETERMINISTIC given the session's
+// nudgeSeed — stable within a session (so catch-up matching works), fresh
+// across sessions (because the seed is regenerated at each startSession).
 // ---------------------------------------------------------------------------
 
-/** Phi nudge times (session-relative seconds) for the current effective length. */
-export function computePhiNudgeTimes(effLimit: number, overrideCount?: number): number[] {
+const NUDGE_DECAY = 1.8;
+const NUDGE_MIN_GAP = 120; // seconds — anti-bunching floor
+const NUDGE_JITTER = 30;   // seconds — ± window, mirrors the 60s wind-down
+
+/** Tiny seeded PRNG (mulberry32). Deterministic stream from a 32-bit seed. */
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Nudge times (session-relative seconds) for the current effective length.
+ * `seed` drives the per-session jitter; `overrideCount` (the user's nudgeCount
+ * setting) caps how many we *attempt* before the min-gap floor prunes.
+ */
+export function computeNudgeTimes(effLimit: number, seed: number, overrideCount?: number): number[] {
   if (effLimit <= 0) return [];
-  const numNudges = overrideCount !== undefined
+  const attempt = overrideCount !== undefined
     ? overrideCount
     : Math.round(PHI * Math.sqrt(effLimit / 60 / 15));
-  if (numNudges <= 0) return [];
+  if (attempt <= 0) return [];
 
+  const rnd = mulberry32(seed);
   const times: number[] = [];
-  for (let i = 1; i <= numNudges; i++) {
-    const t = Math.round(effLimit - effLimit / Math.pow(PHI, i));
-    if (t >= 60 && t <= effLimit - WIND_DOWN_DURATION) times.push(t);
+  for (let i = 1; i <= attempt; i++) {
+    const base = effLimit - effLimit / Math.pow(NUDGE_DECAY, i);
+    const jitter = Math.round((rnd() * 2 - 1) * NUDGE_JITTER);
+    const t = Math.round(base + jitter);
+    if (t < 60 || t > effLimit - WIND_DOWN_DURATION) continue;
+    // Greedy min-gap prune: drop a nudge that lands too close to the last kept.
+    if (times.length && t - times[times.length - 1] < NUDGE_MIN_GAP) continue;
+    times.push(t);
   }
-  return times.sort((a, b) => a - b);
+  return times;
 }
 
 /**
@@ -214,7 +262,7 @@ export function computePhiNudgeTimes(effLimit: number, overrideCount?: number): 
  */
 export function nextNudgeToFire(s: ActiveSession, dailyTotal: number, overrideCount?: number): number | null {
   const { sessionTime, sessionLimitSeconds } = displayFor(s, dailyTotal);
-  const times = computePhiNudgeTimes(sessionLimitSeconds, overrideCount);
+  const times = computeNudgeTimes(sessionLimitSeconds, s.nudgeSeed, overrideCount);
   const fired = new Set(s.firedNudges);
 
   let candidate: number | null = null;
