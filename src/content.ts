@@ -236,13 +236,19 @@ function createAveragePopupOverlay(minutesLeft: number, averageMinutes: number, 
   `;
 
   const avg = formatTimeCompact(averageMinutes * 60);
-  const untilAvgLine = minutesLeft > 0
-    ? `${minutesLeft} min until your 7-day average (${avg})`
-    : `You've reached your 7-day average (${avg})`;
+  // Primary line = the actionable status; the average value gets its own
+  // sub-line so it can never wrap awkwardly regardless of how large the numbers
+  // get. Each line is nowrap so it stays intact on one row.
+  const primaryLine = minutesLeft > 0
+    ? `${minutesLeft} min until your 7-day average`
+    : `You've reached your 7-day average`;
 
   el.innerHTML = `
-    <div style="font-size: 16px; color: #ccc; margin-bottom: 14px; text-align: center !important; font-weight: 600;">
-      ${untilAvgLine}
+    <div style="font-size: 16px; color: #ccc; margin-bottom: 4px; text-align: center !important; font-weight: 600; white-space: nowrap !important;">
+      ${primaryLine}
+    </div>
+    <div style="font-size: 13px; color: #999; margin-bottom: 14px; text-align: center !important; white-space: nowrap !important;">
+      (${avg})
     </div>
     <div style="margin-bottom: 12px;">
       ${buildBarChart(stats.days)}
