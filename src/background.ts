@@ -420,7 +420,7 @@ function handleMessageReceived(
             cooldownRemainingSeconds: remaining,
             totalCooldownSeconds: remaining,
             cooldownCount: 1,
-            cooldownIncrementMinutes: 0
+            cooldownIncrementSeconds: 0
           }).catch(() => {});
         }
       }
@@ -459,7 +459,7 @@ function handleMessageReceived(
           cooldownRemainingSeconds: remaining,
           totalCooldownSeconds: remaining,
           cooldownCount: 1,
-          cooldownIncrementMinutes: 0
+          cooldownIncrementSeconds: 0
         }).catch(() => {});
       } else {
         browser.tabs.sendMessage(tabId, { type: 'HIDE_BLOCKER' }).catch(() => {});
@@ -710,13 +710,13 @@ function checkWindDown(settings: InterventionSettings): void {
 }
 
 
-function sendBlockerToAllTabsOfDomain(domain: Domain, remainingSeconds: number, totalSeconds: number, cooldownCount: number, cooldownIncrementMinutes: number): void {
+function sendBlockerToAllTabsOfDomain(domain: Domain, remainingSeconds: number, totalSeconds: number, cooldownCount: number, cooldownIncrementSeconds: number): void {
   const message = {
     type: 'SHOW_BLOCKER' as const,
     cooldownRemainingSeconds: remainingSeconds,
     totalCooldownSeconds: totalSeconds,
     cooldownCount,
-    cooldownIncrementMinutes
+    cooldownIncrementSeconds
   };
 
   trackedTabIds.forEach(tabId => {
@@ -740,7 +740,7 @@ function sendHideBlockerToAllTabsOfDomain(domain: Domain): void {
   });
 }
 
-function startCooldownTicker(domain: Domain, totalCooldownSeconds: number, sessionNum: number, cooldownIncrementMinutes: number): void {
+function startCooldownTicker(domain: Domain, totalCooldownSeconds: number, sessionNum: number, cooldownIncrementSeconds: number): void {
   if (cooldownTickers[domain]) {
     clearInterval(cooldownTickers[domain]);
   }
@@ -765,7 +765,7 @@ function startCooldownTicker(domain: Domain, totalCooldownSeconds: number, sessi
       }
       console.log(`Cooldown expired for ${domain}`);
     } else {
-      sendBlockerToAllTabsOfDomain(domain, remaining, totalCooldownSeconds, sessionNum, cooldownIncrementMinutes);
+      sendBlockerToAllTabsOfDomain(domain, remaining, totalCooldownSeconds, sessionNum, cooldownIncrementSeconds);
     }
   }, 1000);
 }
@@ -784,15 +784,13 @@ function fireCooldown(
   cooldownIncrementSeconds: number,
   endedSessionNum: number
 ): void {
-  const incrementMinutes = Math.round(cooldownIncrementSeconds / 60);
-
   cooldownEndTime[domain] = Date.now() + cooldownSeconds * 1000;
   sessions[domain] = nextSession;
   delete windDownActive[domain];
 
   sendMessageToAllTabsOfDomain(domain, { type: 'HIDE_WIND_DOWN' });
-  sendBlockerToAllTabsOfDomain(domain, cooldownSeconds, cooldownSeconds, endedSessionNum, incrementMinutes);
-  startCooldownTicker(domain, cooldownSeconds, endedSessionNum, incrementMinutes);
+  sendBlockerToAllTabsOfDomain(domain, cooldownSeconds, cooldownSeconds, endedSessionNum, cooldownIncrementSeconds);
+  startCooldownTicker(domain, cooldownSeconds, endedSessionNum, cooldownIncrementSeconds);
   updateTimerDisplay(todaysTotalTimeInActiveDomain);
 }
 

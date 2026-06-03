@@ -167,6 +167,7 @@ export async function loadSettings(): Promise<void> {
     const sessionLimitEnabledEl = document.getElementById('session-limit-enabled') as HTMLInputElement | null;
     const sessionLimitEl = document.getElementById('session-limit-minutes') as HTMLInputElement | null;
     const cooldownIncrementEl = document.getElementById('cooldown-increment-minutes') as HTMLInputElement | null;
+    const cooldownIncrementSecondsEl = document.getElementById('cooldown-increment-seconds') as HTMLInputElement | null;
     const cooldownRecommendedEl = document.getElementById('cooldown-recommended');
 
     const sessionLimitEnabled = domainSettings.sessionLimitEnabled || false;
@@ -177,8 +178,12 @@ export async function loadSettings(): Promise<void> {
     if (sessionLimitEl && storedSessionLimit !== undefined && storedSessionLimit > 0) {
       sessionLimitEl.value = String(storedSessionLimit);
     }
-    if (cooldownIncrementEl && storedCooldownIncrement !== undefined && storedCooldownIncrement > 0) {
-      cooldownIncrementEl.value = String(storedCooldownIncrement);
+    // cooldownIncrement is stored as (possibly fractional) minutes. Decompose
+    // into whole minutes + seconds for the two-input UI.
+    if (storedCooldownIncrement !== undefined && storedCooldownIncrement > 0) {
+      const totalSec = Math.round(storedCooldownIncrement * 60);
+      if (cooldownIncrementEl) cooldownIncrementEl.value = String(Math.floor(totalSec / 60));
+      if (cooldownIncrementSecondsEl) cooldownIncrementSecondsEl.value = String(totalSec % 60);
     }
 
     const nudgeCountEl = document.getElementById('nudge-count') as HTMLInputElement | null;
@@ -260,11 +265,15 @@ export async function saveSettings(): Promise<void> {
     const sessionLimitEnabledEl = document.getElementById('session-limit-enabled') as HTMLInputElement | null;
     const sessionLimitEl = document.getElementById('session-limit-minutes') as HTMLInputElement | null;
     const cooldownIncrementEl = document.getElementById('cooldown-increment-minutes') as HTMLInputElement | null;
+    const cooldownIncrementSecondsEl = document.getElementById('cooldown-increment-seconds') as HTMLInputElement | null;
     const sessionLimitEnabled = sessionLimitEnabledEl?.checked || false;
     // Always persist whatever value is in the inputs, independent of the enabled
     // checkbox, so toggling off then on preserves the user's numbers.
     const sessionLimit = parseInt(sessionLimitEl?.value || '') || 0;
-    const cooldownIncrement = parseInt(cooldownIncrementEl?.value || '') || 0;
+    // Compose minutes + seconds inputs into fractional minutes for storage.
+    const cdMin = parseInt(cooldownIncrementEl?.value || '') || 0;
+    const cdSec = parseInt(cooldownIncrementSecondsEl?.value || '') || 0;
+    const cooldownIncrement = cdMin + cdSec / 60;
     const nudgeCountEl = document.getElementById('nudge-count') as HTMLInputElement | null;
     const nudgeCountRaw = nudgeCountEl?.value;
     const nudgeCount = nudgeCountRaw !== undefined && nudgeCountRaw !== '' ? parseInt(nudgeCountRaw) : undefined;

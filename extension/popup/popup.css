@@ -414,6 +414,20 @@ body {
   color: #aaa;
 }
 
+/* Cooldown has two inputs (m + s) in one cell — tighten so both fit the column. */
+#cooldown-increment-minutes,
+#cooldown-increment-seconds {
+  width: 34px;
+}
+
+.intervention-group:has(#cooldown-increment-minutes) .time-inputs {
+  gap: 2px;
+}
+
+.intervention-group:has(#cooldown-increment-minutes) .time-inputs span {
+  font-size: 11px;
+}
+
 .intervention-row:has(input[type="checkbox"]:not(:checked)) .intervention-grid {
   opacity: 0.4;
   pointer-events: none;

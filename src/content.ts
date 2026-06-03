@@ -338,7 +338,16 @@ function hideAveragePopup(): void {
   }
 }
 
-function showBlocker(remainingSeconds: number, totalCooldownSeconds: number, cooldownCount: number, cooldownIncrementMinutes: number): void {
+/** Format a cooldown duration as "Xm", "Ys", or "Xm Ys" — keeps sub-minute parts. */
+function formatCooldownDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  if (m > 0 && s > 0) return `${m}m ${s}s`;
+  if (m > 0) return `${m}m`;
+  return `${s}s`;
+}
+
+function showBlocker(remainingSeconds: number, totalCooldownSeconds: number, cooldownCount: number, cooldownIncrementSeconds: number): void {
   pauseAllMedia();
 
   const blurBg = showBlurOverlay();
@@ -362,15 +371,17 @@ function showBlocker(remainingSeconds: number, totalCooldownSeconds: number, coo
     return;
   }
 
-  // Build the cooldown explanation line
-  const totalMinutes = Math.round(totalCooldownSeconds / 60);
+  // Build the cooldown explanation line. Increments may be sub-minute
+  // (e.g. 3m30s), so format with seconds rather than rounding to whole minutes.
+  const total = formatCooldownDuration(totalCooldownSeconds);
+  const increment = formatCooldownDuration(cooldownIncrementSeconds);
   let cooldownExplanation: string;
-  if (cooldownCount > 1 && cooldownIncrementMinutes > 0) {
-    cooldownExplanation = `Session ${cooldownCount} · ${cooldownCount} × ${cooldownIncrementMinutes}m = ${totalMinutes}m cooldown`;
-  } else if (cooldownCount === 1 && cooldownIncrementMinutes > 0) {
-    cooldownExplanation = `Session ${cooldownCount} · ${totalMinutes}m cooldown`;
+  if (cooldownCount > 1 && cooldownIncrementSeconds > 0) {
+    cooldownExplanation = `Session ${cooldownCount} · ${cooldownCount} × ${increment} = ${total} cooldown`;
+  } else if (cooldownCount === 1 && cooldownIncrementSeconds > 0) {
+    cooldownExplanation = `Session ${cooldownCount} · ${total} cooldown`;
   } else {
-    cooldownExplanation = `${totalMinutes}m cooldown`;
+    cooldownExplanation = `${total} cooldown`;
   }
 
   const el = document.createElement('div');
@@ -703,7 +714,7 @@ function handleIncomingMessage(
   } else if (message.type === "SHOW_AVERAGE_POPUP") {
     showAveragePopup(message.minutesLeft, message.averageMinutes, message.stats);
   } else if (message.type === "SHOW_BLOCKER") {
-    showBlocker(message.cooldownRemainingSeconds, message.totalCooldownSeconds, message.cooldownCount, message.cooldownIncrementMinutes);
+    showBlocker(message.cooldownRemainingSeconds, message.totalCooldownSeconds, message.cooldownCount, message.cooldownIncrementSeconds);
   } else if (message.type === "HIDE_BLOCKER") {
     hideBlocker();
   } else if (message.type === "SHOW_WIND_DOWN") {
