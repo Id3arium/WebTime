@@ -48,10 +48,12 @@ in isolation with `node --test`.
 
 ## Development
 
-Requires Node and (for packaging) [`web-ext`](https://github.com/mozilla/web-ext).
+Requires Node. All build tooling — esbuild and
+[`web-ext`](https://github.com/mozilla/web-ext) — is pinned as a dev dependency,
+so a fresh `npm install` is the only setup; nothing needs a global install.
 
 ```bash
-npm install        # install dev dependencies
+npm install        # install all dev dependencies (esbuild, web-ext, tsc)
 npm run typecheck  # tsc --noEmit
 npm test           # run the node:test suites in test/
 npm run build      # typecheck + bundle to extension/dist/ via esbuild
@@ -59,16 +61,21 @@ npm run watch      # tsc in watch mode
 ```
 
 `npm run build` bundles `background.ts`, `content.ts`, and the popup into
-`extension/dist/` (see [`build.mjs`](build.mjs)).
+`extension/dist/` (see [`build.mjs`](build.mjs)). Those bundled files are what
+[`manifest.json`](extension/manifest.json) loads.
 
 ### Full build + package
 
-[`build.sh`](build.sh) runs the typecheck, tests, and then packages a signed-
-ready `.xpi` into `artifacts/` with `web-ext`:
+[`build.sh`](build.sh) is the canonical "ship it" command. It runs the
+typecheck, then the tests, then packages a signed-ready `.zip`/`.xpi` into
+`artifacts/` with the project-local `web-ext` (`npx web-ext`), so the result is
+reproducible on any clean checkout:
 
 ```bash
 ./build.sh
 ```
+
+Because it gates on the tests, a failing suite aborts the package step.
 
 ## Loading in Firefox
 
@@ -79,6 +86,28 @@ ready `.xpi` into `artifacts/` with `web-ext`:
 The extension is Manifest V2 and targets Firefox (it uses the `browser.*`
 WebExtension APIs). Temporary add-ons are removed when Firefox restarts; rebuild
 and reload to pick up changes.
+
+## Releasing
+
+[`release.sh`](release.sh) tags a version and publishes its build to
+[GitHub Releases](https://github.com/Id3arium/WebTime/releases). The version is
+read from [`manifest.json`](extension/manifest.json) — the single source of
+truth — so the tag and the build can never disagree.
+
+```bash
+./release.sh
+```
+
+It is deliberately strict, and will refuse to run if:
+
+- the working tree is **dirty** (a release tag must match committed code),
+- local commits are **not pushed** to `origin`,
+- a release for the current version **already exists** (bump the version first).
+
+When the checks pass it builds a fresh artifact via `build.sh` and attaches it to
+a `v<version>` release, with notes auto-generated from the commits since the last
+release. To cut a new release: bump `version` in `manifest.json` (and
+`package.json`), commit, push, then run `./release.sh`.
 
 ## Testing
 

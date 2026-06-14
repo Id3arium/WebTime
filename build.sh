@@ -14,7 +14,7 @@ npm test
 if [ $? -eq 0 ]; then
     echo ""
     echo "📦 Building extension..."
-    web-ext build --source-dir extension --artifacts-dir artifacts --overwrite-dest
+    npx web-ext build --source-dir extension --artifacts-dir artifacts --overwrite-dest
 else
     echo ""
     echo "❌ Tests failed! Build aborted."
