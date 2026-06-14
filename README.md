@@ -10,7 +10,7 @@ of and curb mindless browsing.
 
 | Usage overview | Single site | Settings |
 |:---:|:---:|:---:|
-| ![Usage overview — 30-day chart and top domains](extension/images/GeneralView.png) | ![Single-site breakdown](extension/images/SingleSiteView.png) | ![Settings](extension/images/SettingsView.png) |
+| ![Usage overview — 30-day chart and top domains](extension/images/GeneralView2.png) | ![Single-site breakdown](extension/images/SingleSiteView.png) | ![Settings](extension/images/SettingsView.png) |
 
 ## Install
 
