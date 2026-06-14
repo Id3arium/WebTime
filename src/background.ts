@@ -84,6 +84,7 @@ function getOrStartSession(domain: Domain, dailyTotal: number, baseLength: numbe
   if (!s) {
     s = startSession({ dailyTotal, baseLength });
     sessions[domain] = s;
+    saveSessionState(); // persist the freshly-started session (incl. its sessionNum)
   }
   return s;
 }
@@ -96,6 +97,71 @@ function clearAllCooldowns(): void {
   for (const domain of Object.keys(cooldownEndTime)) {
     delete cooldownEndTime[domain];
   }
+}
+
+// --- Session-state persistence -------------------------------------------
+//
+// In MV3 the background is a service worker that is killed on idle (and
+// definitely on browser close), wiping all in-memory state. Without this,
+// closing the browser (or just walking away during a cooldown) loses the
+// session number, carryover, grace, and any in-progress cooldown — so the
+// next visit starts at "session 1" again mid-day. We persist the current
+// day's session objects + active cooldowns to storage.local and rehydrate on
+// startup. Only the current day is stored (keyed by date); it's a few KB at
+// most and is discarded automatically when the date no longer matches.
+const SESSION_STATE_KEY = 'webTimeSessionState';
+
+function saveSessionState(): void {
+  // Only persist domains that actually have a session or a live cooldown.
+  const activeCooldowns: Record<Domain, number> = {};
+  for (const domain of Object.keys(cooldownEndTime)) {
+    if ((cooldownEndTime[domain] || 0) > Date.now()) activeCooldowns[domain] = cooldownEndTime[domain];
+  }
+  browser.storage.local.set({
+    [SESSION_STATE_KEY]: {
+      date: currentDateStr,
+      sessions,
+      cooldownEndTime: activeCooldowns,
+    },
+  }).catch(err => console.warn('Failed to persist session state:', err));
+}
+
+async function loadSessionState(): Promise<void> {
+  try {
+    const data = await browser.storage.local.get(SESSION_STATE_KEY);
+    const stored = data[SESSION_STATE_KEY];
+    if (!stored || stored.date !== currentDateStr) return; // absent or stale (new day)
+
+    if (stored.sessions) {
+      for (const [domain, session] of Object.entries(stored.sessions)) {
+        sessions[domain] = session as ActiveSession;
+      }
+    }
+
+    // Re-arm any cooldown still in the future; drop expired ones.
+    const settingsData = await browser.storage.local.get('webTimeSettings');
+    const settings: WebTimeSettings = settingsData.webTimeSettings || { global: {}, domains: {} };
+    for (const [domain, endTime] of Object.entries(stored.cooldownEndTime || {})) {
+      if ((endTime as number) <= Date.now()) continue; // expired during downtime
+      cooldownEndTime[domain] = endTime as number;
+      // Reconstruct the blocker-UI args. The session stored for this domain is
+      // the NEXT session (created when the cooldown fired), so the session that
+      // is cooling down is sessionNum - 1.
+      const nextSession = sessions[domain];
+      const endedSessionNum = nextSession ? Math.max(1, nextSession.sessionNum - 1) : 1;
+      const incrementSec = (settings.domains?.[domain]?.cooldownIncrement || 0) * 60;
+      const totalCooldownSec = Math.ceil(((endTime as number) - Date.now()) / 1000);
+      startCooldownTicker(domain, totalCooldownSec, endedSessionNum, incrementSec);
+      console.log(`Rehydrated active cooldown for ${domain}: ${totalCooldownSec}s left`);
+    }
+    console.log(`Session state rehydrated for ${currentDateStr} (${Object.keys(sessions).length} domains)`);
+  } catch (err) {
+    console.warn('Failed to load session state:', err);
+  }
+}
+
+function clearSessionState(): void {
+  browser.storage.local.remove(SESSION_STATE_KEY).catch(() => {});
 }
 
 
@@ -226,6 +292,7 @@ function incrementTimer(): void {
     clearAllCooldowns();
     for (const domain of Object.keys(sessions)) delete sessions[domain];
     for (const domain of Object.keys(windDownActive)) delete windDownActive[domain];
+    clearSessionState(); // drop persisted state for the old day
     console.log("New day, reset timer.");
   }
   updateTimerDisplay(todaysTotalTimeInActiveDomain);
@@ -520,6 +587,7 @@ function handleMessageReceived(
           // Session limit turned off — drop the session entirely.
           delete sessions[domain];
           delete windDownActive[domain];
+          saveSessionState();
           continue;
         }
 
@@ -556,6 +624,7 @@ function handleMessageReceived(
             `(daily=${todaysTotalTimeInActiveDomain}s, newLimit=${newLimitSeconds}s)`
           );
         } else {
+          saveSessionState(); // persist the live-resized session
           const display = displayFor(updated, todaysTotalTimeInActiveDomain);
           updateTimerDisplay(todaysTotalTimeInActiveDomain);
           console.log(
@@ -626,6 +695,7 @@ function checkPhiNudges(settings: InterventionSettings): void {
   if (nudgeTime !== null) {
     sendNudge();
     sessions[domain] = markNudgeFired(session, nudgeTime);
+    saveSessionState(); // persist firedNudges so a restart doesn't re-fire
     const remaining = displayFor(sessions[domain], todaysTotalTimeInActiveDomain).remaining;
     console.log(`φ-nudge at ${Math.round(nudgeTime / 60)}min into session (${remaining}s remaining)`);
   }
@@ -754,6 +824,7 @@ function startCooldownTicker(domain: Domain, totalCooldownSeconds: number, sessi
       delete cooldownTickers[domain];
       delete cooldownEndTime[domain];
       delete windDownActive[domain];
+      saveSessionState(); // cooldown cleared — persist so a restart doesn't re-arm it
       // The next session was already created when the cooldown was fired and
       // anchored at the daily total of that moment — nothing to start here.
       sendHideBlockerToAllTabsOfDomain(domain);
@@ -787,6 +858,7 @@ function fireCooldown(
   cooldownEndTime[domain] = Date.now() + cooldownSeconds * 1000;
   sessions[domain] = nextSession;
   delete windDownActive[domain];
+  saveSessionState(); // persist new session number + active cooldown
 
   sendMessageToAllTabsOfDomain(domain, { type: 'HIDE_WIND_DOWN' });
   sendBlockerToAllTabsOfDomain(domain, cooldownSeconds, cooldownSeconds, endedSessionNum, cooldownIncrementSeconds);
@@ -901,6 +973,7 @@ async function init(): Promise<void> {
 
   await loadTimeData();
   await loadAveragePopupShown();
+  await loadSessionState(); // rehydrate session numbers / cooldowns after a worker restart
 
   const trackedTabs = await browser.tabs.query({ url: ["http://*/*", "https://*/*"] });
   trackedTabs.forEach((tab) => {
