@@ -39,7 +39,7 @@ Three layers, deliberately separated:
 | [`src/background.ts`](src/background.ts) | The engine: tab tracking, the 1s timer loop, storage/persistence (with data migration), and all intervention dispatch. |
 | [`src/content.ts`](src/content.ts) | In-page UI: the timer widget, blur overlay, nudge animation, and all popups. |
 | [`src/popup/`](src/popup/) | The toolbar popup (usage chart + settings), bundled to `popup-bundle.js`. |
-| [`src/shared/session-math.ts`](src/shared/session-math.ts) | **Pure, browser-free** session math — boundaries, carryover, phi nudge timing, grace, wind-down. Fully unit-tested. |
+| [`src/shared/session-model.ts`](src/shared/session-model.ts) | **Pure, browser-free** session math — boundaries, carryover, phi nudge timing, grace, wind-down. Fully unit-tested. |
 | [`src/shared/utils.ts`](src/shared/utils.ts) | Pure helpers — domain extraction, time formatting, 7-day stats. |
 | [`src/types.ts`](src/types.ts) | Shared type definitions. |
 
@@ -86,7 +86,7 @@ Tests live in [`test/`](test/) and run via `node --test`. Each suite bundles the
 relevant `src/shared/` module with esbuild and imports the **real** source (no
 copy-pasted logic), so tests can't silently drift from the implementation:
 
-- [`test/session-math.test.mjs`](test/session-math.test.mjs) — boundaries,
+- [`test/session-model.test.mjs`](test/session-model.test.mjs) — boundaries,
   carryover, end-early, cooldowns, phi nudges, grace, wind-down.
 - [`test/seven-day-stats.test.mjs`](test/seven-day-stats.test.mjs) — 7-day
   average stats that drive the average popup.
