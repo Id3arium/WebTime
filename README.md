@@ -6,6 +6,22 @@ A Firefox browser extension that tracks how long you spend on each site and uses
 gentle, escalating **interventions** — not hard blocks — to help you stay aware
 of and curb mindless browsing.
 
+## Screenshots
+
+| Usage overview | Single site | Settings |
+|:---:|:---:|:---:|
+| ![Usage overview — 30-day chart and top domains](extension/images/GeneralView.png) | ![Single-site breakdown](extension/images/SingleSiteView.png) | ![Settings](extension/images/SettingsView.png) |
+
+## Install
+
+WebTime is published on
+[Firefox Add-ons (AMO)](https://addons.mozilla.org/) — _link coming soon_.
+
+You can also install the latest build directly from
+[GitHub Releases](https://github.com/Id3arium/WebTime/releases): download the
+`.zip`/`.xpi` and load it via `about:addons` → ⚙️ → **Install Add-on From
+File…**. (For development, see [Loading in Firefox](#loading-in-firefox) below.)
+
 ## Philosophy
 
 WebTime favors **autonomy over coercion**. Instead of slamming a wall in front
@@ -38,9 +54,10 @@ Three layers, deliberately separated:
 |------|------|
 | [`src/background.ts`](src/background.ts) | The engine: tab tracking, the 1s timer loop, storage/persistence (with data migration), and all intervention dispatch. |
 | [`src/content.ts`](src/content.ts) | In-page UI: the timer widget, blur overlay, nudge animation, and all popups. |
-| [`src/popup/`](src/popup/) | The toolbar popup (usage chart + settings), bundled to `popup-bundle.js`. |
+| [`src/popup/`](src/popup/) | The toolbar popup — chart building, data processing, state, and UI across several modules, bundled to `popup-bundle.js`. |
 | [`src/shared/session-model.ts`](src/shared/session-model.ts) | **Pure, browser-free** session math — boundaries, carryover, phi nudge timing, grace, wind-down. Fully unit-tested. |
 | [`src/shared/utils.ts`](src/shared/utils.ts) | Pure helpers — domain extraction, time formatting, 7-day stats. |
+| [`src/shared/constants.ts`](src/shared/constants.ts) | Shared tuning constants and defaults. |
 | [`src/types.ts`](src/types.ts) | Shared type definitions. |
 
 The pure modules in `src/shared/` contain no browser APIs so they can be tested
