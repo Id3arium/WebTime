@@ -20,8 +20,6 @@ body {
   overflow: hidden;
 
   background-color: var(--dark-bg);
-  backdrop-filter: blur(6px);              /* Blur effect */
-  -webkit-backdrop-filter: blur(6px);      /* For Safari */
 }
 
 /* Full-width clipper for the carousel. It must NOT have horizontal padding:
