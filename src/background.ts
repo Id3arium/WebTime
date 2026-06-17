@@ -57,11 +57,16 @@ const sessions: Record<Domain, ActiveSession> = {};
 
 // Inter-session / UI state — deliberately NOT on the session object, since it
 // describes the gap *between* sessions or transient overlay state:
-//   cooldownEndTime[domain] = ms epoch when the active cooldown ends (absent = not in cooldown).
-//   cooldownTickers[domain] = the 1s setInterval that drives the blocker countdown UI.
-//   windDownActive[domain]  = whether the wind-down overlay is currently shown.
+//   cooldownEndTime[domain]   = ms epoch when the active cooldown ends (absent = not in cooldown).
+//   cooldownTotalSec[domain]  = the FULL length (s) of the active cooldown, captured when it fired.
+//                               The blocker progress bar is remaining/total; recomputing the total
+//                               elsewhere (sessionNum × increment) is fragile — if the increment
+//                               setting reads as 0 the bar collapses to 100%. So store it once.
+//   cooldownTickers[domain]   = the 1s setInterval that drives the blocker countdown UI.
+//   windDownActive[domain]    = whether the wind-down overlay is currently shown.
 const cachedDomainSessionLimit: Record<Domain, { sessionLimitSeconds: number }> = {};
 const cooldownEndTime: Record<Domain, number> = {};
+const cooldownTotalSec: Record<Domain, number> = {};
 const cooldownTickers: Record<Domain, ReturnType<typeof setInterval>> = {};
 const windDownActive: Record<Domain, boolean> = {};
 
@@ -95,6 +100,7 @@ function clearAllCooldowns(): void {
   }
   for (const domain of Object.keys(cooldownEndTime)) {
     delete cooldownEndTime[domain];
+    delete cooldownTotalSec[domain];
   }
 }
 
@@ -113,14 +119,21 @@ const SESSION_STATE_KEY = 'webTimeSessionState';
 function saveSessionState(): void {
   // Only persist domains that actually have a session or a live cooldown.
   const activeCooldowns: Record<Domain, number> = {};
+  const activeCooldownTotals: Record<Domain, number> = {};
   for (const domain of Object.keys(cooldownEndTime)) {
-    if ((cooldownEndTime[domain] || 0) > Date.now()) activeCooldowns[domain] = cooldownEndTime[domain];
+    if ((cooldownEndTime[domain] || 0) > Date.now()) {
+      activeCooldowns[domain] = cooldownEndTime[domain];
+      // Persist the full length too, so the bar's denominator survives a
+      // worker restart instead of collapsing to "remaining at rehydrate".
+      activeCooldownTotals[domain] = cooldownTotalSec[domain] || 0;
+    }
   }
   browser.storage.local.set({
     [SESSION_STATE_KEY]: {
       date: currentDateStr,
       sessions,
       cooldownEndTime: activeCooldowns,
+      cooldownTotalSec: activeCooldownTotals,
     },
   }).catch(err => console.warn('Failed to persist session state:', err));
 }
@@ -149,9 +162,17 @@ async function loadSessionState(): Promise<void> {
       const nextSession = sessions[domain];
       const endedSessionNum = nextSession ? Math.max(1, nextSession.sessionNum - 1) : 1;
       const incrementSec = (settings.domains?.[domain]?.cooldownIncrement || 0) * 60;
-      const totalCooldownSec = Math.ceil(((endTime as number) - Date.now()) / 1000);
+      const remainingSec = Math.ceil(((endTime as number) - Date.now()) / 1000);
+      // Restore the bar's denominator: prefer the persisted full length, then
+      // reconstruct from the formula, then fall back to remaining (last resort,
+      // bar starts full but at least drains correctly).
+      const storedTotal = (stored.cooldownTotalSec || {})[domain] as number | undefined;
+      const totalCooldownSec = storedTotal && storedTotal > 0
+        ? storedTotal
+        : (incrementSec > 0 ? endedSessionNum * incrementSec : remainingSec);
+      cooldownTotalSec[domain] = totalCooldownSec;
       startCooldownTicker(domain, totalCooldownSec, endedSessionNum, incrementSec);
-      console.log(`Rehydrated active cooldown for ${domain}: ${totalCooldownSec}s left`);
+      console.log(`Rehydrated active cooldown for ${domain}: ${remainingSec}s left of ${totalCooldownSec}s total`);
     }
     console.log(`Session state rehydrated for ${currentDateStr} (${Object.keys(sessions).length} domains)`);
   } catch (err) {
@@ -781,10 +802,11 @@ async function sendBlockerToLateJoiningTab(tabId: number, domain: Domain): Promi
   const settingsData = await browser.storage.local.get('webTimeSettings');
   const settings: WebTimeSettings = settingsData.webTimeSettings || { global: {}, domains: {} };
   const incrementSec = (settings.domains?.[domain]?.cooldownIncrement || 0) * 60;
-  // Total cooldown = ended session number × increment (the cooldown formula).
-  // Falls back to `remaining` if increment is unknown, so the progress bar is
-  // never zero-length.
-  const totalSeconds = incrementSec > 0 ? endedSessionNum * incrementSec : remaining;
+  // The bar's denominator is the cooldown's FULL length, captured when it fired.
+  // Use the stored value — recomputing it from the increment setting is exactly
+  // what made the bar start at 100% when that setting read as 0 on a fresh tab.
+  const totalSeconds = cooldownTotalSec[domain]
+    || (incrementSec > 0 ? endedSessionNum * incrementSec : remaining);
   browser.tabs.sendMessage(tabId, {
     type: 'SHOW_BLOCKER' as const,
     cooldownRemainingSeconds: remaining,
@@ -837,6 +859,7 @@ function startCooldownTicker(domain: Domain, totalCooldownSeconds: number, sessi
       clearInterval(cooldownTickers[domain]);
       delete cooldownTickers[domain];
       delete cooldownEndTime[domain];
+      delete cooldownTotalSec[domain];
       delete windDownActive[domain];
       saveSessionState(); // cooldown cleared — persist so a restart doesn't re-arm it
       // The next session was already created when the cooldown was fired and
@@ -850,7 +873,11 @@ function startCooldownTicker(domain: Domain, totalCooldownSeconds: number, sessi
       }
       console.log(`Cooldown expired for ${domain}`);
     } else {
-      sendBlockerToAllTabsOfDomain(domain, remaining, totalCooldownSeconds, sessionNum, cooldownIncrementSeconds);
+      // Always send the stored full length as the denominator (single source of
+      // truth) so every tab agrees with the late-join path; fall back to the
+      // value the ticker was started with.
+      const total = cooldownTotalSec[domain] || totalCooldownSeconds;
+      sendBlockerToAllTabsOfDomain(domain, remaining, total, sessionNum, cooldownIncrementSeconds);
     }
   }, 1000);
 }
@@ -870,6 +897,7 @@ function fireCooldown(
   endedSessionNum: number
 ): void {
   cooldownEndTime[domain] = Date.now() + cooldownSeconds * 1000;
+  cooldownTotalSec[domain] = cooldownSeconds; // the bar's denominator — never recompute it
   sessions[domain] = nextSession;
   delete windDownActive[domain];
   saveSessionState(); // persist new session number + active cooldown

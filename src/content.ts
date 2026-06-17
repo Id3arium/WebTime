@@ -353,6 +353,32 @@ function formatCooldownDuration(seconds: number): string {
   return `${s}s`;
 }
 
+/**
+ * Set the cooldown bar's width. Normal per-second ticks move it by a small
+ * amount and should animate smoothly (transition: width 1s). But a *re-sync* —
+ * e.g. refocusing a tab that was hidden, where the content script's bar froze
+ * at a stale high % while the real cooldown kept draining — produces a large
+ * jump. Animating that jump is the "stray slide" the user sees. So: snap
+ * instantly when the step is bigger than one tick could account for, animate
+ * otherwise. We snap by disabling the transition, setting the width, forcing a
+ * reflow, then restoring it.
+ */
+function setProgressWidth(el: HTMLElement, pct: number): void {
+  const prev = parseFloat(el.style.width) || 0;
+  // One tick ≈ 1s of cooldown. Anything beyond a few % of jump in a single
+  // update is a re-sync, not a tick — snap it.
+  const isResync = Math.abs(pct - prev) > 5;
+  if (isResync) {
+    const saved = el.style.transition;
+    el.style.transition = 'none';
+    el.style.width = `${pct}%`;
+    void el.offsetWidth; // force reflow so the no-transition width commits
+    el.style.transition = saved;
+  } else {
+    el.style.width = `${pct}%`;
+  }
+}
+
 function showBlocker(remainingSeconds: number, totalCooldownSeconds: number, cooldownCount: number, cooldownIncrementSeconds: number): void {
   pauseAllMedia();
 
@@ -372,7 +398,7 @@ function showBlocker(remainingSeconds: number, totalCooldownSeconds: number, coo
     if (progressEl && totalCooldownSeconds > 0) {
       // Bar shrinks from 100% to 0% (same direction as reminder)
       const pct = Math.max(0, (remainingSeconds / totalCooldownSeconds) * 100);
-      progressEl.style.width = `${pct}%`;
+      setProgressWidth(progressEl, pct);
     }
     return;
   }
@@ -412,6 +438,14 @@ function showBlocker(remainingSeconds: number, totalCooldownSeconds: number, coo
     transition: opacity 0.3s ease !important;
     overflow: hidden !important;
   `;
+
+  // Initial fill width = the ACTUAL remaining fraction, not 100%. When a tab
+  // joins mid-cooldown the bar must appear already at the right position;
+  // hardcoding 100% here let the first ticker update animate it from full down
+  // to the real value (transition: width 1s), which read as a stray slide.
+  const initialPct = totalCooldownSeconds > 0
+    ? Math.max(0, Math.min(100, (remainingSeconds / totalCooldownSeconds) * 100))
+    : 100;
 
   el.innerHTML = `
     <div style="font-size: 18px; font-weight: 600; color: #ccc; margin-bottom: 8px;">
