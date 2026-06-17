@@ -6,7 +6,14 @@ declare const browser: typeof chrome;
 
 let timerText: HTMLDivElement | null = null;
 let lastActivityTime = Date.now();
-let showSessionTime = false;  // global toggle: false = daily time, true = session time
+// The session timer is the resting/home state on any site with an active
+// session limit. Clicking the timer "peeks" at the daily total for a few
+// seconds, then it snaps back to the session view. peekingDaily is per-tab and
+// momentary (never persisted or synced); updateTimerText() still falls back to
+// daily on its own when no session exists for the current site.
+const DAILY_PEEK_MS = 5000;
+let peekingDaily = false;
+let peekRevertTimer: ReturnType<typeof setTimeout> | null = null;
 let lastDailyTime = 0;
 let lastSessionTime: number | undefined;
 let lastSessionLimitSeconds: number | undefined;
@@ -108,14 +115,10 @@ function createTimerElement(): void {
 
   timer.appendChild(timerText);
 
-  // Click to toggle between daily time and session time (synced globally across tabs)
-  timer.addEventListener('click', () => {
-    if (lastSessionTime !== undefined && lastSessionLimitSeconds !== undefined && lastSessionLimitSeconds > 0) {
-      showSessionTime = !showSessionTime;
-      updateTimerText();
-      browser.storage.local.set({ webTimeShowSessionTimer: showSessionTime });
-    }
-  });
+  // Click to peek at the daily total; it reverts to the session view after a
+  // few seconds. Only meaningful where a session exists (otherwise daily is
+  // already what's shown).
+  timer.addEventListener('click', peekDaily);
   timer.style.cursor = 'pointer';
 
   document.body.appendChild(timer);
@@ -135,11 +138,18 @@ function formatTimeAdaptive(timeInSeconds: number): string {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
+/** Whether the current site has an active session to display. */
+function hasSession(): boolean {
+  return lastSessionTime !== undefined && !!lastSessionLimitSeconds && lastSessionLimitSeconds > 0;
+}
+
 function updateTimerText(): void {
   if (!timerText) return;
   let text: string;
-  if (showSessionTime && lastSessionTime !== undefined && lastSessionLimitSeconds && lastSessionLimitSeconds > 0) {
-    const remaining = Math.max(0, lastSessionLimitSeconds - lastSessionTime);
+  // Session is the default view; daily only while peeking, or when there is no
+  // session for this site at all.
+  if (hasSession() && !peekingDaily) {
+    const remaining = Math.max(0, lastSessionLimitSeconds! - lastSessionTime!);
     text = `⏱ ${formatTimeAdaptive(remaining)}`;
   } else {
     text = formatTimeAdaptive(lastDailyTime);
@@ -147,6 +157,23 @@ function updateTimerText(): void {
   if (timerText.textContent !== text) {
     timerText.textContent = text;
   }
+}
+
+/**
+ * Show the daily total for a moment, then snap back to the session view.
+ * No-op where there's no session (daily is already shown). Each click restarts
+ * the revert countdown so repeated clicks keep the peek open.
+ */
+function peekDaily(): void {
+  if (!hasSession()) return;
+  peekingDaily = true;
+  updateTimerText();
+  if (peekRevertTimer) clearTimeout(peekRevertTimer);
+  peekRevertTimer = setTimeout(() => {
+    peekingDaily = false;
+    peekRevertTimer = null;
+    updateTimerText();
+  }, DAILY_PEEK_MS);
 }
 
 function createBlurOverlay(): void {
@@ -742,8 +769,8 @@ function handleIncomingMessage(
     lastSessionTime = message.sessionTime;
     lastSessionLimitSeconds = message.sessionLimitSeconds;
     lastSessionNum = message.sessionNum;
-    // Note: don't reset showSessionTime here. The toggle is a global preference
-    // and updateTimerText() already falls back to daily display when session
+    // Note: don't touch peekingDaily here — a peek is a deliberate, time-boxed
+    // user action. updateTimerText() falls back to daily on its own when session
     // data is unavailable for this tab (e.g. domain has no session limit, or
     // another domain is currently active so background sends shared updates).
     if (timerText) {
@@ -794,20 +821,8 @@ function init(): void {
   createWindDownOverlay();
   browser.runtime.onMessage.addListener(handleIncomingMessage);
 
-  // Load persisted timer toggle state
-  browser.storage.local.get('webTimeShowSessionTimer').then(data => {
-    if (data.webTimeShowSessionTimer !== undefined) {
-      showSessionTime = data.webTimeShowSessionTimer;
-      updateTimerText();
-    }
-  });
-
-  // Sync timer toggle across tabs when changed elsewhere
+  // React to settings changes (currently just the end-session shortcut).
   browser.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes.webTimeShowSessionTimer) {
-      showSessionTime = changes.webTimeShowSessionTimer.newValue ?? false;
-      updateTimerText();
-    }
     if (area === 'local' && changes.webTimeSettings) {
       const newSettings = changes.webTimeSettings.newValue;
       const sc = newSettings?.global?.endSessionShortcut;
