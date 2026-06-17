@@ -59,7 +59,6 @@ export interface WebTimeSettings {
 // ============================================
 
 export interface InterventionState {
-  lastNudgeTime: Record<Domain, number>;
   averagePopupShown: Record<Domain, boolean>;  // reset on day rollover
 }
 

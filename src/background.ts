@@ -42,7 +42,6 @@ let dayResetTime = 0;
 let isSaving = false;
 
 let interventionState: InterventionState = {
-  lastNudgeTime: {},
   averagePopupShown: {}
 };
 
@@ -284,7 +283,6 @@ function incrementTimer(): void {
     currentDateStr = newDateStr;
     todaysTotalTimeInActiveDomain = 0;
     interventionState = {
-      lastNudgeTime: {},
       averagePopupShown: {}
     };
     // Reset session limit state on day rollover. The session object collapses
