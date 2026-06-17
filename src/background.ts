@@ -189,29 +189,6 @@ function getLocalDateStrWithReset(): DateString {
   return getLocalDateStr(dayResetTime);
 }
 
-function migrateDataIfNeeded(oldTimeHistory: TimeHistory | Record<DateString, number>): TimeHistory {
-  const dates = Object.keys(oldTimeHistory);
-  if (dates.length === 0) return oldTimeHistory as TimeHistory;
-
-  const firstDate = dates[0];
-  if (typeof oldTimeHistory[firstDate] === "number") {
-    log("Migrating old YouTube-only data to new multi-site format");
-
-    const migratedHistory: TimeHistory = {};
-    for (const [date, seconds] of Object.entries(oldTimeHistory)) {
-      migratedHistory[date] = {
-        "youtube.com": seconds as number,
-      };
-    }
-
-    log(`Migrated ${dates.length} days of data from old format`);
-    return migratedHistory;
-  }
-
-  log("Data already in new multi-site format");
-  return oldTimeHistory as TimeHistory;
-}
-
 function initDefaultTimeData(): void {
   todaysTotalTimeInActiveDomain = 0;
   timeHistory = {};
@@ -263,7 +240,7 @@ async function loadTimeData(): Promise<void> {
       return;
     }
 
-    timeHistory = migrateDataIfNeeded(trackedTime.timeHistory);
+    timeHistory = trackedTime.timeHistory;
 
     if (currentDateStr !== trackedTime.lastDate) {
       log(
