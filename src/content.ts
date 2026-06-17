@@ -158,8 +158,8 @@ function createBlurOverlay(): void {
     left: 0;
     width: 100%;
     height: 100%;
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     background: rgba(0, 0, 0, 0.3);
     z-index: 999999;
     pointer-events: none;
@@ -468,7 +468,7 @@ function showBlocker(remainingSeconds: number, totalCooldownSeconds: number, coo
       <div class="web-time-blocker-progress-fill" style="
         height: 100%;
         background: #4a9eff;
-        width: 100%;
+        width: ${initialPct}%;
         transition: width 1s linear;
       "></div>
     </div>
