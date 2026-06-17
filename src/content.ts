@@ -781,6 +781,14 @@ document.addEventListener("mousemove", updateActivityState);
 function init(): void {
   log("initTimer()");
 
+  // Clear out any UI left behind by a previous content-script instance. On an
+  // extension upgrade/reinstall the new script is injected into already-open
+  // tabs while the old script's nodes are still in the DOM — without this we'd
+  // append duplicates (e.g. two timers stacked top-right).
+  document
+    .querySelectorAll('.web-time-timer, .web-time-blur-overlay, .web-time-wind-down-overlay')
+    .forEach(el => el.remove());
+
   createTimerElement();
   createBlurOverlay();
   createWindDownOverlay();
