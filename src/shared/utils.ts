@@ -82,6 +82,22 @@ export function formatDateForDisplay(dateString: string): string {
 }
 
 /**
+ * Day-of-week abbreviation (e.g. "2025-01-15" -> "Wed") for a YYYY-MM-DD string.
+ */
+export function getDayOfWeek(dateString: string): string {
+  const date = parseDateLocal(dateString);
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  return days[date.getDay()];
+}
+
+/**
+ * Format a date string with its weekday (e.g. "2025-01-15" -> "Jan 15 (Wed)").
+ */
+export function formatDateWithDayOfWeek(dateString: string): string {
+  return `${formatDateForDisplay(dateString)} (${getDayOfWeek(dateString)})`;
+}
+
+/**
  * Debug logging that can be easily toggled
  */
 export function log(...args: unknown[]): void {
@@ -155,6 +171,8 @@ export const Utils = {
   formatTimeWithSeconds,
   getLocalDateStr,
   formatDateForDisplay,
+  getDayOfWeek,
+  formatDateWithDayOfWeek,
   log,
   formatTimeCompact,
   compute7DayStats,

@@ -1,5 +1,4 @@
 import { CONFIG, COLORS, ViewState } from './config.js';
-import { formatTime, getLocalDateStr, formatDateWithDayOfWeek } from './popup-utils.js';
 import { AppState } from './state.js';
 import {
   processGeneralViewData,
@@ -15,7 +14,7 @@ import {
   highlightBar,
   type DomainPieData
 } from './chart-builder.js';
-import { escapeHtml } from '../shared/utils.js';
+import { formatTime, getLocalDateStr, formatDateWithDayOfWeek, escapeHtml } from '../shared/utils.js';
 import type { ChartInstance } from '../types.js';
 
 declare const browser: typeof chrome;
@@ -397,7 +396,7 @@ export function renderDetailView(domain: string | null): void {
 export function updateDetailHeader(domain: string): void {
   if (!AppState.allTimeHistory) return;
 
-  const currentDate = getLocalDateStr();
+  const currentDate = getLocalDateStr(AppState.dayResetTime);
   const todaysTime = calculateTodaysTotals(
     AppState.allTimeHistory, currentDate, domain
   );
@@ -477,7 +476,7 @@ export function updateGeneralViewHeader(dateString: string): void {
   const headerSummary = document.querySelector('#general-page .time-summary');
   if (!headerSummary) return;
 
-  const today = getLocalDateStr();
+  const today = getLocalDateStr(AppState.dayResetTime);
 
   const formattedDate = formatDateWithDayOfWeek(dateString);
   if (dateString === today) {

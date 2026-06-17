@@ -12,6 +12,9 @@ export interface AppStateInterface {
   chartInstance: ChartInstance | null;
   pieChartInstance: ChartInstance | null;
   lockedDayIndex: number | null;
+  /** Hour (0-23) the day rolls over, from settings. Matches the background's
+   *  day-reset so the popup's notion of "today" agrees with tracked time. */
+  dayResetTime: number;
 
   setCurrentDomain(domain: Domain | null): void;
   setSelectedDomain(domain: Domain | null): void;
@@ -37,6 +40,7 @@ export const AppState: AppStateInterface = {
   chartInstance: null,
   pieChartInstance: null,
   lockedDayIndex: null,
+  dayResetTime: 0,
 
   setCurrentDomain(domain: Domain | null): void {
     this.activeTabDomain = domain;

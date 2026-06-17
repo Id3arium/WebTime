@@ -1,5 +1,5 @@
 import { CONFIG, COLORS } from './config.js';
-import { formatDateForDisplay, formatDateWithDayOfWeek, formatTime } from './popup-utils.js';
+import { formatDateForDisplay, formatDateWithDayOfWeek, formatTime } from '../shared/utils.js';
 import { AppState } from './state.js';
 import type { GeneralViewData, DetailViewData, MovingAverageData } from './data-processor.js';
 

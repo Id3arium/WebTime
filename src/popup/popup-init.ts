@@ -1,4 +1,4 @@
-import { extractDomain } from './popup-utils.js';
+import { extractDomain } from '../shared/utils.js';
 import { AppState } from './state.js';
 import { UIManager } from './ui-manager.js';
 import { CONFIG } from './config.js';
@@ -59,6 +59,10 @@ export const App = {
     if (settings.global?.scalingPower !== undefined) {
       CONFIG.scalingPower = Math.max(0.3, Math.min(1.0, settings.global.scalingPower));
     }
+
+    // Mirror the background's day-reset hour so the popup's "today" agrees with
+    // tracked time between midnight and the reset hour.
+    AppState.dayResetTime = settings.global?.dayResetTime || 0;
 
     AppState.setCurrentDomain(currentDomain);
     AppState.setTimeHistory(timeHistory);

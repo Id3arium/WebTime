@@ -1,5 +1,5 @@
 import { CONFIG } from './config.js';
-import { formatTime } from './popup-utils.js';
+import { formatTime } from '../shared/utils.js';
 import type { TimeHistory, Domain, DateString } from '../types.js';
 
 export interface RankData {
