@@ -172,9 +172,9 @@ async function loadSessionState(): Promise<void> {
         : (incrementSec > 0 ? endedSessionNum * incrementSec : remainingSec);
       cooldownTotalSec[domain] = totalCooldownSec;
       startCooldownTicker(domain, totalCooldownSec, endedSessionNum, incrementSec);
-      console.log(`Rehydrated active cooldown for ${domain}: ${remainingSec}s left of ${totalCooldownSec}s total`);
+      log(`Rehydrated active cooldown for ${domain}: ${remainingSec}s left of ${totalCooldownSec}s total`);
     }
-    console.log(`Session state rehydrated for ${currentDateStr} (${Object.keys(sessions).length} domains)`);
+    log(`Session state rehydrated for ${currentDateStr} (${Object.keys(sessions).length} domains)`);
   } catch (err) {
     console.warn('Failed to load session state:', err);
   }
@@ -195,7 +195,7 @@ function migrateDataIfNeeded(oldTimeHistory: TimeHistory | Record<DateString, nu
 
   const firstDate = dates[0];
   if (typeof oldTimeHistory[firstDate] === "number") {
-    console.log("Migrating old YouTube-only data to new multi-site format");
+    log("Migrating old YouTube-only data to new multi-site format");
 
     const migratedHistory: TimeHistory = {};
     for (const [date, seconds] of Object.entries(oldTimeHistory)) {
@@ -204,28 +204,28 @@ function migrateDataIfNeeded(oldTimeHistory: TimeHistory | Record<DateString, nu
       };
     }
 
-    console.log(`Migrated ${dates.length} days of data from old format`);
+    log(`Migrated ${dates.length} days of data from old format`);
     return migratedHistory;
   }
 
-  console.log("Data already in new multi-site format");
+  log("Data already in new multi-site format");
   return oldTimeHistory as TimeHistory;
 }
 
 function initDefaultTimeData(): void {
   todaysTotalTimeInActiveDomain = 0;
   timeHistory = {};
-  console.log("Initialized with default values");
+  log("Initialized with default values");
 }
 
 async function saveTimeData(): Promise<void> {
   if (isSaving) {
-    console.log('Save already in progress, skipping...');
+    log('Save already in progress, skipping...');
     return;
   }
 
   isSaving = true;
-  console.log(`saveTimeData() ${currentDateStr}: ${todaysTotalTimeInActiveDomain} seconds`);
+  log(`saveTimeData() ${currentDateStr}: ${todaysTotalTimeInActiveDomain} seconds`);
 
   try {
     if (!timeHistory[currentDateStr]) {
@@ -245,7 +245,7 @@ async function saveTimeData(): Promise<void> {
     await browser.storage.local.set({
       trackedTime: storageData,
     });
-    console.log("Time data successfully saved with history.");
+    log("Time data successfully saved with history.");
   } catch (error) {
     console.error("Error saving time data to storage:", error);
   } finally {
@@ -266,7 +266,7 @@ async function loadTimeData(): Promise<void> {
     timeHistory = migrateDataIfNeeded(trackedTime.timeHistory);
 
     if (currentDateStr !== trackedTime.lastDate) {
-      console.log(
+      log(
         `New day detected (Last: ${trackedTime.lastDate}, Now: ${currentDateStr})`
       );
       todaysTotalTimeInActiveDomain = 0;
@@ -275,7 +275,7 @@ async function loadTimeData(): Promise<void> {
       todaysTotalTimeInActiveDomain = trackedTabDomain ? (todaysData[trackedTabDomain] || 0) : 0;
     }
 
-    console.log(
+    log(
       `Loaded data for ${currentDateStr}, time: ${todaysTotalTimeInActiveDomain}`
     );
   } catch (error) {
@@ -312,7 +312,7 @@ function incrementTimer(): void {
     for (const domain of Object.keys(sessions)) delete sessions[domain];
     for (const domain of Object.keys(windDownActive)) delete windDownActive[domain];
     clearSessionState(); // drop persisted state for the old day
-    console.log("New day, reset timer.");
+    log("New day, reset timer.");
   }
   updateTimerDisplay(todaysTotalTimeInActiveDomain);
 
@@ -327,7 +327,7 @@ function startTimer(): void {
   if (timerInterval) return;
 
   timerInterval = setInterval(incrementTimer, 1000);
-  console.log("Timer started.");
+  log("Timer started.");
 }
 
 function stopTimer(): void {
@@ -354,7 +354,7 @@ function updateTimerDisplay(updatedTime: number): void {
       message.sessionTime = display.sessionTime;
       message.sessionLimitSeconds = display.sessionLimitSeconds;
       message.sessionNum = session.sessionNum;
-      console.log(
+      log(
         `[timer] domain=${trackedTabDomain} daily=${updatedTime}s ` +
         `start=${session.startDaily}s base=${session.baseLength}s ` +
         `carryover=${session.carryover}s grace=${session.graceSeconds}s ` +
@@ -377,7 +377,7 @@ async function updateTimingState(tabId: number): Promise<void> {
   try {
     const activeTab = await browser.tabs.get(tabId);
     if (!activeTab || !activeTab.url) {
-      console.log(`Tab ${tabId} was closed or has no URL`);
+      log(`Tab ${tabId} was closed or has no URL`);
       stopTimer();
       return;
     }
@@ -417,7 +417,7 @@ function handleDomainSwitch(url: string): void {
   // back. Settings changes are handled in the SETTINGS_UPDATED handler, which
   // touches only the changed domain. So domain switches safely preserve the
   // session object across tabs of the same domain.
-  console.log(`Switched to domain: ${trackedTabDomain}, time: ${todaysTotalTimeInActiveDomain}`);
+  log(`Switched to domain: ${trackedTabDomain}, time: ${todaysTotalTimeInActiveDomain}`);
   updateTimerDisplay(todaysTotalTimeInActiveDomain);
 }
 
@@ -439,7 +439,7 @@ function handleTimerState(activeTab: chrome.tabs.Tab, tabId: number): void {
 }
 
 function handleTabActivated(activeInfo: chrome.tabs.TabActiveInfo): void {
-  console.log(`handleTabActivated called for tab ${activeInfo.tabId}`);
+  log(`handleTabActivated called for tab ${activeInfo.tabId}`);
   activeTabId = activeInfo.tabId;
   updateTimingState(activeTabId);
 }
@@ -453,11 +453,11 @@ function handleTabUpdated(
     const domain = extractDomain(changeInfo.url);
     if (domain) {
       trackedTabIds.add(tabId);
-      console.log(`Added tab ${tabId} to tracked tabs`);
+      log(`Added tab ${tabId} to tracked tabs`);
     } else {
       trackedTabIds.delete(tabId);
       delete tabLastActivity[tabId];
-      console.log(`Removed tab ${tabId} from tracked tabs`);
+      log(`Removed tab ${tabId} from tracked tabs`);
     }
   }
   // When audio stops, treat it as a fresh activity event so the inactivity
@@ -486,7 +486,7 @@ function handleMessageReceived(
   sender: chrome.runtime.MessageSender,
   _sendResponse: (response?: unknown) => void
 ): void {
-  console.log(`handleMessage()`, message, sender);
+  log(`handleMessage()`, message, sender);
 
   if (message.type === "CONTENT_SCRIPT_READY" && sender.tab?.id) {
     trackedTabIds.add(sender.tab.id);
@@ -539,12 +539,12 @@ function handleMessageReceived(
       const settings: WebTimeSettings = data.webTimeSettings || { global: {}, domains: {} };
 
       inactivityThresholdMs = (settings.global?.inactivityTimeoutS ?? 30) * 1000;
-      console.log(`Inactivity threshold: ${inactivityThresholdMs}ms`);
+      log(`Inactivity threshold: ${inactivityThresholdMs}ms`);
 
       const newResetTime = settings.global?.dayResetTime || 0;
       if (newResetTime !== dayResetTime) {
         dayResetTime = newResetTime;
-        console.log(`Day reset time updated to: ${dayResetTime}:00`);
+        log(`Day reset time updated to: ${dayResetTime}:00`);
         const newDateStr = getLocalDateStrWithReset();
         if (newDateStr !== currentDateStr) {
           saveTimeData();
@@ -552,7 +552,7 @@ function handleMessageReceived(
           const todayData = timeHistory[currentDateStr] || {};
           todaysTotalTimeInActiveDomain = trackedTabDomain ? (todayData[trackedTabDomain] || 0) : 0;
           updateTimerDisplay(todaysTotalTimeInActiveDomain);
-          console.log(`Date changed to ${currentDateStr} due to reset time change`);
+          log(`Date changed to ${currentDateStr} due to reset time change`);
         }
       }
 
@@ -618,7 +618,7 @@ function handleMessageReceived(
             cooldownIncrement: cooldownIncrementSeconds,
           });
           fireCooldown(domain, result.nextSession, result.cooldownSeconds, cooldownIncrementSeconds, updated.sessionNum);
-          console.log(
+          log(
             `Session limit shrunk past elapsed for ${domain}: session ended immediately ` +
             `(daily=${todaysTotalTimeInActiveDomain}s, newLimit=${newLimitSeconds}s)`
           );
@@ -626,7 +626,7 @@ function handleMessageReceived(
           saveSessionState(); // persist the live-resized session
           const display = displayFor(updated, todaysTotalTimeInActiveDomain);
           updateTimerDisplay(todaysTotalTimeInActiveDomain);
-          console.log(
+          log(
             `Session limit changed for ${domain}: ` +
             `effLimit=${display.sessionLimitSeconds}s remaining=${display.remaining}s ` +
             `(daily=${todaysTotalTimeInActiveDomain}s, base=${newLimitSeconds}s, ` +
@@ -696,7 +696,7 @@ function checkPhiNudges(settings: InterventionSettings): void {
     sessions[domain] = markNudgeFired(session, nudgeTime);
     saveSessionState(); // persist firedNudges so a restart doesn't re-fire
     const remaining = displayFor(sessions[domain], todaysTotalTimeInActiveDomain).remaining;
-    console.log(`φ-nudge at ${Math.round(nudgeTime / 60)}min into session (${remaining}s remaining)`);
+    log(`φ-nudge at ${Math.round(nudgeTime / 60)}min into session (${remaining}s remaining)`);
   }
 }
 
@@ -738,7 +738,7 @@ function checkAveragePopup(settings: InterventionSettings): void {
   const averageMinutes = Math.round(averageSeconds / 60);
   const stats = compute7DayStats(timeHistory, trackedTabDomain, currentDateStr);
   sendAveragePopup(Math.max(0, minutesLeft), averageMinutes, stats);
-  console.log(`Average popup shown at ${Math.round(timeInSeconds / 60)}min (80% of avg: ${Math.round(averageSeconds / 60)}min)`);
+  log(`Average popup shown at ${Math.round(timeInSeconds / 60)}min (80% of avg: ${Math.round(averageSeconds / 60)}min)`);
 }
 
 function sendMessageToAllTabsOfDomain(domain: Domain, message: Record<string, unknown>): void {
@@ -763,7 +763,7 @@ function checkWindDown(settings: InterventionSettings): void {
 
   if (wd.active && !windDownActive[domain]) {
     windDownActive[domain] = true;
-    console.log(`Wind-down started for ${domain} (${wd.remaining}s remaining)`);
+    log(`Wind-down started for ${domain} (${wd.remaining}s remaining)`);
   }
 
   if (wd.active) {
@@ -871,7 +871,7 @@ function startCooldownTicker(domain: Domain, totalCooldownSeconds: number, sessi
       if (trackedTabDomain === domain) {
         updateTimerDisplay(todaysTotalTimeInActiveDomain);
       }
-      console.log(`Cooldown expired for ${domain}`);
+      log(`Cooldown expired for ${domain}`);
     } else {
       // Always send the stored full length as the denominator (single source of
       // truth) so every tab agrees with the late-join path; fall back to the
@@ -934,7 +934,7 @@ async function endSessionEarly(): Promise<void> {
   if (!result) return; // no time left to claim — normal cooldown will fire on its own
 
   fireCooldown(domain, result.nextSession, result.cooldownSeconds, cooldownIncrementSeconds, session.sessionNum);
-  console.log(
+  log(
     `Session ${session.sessionNum} ended early for ${domain} ` +
     `(daily=${todaysTotalTimeInActiveDomain}s, carryoverToNext=${result.nextSession.carryover}s, ` +
     `graceEarned=${result.graceEarned}s, cooldown=${result.cooldownSeconds}s)`
@@ -969,7 +969,7 @@ function checkSessionLimit(settings: InterventionSettings): boolean {
   });
 
   fireCooldown(domain, result.nextSession, result.cooldownSeconds, cooldownIncrementSeconds, session.sessionNum);
-  console.log(
+  log(
     `Session ${session.sessionNum} limit reached for ${domain} ` +
     `(daily=${todaysTotalTimeInActiveDomain}s, cooldown=${result.cooldownSeconds}s, ` +
     `nextSession=${result.nextSession.sessionNum})`
@@ -1008,8 +1008,8 @@ async function init(): Promise<void> {
   const settings: WebTimeSettings = settingsData.webTimeSettings || { global: {}, domains: {} };
   dayResetTime = settings.global?.dayResetTime || 0;
   inactivityThresholdMs = (settings.global?.inactivityTimeoutS ?? 30) * 1000;
-  console.log(`Day reset time loaded: ${dayResetTime}:00`);
-  console.log(`Inactivity threshold: ${inactivityThresholdMs}ms`);
+  log(`Day reset time loaded: ${dayResetTime}:00`);
+  log(`Inactivity threshold: ${inactivityThresholdMs}ms`);
 
   currentDateStr = getLocalDateStrWithReset();
 
@@ -1036,7 +1036,7 @@ async function init(): Promise<void> {
       updateTimingState(activeTabId);
     }
   }, ACTIVITY_CHECK_INTERVAL_MS);
-  console.log("Initialization complete.");
+  log("Initialization complete.");
 }
 
 init();

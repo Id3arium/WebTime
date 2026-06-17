@@ -1,5 +1,5 @@
 import { Constants } from './shared/constants.js';
-import { formatTimeCompact, escapeHtml } from './shared/utils.js';
+import { formatTimeCompact, escapeHtml, log } from './shared/utils.js';
 import type { ExtensionMessage, SessionStartStats } from './types.js';
 
 declare const browser: typeof chrome;
@@ -120,7 +120,7 @@ function createTimerElement(): void {
 
   document.body.appendChild(timer);
 
-  console.log("Timer element created and added to page.");
+  log("Timer element created and added to page.");
 }
 
 /** Adaptive time format: MM:SS when < 1h, H:MM:SS when >= 1h */
@@ -715,7 +715,7 @@ function showEndSessionConfirm(): void {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     browser.runtime.sendMessage({ type: 'REQUEST_BLOCKER_STATE' }).catch(() => {
-      console.log('WebTime: extension context invalidated, reloading tab');
+      console.warn('WebTime: extension context invalidated, reloading tab');
       location.reload();
     });
   }
@@ -779,7 +779,7 @@ document.addEventListener("keydown", updateActivityState);
 document.addEventListener("mousemove", updateActivityState);
 
 function init(): void {
-  console.log("initTimer()");
+  log("initTimer()");
 
   createTimerElement();
   createBlurOverlay();
@@ -820,7 +820,7 @@ function init(): void {
   } catch (error) {
     console.error("Error sending CONTENT_SCRIPT_READY message:", error);
   }
-  console.log("Sent CONTENT_SCRIPT_READY message to background.");
+  log("Sent CONTENT_SCRIPT_READY message to background.");
 }
 
 init();

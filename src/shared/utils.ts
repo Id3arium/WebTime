@@ -98,10 +98,11 @@ export function formatDateWithDayOfWeek(dateString: string): string {
 }
 
 /**
- * Debug logging that can be easily toggled
+ * Debug logging, off in production. Flip DEBUG_ENABLED to true to get the full
+ * trace (tab switches, saves, ticks, session/cooldown lifecycle) back.
  */
+const DEBUG_ENABLED = false;
 export function log(...args: unknown[]): void {
-  const DEBUG_ENABLED = true;
   if (DEBUG_ENABLED) {
     console.log('[WebTime Debug]:', ...args);
   }
