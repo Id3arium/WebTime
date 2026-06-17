@@ -36,7 +36,7 @@
 
   "browser_specific_settings": {
     "gecko": {
-      "id": "webtime@somedomain.com",
+      "id": "webtime@local",
       "data_collection_permissions": {
         "required": ["none"],
         "optional": []
