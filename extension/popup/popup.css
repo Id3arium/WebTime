@@ -5,6 +5,10 @@
   --border-line: #444;
   --light-text: #eeeeff;
   --summary-text: #ccc;
+  /* The ONE edge inset for the whole popup. Change this to move every edge
+     (chart, headers, footer, divider lines) together. Nothing else should
+     define horizontal spacing against the popup edge. */
+  --pad: 16px;
 }
 
 body {
@@ -12,7 +16,7 @@ body {
   height: 600px;
   font-family: Arial, sans-serif;
   margin: 0;
-  padding: 0px 16px;
+  padding: 0;
   overflow: hidden;
 
   background-color: var(--dark-bg);
@@ -20,6 +24,13 @@ body {
   -webkit-backdrop-filter: blur(6px);      /* For Safari */
 }
 
+/* Full-width clipper for the carousel. It must NOT have horizontal padding:
+   overflow:hidden clips at the padding box, so any horizontal inset here would
+   sit INSIDE the clip region and let the adjacent sliding page bleed through it.
+   The horizontal --pad inset lives on .half-page instead.
+   No vertical padding either: the chart/panel heights are tuned to fill the
+   popup flush top-to-bottom; the bottom breathing room comes from the footer's
+   own padding and the chart's layout.padding, like the original design. */
 .content {
   display: flex;
   flex-direction: column;
@@ -27,9 +38,12 @@ body {
   overflow: hidden;
 }
 
+/* Carousel: each page is exactly one viewport (100%) wide and we slide by whole
+   viewports. This is padding-independent — unlike the old 200%-wide container +
+   translateX(-50%), which only lined up when .content had zero padding. */
 .pages-container {
   display: flex;
-  width: 200%;
+  width: 100%;
   height: 100%;
   transition: transform 0.3s ease-in-out;
 }
@@ -39,15 +53,20 @@ body {
 }
 
 .pages-container.show-detail {
-  transform: translateX(-50%);
+  transform: translateX(-100%);
 }
 
 .half-page {
-  width: 50%;
+  width: 100%;
+  flex-shrink: 0;
   height: 100%;
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
+  /* The horizontal edge inset lives HERE (not on .content) so the page fills the
+     full viewport width and clips cleanly — no neighbor-page sliver at the seam.
+     This is the single owner of the left/right --pad inset. */
+  padding: 0 var(--pad);
+  box-sizing: border-box;
 }
 
 .page-header {
@@ -55,8 +74,8 @@ body {
   background-color: var(--dark-bg); 
   text-align: center;
   padding: 16px 0;
+  margin: 0 0 8px 0;
   border-bottom: 1px solid var(--border-line);
-  margin-bottom: 8px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -125,7 +144,7 @@ body {
   color: var(--light-text);
   background-color: var(--dark-bg);
   border-radius: 8px;
-  padding: 8px 0 16px 0;
+  padding: 0;
   margin: 0;
   box-sizing: border-box;
   display: flex;
@@ -135,6 +154,23 @@ body {
 .page-content.split-view {
   flex-direction: row;
   gap: 12px;
+  position: relative;
+}
+
+/* Vertical divider between chart and settings. Drawn as a positioned line (not a
+   panel border) so it can stop short of the edges: it extends up to meet the
+   header's horizontal line, and stops at the Save button's bottom so it doesn't
+   run into the bottom edge. Lines separate content without crashing into other
+   lines or the popup edge. */
+.page-content.split-view::after {
+  content: '';
+  position: absolute;
+  left: 406px;              /* centered in the 12px gap between chart and settings */
+  top: -8px;                /* reach up to touch the header line */
+  bottom: 24px;             /* stop flush with the Save button's bottom inset */
+  width: 1px;
+  background: var(--border-line);
+  pointer-events: none;
 }
 
 .left-panel {
@@ -149,16 +185,20 @@ body {
 }
 
 .right-panel {
-  width: 350px;
-  flex-shrink: 0;
+  /* Fill whatever remains after the fixed 400px chart + 12px gap, so the panel
+     fits the inset wrapper exactly at any --pad (no hardcoded width to drift). */
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  min-width: 0;
   height: 500px;
   overflow: hidden;
+  /* Left padding is the INTERNAL gap from the chart/settings divider, not an
+     edge inset. The right edge is owned by --pad on .content, so no right pad. */
   padding-left: 12px;
-  padding-right: 8px;
-  border-left: 1px solid var(--border-line);
+  padding-right: 0;
+  /* Vertical divider is drawn by .split-view::after so it can stop short of the
+     edges; no border-left here. */
 }
 
 #total-time-chart,
@@ -337,7 +377,10 @@ body {
 .divider {
   height: 1px;
   background: var(--light-bg);
-  margin: 4px 0;
+  /* Slightly WIDER than the Save button (which the content padding matches),
+     but short of the panel edge — lines separate content without reaching the
+     edge. -7px from the 14px content padding => ~7px past the button each side. */
+  margin: 4px -7px;
 }
 
 .interventions-header {
@@ -484,9 +527,10 @@ body {
 }
 
 .settings-footer {
-  padding: 14px;
-  padding-bottom: 24px;
-  border-top: 1px solid var(--border-line);
+  /* Horizontal padding (7px) makes the Save button line up with the middle
+     divider's width. No separator line here — the vertical divider already sets
+     this section apart, so the line was redundant clutter above the button. */
+  padding: 14px 7px 24px 7px;
 }
 
 .save-btn {

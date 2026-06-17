@@ -109,6 +109,13 @@ export function getBaseChartOptions(_isGeneralView: boolean = false): Record<str
     animation: { duration: CONFIG.initAnimationDuration },
     responsive: true,
     maintainAspectRatio: false,
+    // Inset the plot area from the canvas edges so the left y-axis labels and
+    // the rotated x-axis date labels have room INSIDE the canvas — otherwise
+    // they render flush against the panel edge (which clips them via
+    // overflow:hidden) and look cramped on the left/bottom.
+    layout: {
+      padding: { left: 8, right: 0, top: 0, bottom: 20 }
+    },
     scales: {
       y: {
         grid: { color: getGridColor() },
@@ -334,7 +341,12 @@ export function buildDetailViewChart(processedData: DetailViewData): ChartConfig
         }
       }
     },
-    plugins: { tooltip: getDetailViewTooltipConfig(processedData) }
+    plugins: {
+      legend: {
+        labels: { boxHeight: 8, padding: 8, font: { size: 11 } }
+      },
+      tooltip: getDetailViewTooltipConfig(processedData)
+    }
   };
 
   return {
