@@ -473,23 +473,13 @@ function handleMessageReceived(
     trackedTabIds.add(sender.tab.id);
     updateTimerDisplay(todaysTotalTimeInActiveDomain);
 
-    // If the domain is currently in cooldown, immediately show blocker on this new tab.
-    // We don't know the session number or increment minutes from here — the active
-    // cooldown ticker will send a full-fidelity SHOW_BLOCKER on its next tick anyway.
+    // If the domain is currently in cooldown, immediately show the blocker on
+    // this new tab with the SAME text every other tab shows (correct session
+    // number + breakdown), reconstructed from existing state.
     if (sender.tab.url) {
       const domain = extractDomain(sender.tab.url);
-      if (domain) {
-        const endTime = cooldownEndTime[domain] || 0;
-        if (endTime > Date.now()) {
-          const remaining = Math.ceil((endTime - Date.now()) / 1000);
-          browser.tabs.sendMessage(sender.tab.id, {
-            type: 'SHOW_BLOCKER',
-            cooldownRemainingSeconds: remaining,
-            totalCooldownSeconds: remaining,
-            cooldownCount: 1,
-            cooldownIncrementSeconds: 0
-          }).catch(() => {});
-        }
+      if (domain && (cooldownEndTime[domain] || 0) > Date.now()) {
+        void sendBlockerToLateJoiningTab(sender.tab.id, domain);
       }
     }
   }
@@ -518,19 +508,9 @@ function handleMessageReceived(
     const tabId = sender.tab.id;
     const domain = extractDomain(sender.tab.url);
     if (domain) {
-      const endTime = cooldownEndTime[domain] || 0;
-      if (endTime > Date.now()) {
-        const remaining = Math.ceil((endTime - Date.now()) / 1000);
-        browser.tabs.sendMessage(tabId, {
-          type: 'SHOW_BLOCKER',
-          cooldownRemainingSeconds: remaining,
-          totalCooldownSeconds: remaining,
-          cooldownCount: 1,
-          cooldownIncrementSeconds: 0
-        }).catch(() => {});
-      } else {
-        browser.tabs.sendMessage(tabId, { type: 'HIDE_BLOCKER' }).catch(() => {});
-      }
+      // sendBlockerToLateJoiningTab handles both cases: SHOW with correct
+      // reconstructed text if in cooldown, HIDE otherwise.
+      void sendBlockerToLateJoiningTab(tabId, domain);
     }
   }
 
@@ -779,6 +759,42 @@ function checkWindDown(settings: InterventionSettings): void {
   }
 }
 
+
+/**
+ * Send a full-fidelity SHOW_BLOCKER to a single tab that joined mid-cooldown
+ * (newly focused / restored). The blocker args aren't passed in — they're
+ * reconstructed from existing state so the late-joiner shows the SAME text as
+ * every other tab ("Session N ended" + breakdown) instead of placeholders:
+ *   - ended session number = next session's sessionNum - 1 (cooldown stored the
+ *     next session), same derivation the rehydrate path uses.
+ *   - cooldown increment    = the domain's settings value (not on the session).
+ *   - remaining / total      = derived from cooldownEndTime.
+ * No-ops if the domain isn't actually in cooldown.
+ */
+async function sendBlockerToLateJoiningTab(tabId: number, domain: Domain): Promise<void> {
+  const endTime = cooldownEndTime[domain] || 0;
+  if (endTime <= Date.now()) {
+    browser.tabs.sendMessage(tabId, { type: 'HIDE_BLOCKER' as const }).catch(() => {});
+    return;
+  }
+  const remaining = Math.ceil((endTime - Date.now()) / 1000);
+  const nextSession = sessions[domain];
+  const endedSessionNum = nextSession ? Math.max(1, nextSession.sessionNum - 1) : 1;
+  const settingsData = await browser.storage.local.get('webTimeSettings');
+  const settings: WebTimeSettings = settingsData.webTimeSettings || { global: {}, domains: {} };
+  const incrementSec = (settings.domains?.[domain]?.cooldownIncrement || 0) * 60;
+  // Total cooldown = ended session number × increment (the cooldown formula).
+  // Falls back to `remaining` if increment is unknown, so the progress bar is
+  // never zero-length.
+  const totalSeconds = incrementSec > 0 ? endedSessionNum * incrementSec : remaining;
+  browser.tabs.sendMessage(tabId, {
+    type: 'SHOW_BLOCKER' as const,
+    cooldownRemainingSeconds: remaining,
+    totalCooldownSeconds: totalSeconds,
+    cooldownCount: endedSessionNum,
+    cooldownIncrementSeconds: incrementSec
+  }).catch(() => {});
+}
 
 function sendBlockerToAllTabsOfDomain(domain: Domain, remainingSeconds: number, totalSeconds: number, cooldownCount: number, cooldownIncrementSeconds: number): void {
   const message = {

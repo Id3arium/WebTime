@@ -381,11 +381,13 @@ function showBlocker(remainingSeconds: number, totalCooldownSeconds: number, coo
   // (e.g. 3m30s), so format with seconds rather than rounding to whole minutes.
   const total = formatCooldownDuration(totalCooldownSeconds);
   const increment = formatCooldownDuration(cooldownIncrementSeconds);
+  // Heading says which session ended; the sub-line shows the breakdown. When
+  // the cooldown grows with each session (count × increment), show the math so
+  // the rising duration reads as intentional — but compactly: "3 × 3m = 9m".
+  // Otherwise just the total.
   let cooldownExplanation: string;
   if (cooldownCount > 1 && cooldownIncrementSeconds > 0) {
-    cooldownExplanation = `Session ${cooldownCount} · ${cooldownCount} × ${increment} = ${total} cooldown`;
-  } else if (cooldownCount === 1 && cooldownIncrementSeconds > 0) {
-    cooldownExplanation = `Session ${cooldownCount} · ${total} cooldown`;
+    cooldownExplanation = `${cooldownCount} × ${increment} = ${total} cooldown`;
   } else {
     cooldownExplanation = `${total} cooldown`;
   }
@@ -413,7 +415,7 @@ function showBlocker(remainingSeconds: number, totalCooldownSeconds: number, coo
 
   el.innerHTML = `
     <div style="font-size: 18px; font-weight: 600; color: #ccc; margin-bottom: 8px;">
-      Session limit reached
+      ${cooldownCount > 0 ? `Session ${cooldownCount} Ended` : 'Session Ended'}
     </div>
     <div style="font-size: 14px; color: #eee; margin-bottom: 16px;">
       ${cooldownExplanation}
