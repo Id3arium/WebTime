@@ -2,9 +2,10 @@
 
 > Track and take control of your time.
 
-A Firefox browser extension that tracks how long you spend on each site and uses
-gentle, escalating **interventions** — not hard blocks — to help you stay aware
-of and curb mindless browsing.
+A Firefox browser extension that tracks how long you spend on each site, with a
+small timer in the corner of your screen, and gives you the tools to spend that
+time mindfully. It uses **session-based browsing** that's both disciplined and
+flexible — gentle nudges and cooldowns, not hard blocks.
 
 ## Screenshots
 
@@ -32,21 +33,28 @@ keep you informed enough to make your own choice.
 
 ## Features
 
+**Visualize your data**
+
 - **Per-domain time tracking** with a small on-page timer (shows the current
   session by default; click to peek at today's total).
-- **Nudges** — brief overlays that get more frequent as a session nears its end
-  (sparse early, accelerating late).
-- **7-day average popup** — when you cross ~80% of your trailing 7-day average
-  for a domain, a popup surfaces the trend so you notice before overshooting.
+- **Usage chart** in the toolbar popup — track individual sites over time, and
+  expand any day for a detailed breakdown.
+- **7-day moving averages** to spot patterns, plus a popup when you cross ~80%
+  of your trailing 7-day average for a domain.
+- **All your data stays local** — nothing leaves your browser.
+
+**Mindful accountability**
+
+- **Minimalist nudges** — brief overlays that get more frequent as a session
+  nears its end (sparse early, accelerating late), without interrupting your flow.
 - **Session limits with cooldowns** — after continuous use past a configurable
   limit, a cooldown blocks the page; each successive cooldown grows.
-- **Carryover / grace** — ending a session early carries *all* the time you had
-  left onto your next session, plus an extra 10% on top as a grace bonus — so
-  stopping early is rewarded, not punished.
+- **End a session early** — unused time rolls over to your next session, plus an
+  extra 10% on top, so stopping early is rewarded, not punished.
 - **Wind-down mode** — a bar across the top of the page that drains down over
   the final 60 seconds of a session, a visible heads-up that time's almost up.
-- **Usage chart** in the toolbar popup (30-day history, top domains, 7-day
-  moving average).
+- **Per-site limits** — customize what works for each site. Your time, your
+  decisions.
 
 ## Architecture
 
