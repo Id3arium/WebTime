@@ -15,7 +15,7 @@ of and curb mindless browsing.
 ## Install
 
 WebTime is published on
-[Firefox Add-ons (AMO)](https://addons.mozilla.org/) — _link coming soon_.
+[Firefox Add-ons (AMO)](https://addons.mozilla.org/en-US/firefox/addon/web-time/)
 
 You can also install the latest build directly from
 [GitHub Releases](https://github.com/Id3arium/WebTime/releases): download the
@@ -32,17 +32,19 @@ keep you informed enough to make your own choice.
 
 ## Features
 
-- **Per-domain time tracking** with a small on-page timer (click to toggle
-  between today's total and current-session time).
-- **Phi-spaced nudges** — brief overlays that get more frequent as a session
-  nears its end (sparse early, accelerating late).
+- **Per-domain time tracking** with a small on-page timer (shows the current
+  session by default; click to peek at today's total).
+- **Nudges** — brief overlays that get more frequent as a session nears its end
+  (sparse early, accelerating late).
 - **7-day average popup** — when you cross ~80% of your trailing 7-day average
   for a domain, a popup surfaces the trend so you notice before overshooting.
 - **Session limits with cooldowns** — after continuous use past a configurable
   limit, a cooldown blocks the page; each successive cooldown grows.
-- **Carryover / grace** — ending a session early banks unused time (10% of
-  what's left) onto your next session, so stopping is rewarded, not punished.
-- **Wind-down mode** — a 60-second visual ramp at the end of a session.
+- **Carryover / grace** — ending a session early carries *all* the time you had
+  left onto your next session, plus an extra 10% on top as a grace bonus — so
+  stopping early is rewarded, not punished.
+- **Wind-down mode** — a bar across the top of the page that drains down over
+  the final 60 seconds of a session, a visible heads-up that time's almost up.
 - **Usage chart** in the toolbar popup (30-day history, top domains, 7-day
   moving average).
 
@@ -52,10 +54,10 @@ Three layers, deliberately separated:
 
 | Path | Role |
 |------|------|
-| [`src/background.ts`](src/background.ts) | The engine: tab tracking, the 1s timer loop, storage/persistence (with data migration), and all intervention dispatch. |
+| [`src/background.ts`](src/background.ts) | The engine: tab tracking, the 1s timer loop, storage/persistence, and all intervention dispatch. |
 | [`src/content.ts`](src/content.ts) | In-page UI: the timer widget, blur overlay, nudge animation, and all popups. |
 | [`src/popup/`](src/popup/) | The toolbar popup — chart building, data processing, state, and UI across several modules, bundled to `popup-bundle.js`. |
-| [`src/shared/session-model.ts`](src/shared/session-model.ts) | **Pure, browser-free** session math — boundaries, carryover, phi nudge timing, grace, wind-down. Fully unit-tested. |
+| [`src/shared/session-model.ts`](src/shared/session-model.ts) | **Pure, browser-free** session math — boundaries, carryover, nudge timing, grace, wind-down. Fully unit-tested. |
 | [`src/shared/utils.ts`](src/shared/utils.ts) | Pure helpers — domain extraction, time formatting, 7-day stats. |
 | [`src/shared/constants.ts`](src/shared/constants.ts) | Shared tuning constants and defaults. |
 | [`src/types.ts`](src/types.ts) | Shared type definitions. |
@@ -133,7 +135,7 @@ relevant `src/shared/` module with esbuild and imports the **real** source (no
 copy-pasted logic), so tests can't silently drift from the implementation:
 
 - [`test/session-model.test.mjs`](test/session-model.test.mjs) — boundaries,
-  carryover, end-early, cooldowns, phi nudges, grace, wind-down.
+  carryover, end-early, cooldowns, nudges, grace, wind-down.
 - [`test/seven-day-stats.test.mjs`](test/seven-day-stats.test.mjs) — 7-day
   average stats that drive the average popup.
 
