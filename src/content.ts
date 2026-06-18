@@ -1,5 +1,5 @@
 import { Constants } from './shared/constants.js';
-import { formatTimeCompact, escapeHtml, log } from './shared/utils.js';
+import { formatTimeCompact, log } from './shared/utils.js';
 import type { ExtensionMessage, SessionStartStats } from './types.js';
 
 declare const browser: typeof chrome;
@@ -42,6 +42,24 @@ const CSS_RESET = `
   -webkit-font-smoothing: antialiased !important;
   box-sizing: border-box !important;
 `;
+
+/**
+ * Build an element via the DOM API instead of innerHTML. `style` is a static
+ * style string (assigned through cssText, which is not an injection vector);
+ * `text` is set as a text node, so any dynamic value is inert markup-wise.
+ * Used for the overlay dialogs to keep them free of innerHTML.
+ */
+function makeEl(
+  tag: string,
+  opts: { className?: string; style?: string; text?: string; children?: HTMLElement[] } = {}
+): HTMLElement {
+  const el = document.createElement(tag);
+  if (opts.className) el.className = opts.className;
+  if (opts.style) el.style.cssText = opts.style;
+  if (opts.text !== undefined) el.textContent = opts.text;
+  if (opts.children) el.append(...opts.children);
+  return el;
+}
 
 // Queue of popup-show functions — at most one mandatory popup visible at a time.
 // When a popup is dismissed it calls dequeuePopup() to show the next waiting one.
@@ -216,7 +234,7 @@ function hideBlurOverlay(): void {
   blurOverlay.style.visibility = 'hidden';
 }
 
-function buildBarChart(days: SessionStartStats['days']): string {
+function buildBarChart(days: SessionStartStats['days']): HTMLElement[] {
   const maxSeconds = Math.max(...days.map(d => d.seconds), 1);
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -228,16 +246,34 @@ function buildBarChart(days: SessionStartStats['days']): string {
     const barWidth = Math.round((seconds / maxSeconds) * 100);
     const label = seconds > 0 ? formatTimeCompact(seconds) : '—';
 
-    return `
-      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-        <div style="width: 56px; font-size: 12px; color: #888; text-align: right; flex-shrink: 0; white-space: nowrap;">${dayName} ${dayOfMonth}</div>
-        <div style="flex: 1; height: 10px; background: #333; border-radius: 3px; overflow: hidden;">
-          ${seconds > 0 ? `<div style="width: ${barWidth}%; height: 100%; background: rgba(69, 113, 231, 0.7); border-radius: 3px;"></div>` : ''}
-        </div>
-        <div style="width: 44px; font-size: 12px; color: #aaa; flex-shrink: 0;">${label}</div>
-      </div>
-    `;
-  }).join('');
+    const dayLabel = makeEl('div', {
+      style: 'width: 56px; font-size: 12px; color: #888; text-align: right; flex-shrink: 0; white-space: nowrap;',
+      text: `${dayName} ${dayOfMonth}`,
+    });
+
+    const trackChildren: HTMLElement[] = [];
+    if (seconds > 0) {
+      const fill = makeEl('div', {
+        style: 'height: 100%; background: rgba(69, 113, 231, 0.7); border-radius: 3px;',
+      });
+      fill.style.width = `${barWidth}%`;
+      trackChildren.push(fill);
+    }
+    const track = makeEl('div', {
+      style: 'flex: 1; height: 10px; background: #333; border-radius: 3px; overflow: hidden;',
+      children: trackChildren,
+    });
+
+    const value = makeEl('div', {
+      style: 'width: 44px; font-size: 12px; color: #aaa; flex-shrink: 0;',
+      text: label,
+    });
+
+    return makeEl('div', {
+      style: 'display: flex; align-items: center; gap: 8px; margin-bottom: 4px;',
+      children: [dayLabel, track, value],
+    });
+  });
 }
 
 function createAveragePopupOverlay(minutesLeft: number, averageMinutes: number, stats: SessionStartStats): HTMLDivElement {
@@ -270,31 +306,26 @@ function createAveragePopupOverlay(minutesLeft: number, averageMinutes: number, 
     ? `${minutesLeft} min until your 7-day average`
     : `You've reached your 7-day average`;
 
-  el.innerHTML = `
-    <div style="font-size: 16px; color: #ccc; margin-bottom: 4px; text-align: center !important; font-weight: 600; white-space: nowrap !important;">
-      ${primaryLine}
-    </div>
-    <div style="font-size: 13px; color: #999; margin-bottom: 14px; text-align: center !important; white-space: nowrap !important;">
-      (${avg})
-    </div>
-    <div style="margin-bottom: 12px;">
-      ${buildBarChart(stats.days)}
-    </div>
-    <button class="web-time-avg-continue-btn" style="
-      width: 100%;
-      background: #3a3a3a;
-      border: none;
-      color: #eee;
-      padding: 7px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 13px;
-      text-align: center !important;
-      transition: background 0.2s, opacity 0.3s;
-    ">Continue</button>
-  `;
+  const primary = makeEl('div', {
+    style: 'font-size: 16px; color: #ccc; margin-bottom: 4px; text-align: center !important; font-weight: 600; white-space: nowrap !important;',
+    text: primaryLine,
+  });
+  const avgLine = makeEl('div', {
+    style: 'font-size: 13px; color: #999; margin-bottom: 14px; text-align: center !important; white-space: nowrap !important;',
+    text: `(${avg})`,
+  });
+  const chart = makeEl('div', {
+    style: 'margin-bottom: 12px;',
+    children: buildBarChart(stats.days),
+  });
+  const continueBtn = makeEl('button', {
+    className: 'web-time-avg-continue-btn',
+    style: 'width: 100%; background: #3a3a3a; border: none; color: #eee; padding: 7px; border-radius: 6px; cursor: pointer; font-size: 13px; text-align: center !important; transition: background 0.2s, opacity 0.3s;',
+    text: 'Continue',
+  }) as HTMLButtonElement;
 
-  const continueBtn = el.querySelector('.web-time-avg-continue-btn') as HTMLButtonElement;
+  el.replaceChildren(primary, avgLine, chart, continueBtn);
+
   continueBtn.addEventListener('mouseenter', () => { continueBtn.style.background = '#4a4a4a'; });
   continueBtn.addEventListener('mouseleave', () => { continueBtn.style.background = '#3a3a3a'; });
   continueBtn.addEventListener('click', () => hideAveragePopup());
@@ -474,32 +505,30 @@ function showBlocker(remainingSeconds: number, totalCooldownSeconds: number, coo
     ? Math.max(0, Math.min(100, (remainingSeconds / totalCooldownSeconds) * 100))
     : 100;
 
-  el.innerHTML = `
-    <div style="font-size: 18px; font-weight: 600; color: #ccc; margin-bottom: 8px;">
-      ${cooldownCount > 0 ? `Session ${cooldownCount} Ended` : 'Session Ended'}
-    </div>
-    <div style="font-size: 14px; color: #eee; margin-bottom: 16px;">
-      ${cooldownExplanation}
-    </div>
-    <div style="font-size: 24px; font-weight: 500; color: #fff; margin-bottom: 16px; font-variant-numeric: tabular-nums;" class="web-time-blocker-countdown">
-      ${formatCountdown(remainingSeconds)}
-    </div>
-    <div style="
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      height: 4px;
-      background: rgba(255, 255, 255, 0.1);
-    ">
-      <div class="web-time-blocker-progress-fill" style="
-        height: 100%;
-        background: #4a9eff;
-        width: ${initialPct}%;
-        transition: width 1s linear;
-      "></div>
-    </div>
-  `;
+  const heading = makeEl('div', {
+    style: 'font-size: 18px; font-weight: 600; color: #ccc; margin-bottom: 8px;',
+    text: cooldownCount > 0 ? `Session ${cooldownCount} Ended` : 'Session Ended',
+  });
+  const explanation = makeEl('div', {
+    style: 'font-size: 14px; color: #eee; margin-bottom: 16px;',
+    text: cooldownExplanation,
+  });
+  const countdown = makeEl('div', {
+    className: 'web-time-blocker-countdown',
+    style: 'font-size: 24px; font-weight: 500; color: #fff; margin-bottom: 16px; font-variant-numeric: tabular-nums;',
+    text: formatCountdown(remainingSeconds),
+  });
+  const progressFill = makeEl('div', {
+    className: 'web-time-blocker-progress-fill',
+    style: 'height: 100%; background: #4a9eff; transition: width 1s linear;',
+  });
+  progressFill.style.width = `${initialPct}%`;
+  const progressTrack = makeEl('div', {
+    style: 'position: absolute; bottom: 0; left: 0; width: 100%; height: 4px; background: rgba(255, 255, 255, 0.1);',
+    children: [progressFill],
+  });
+
+  el.replaceChildren(heading, explanation, countdown, progressTrack);
 
   blurOverlay!.appendChild(el);
   blockerDialog = el;
@@ -681,22 +710,33 @@ function showEndSessionConfirm(): void {
     opacity: 0 !important;
     transition: opacity 0.3s ease !important;
   `;
-  el.innerHTML = `
-    <div style="font-size: 16px; color: #eee; margin-bottom: 18px; line-height: 1.4;">
-      End session ${lastSessionNum ?? ''}?<br>
-      ${escapeHtml(formatTimeAdaptive(Math.floor(remaining * 1.1)))} will be added to next session
-    </div>
-    <div style="display: flex; gap: 8px;">
-      <button class="web-time-end-cancel" style="
-        flex: 1; background: #3a3a3a; border: none; color: #eee;
-        padding: 8px; border-radius: 6px; cursor: pointer; font-size: 13px;
-      ">Cancel</button>
-      <button class="web-time-end-ok" style="
-        flex: 1; background: #4571e7; border: none; color: #fff;
-        padding: 8px; border-radius: 6px; cursor: pointer; font-size: 13px;
-      ">OK</button>
-    </div>
-  `;
+  const carryover = formatTimeAdaptive(Math.floor(remaining * 1.1));
+  const prompt = makeEl('div', {
+    style: 'font-size: 16px; color: #eee; margin-bottom: 18px; line-height: 1.4;',
+  });
+  prompt.append(
+    `End session ${lastSessionNum ?? ''}?`,
+    document.createElement('br'),
+    `${carryover} will be added to next session`,
+  );
+
+  const buttonStyle = 'flex: 1; border: none; padding: 8px; border-radius: 6px; cursor: pointer; font-size: 13px;';
+  const cancelBtn = makeEl('button', {
+    className: 'web-time-end-cancel',
+    style: `${buttonStyle} background: #3a3a3a; color: #eee;`,
+    text: 'Cancel',
+  });
+  const okBtn = makeEl('button', {
+    className: 'web-time-end-ok',
+    style: `${buttonStyle} background: #4571e7; color: #fff;`,
+    text: 'OK',
+  });
+  const buttonRow = makeEl('div', {
+    style: 'display: flex; gap: 8px;',
+    children: [cancelBtn, okBtn],
+  });
+
+  el.replaceChildren(prompt, buttonRow);
   blurOverlay!.appendChild(el);
   endSessionDialog = el;
   setTimeout(() => { el.style.opacity = '1'; }, 50);

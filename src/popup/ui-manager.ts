@@ -14,7 +14,7 @@ import {
   highlightBar,
   type DomainPieData
 } from './chart-builder.js';
-import { formatTime, getLocalDateStr, formatDateWithDayOfWeek, escapeHtml } from '../shared/utils.js';
+import { formatTime, getLocalDateStr, formatDateWithDayOfWeek } from '../shared/utils.js';
 import type { ChartInstance } from '../types.js';
 
 declare const browser: typeof chrome;
@@ -372,7 +372,9 @@ export function renderDetailView(domain: string | null): void {
 
   const leftPanel = document.querySelector('#detail-page .left-panel');
   if (leftPanel) {
-    leftPanel.innerHTML = '<canvas id="time-chart"></canvas>';
+    const canvas = document.createElement('canvas');
+    canvas.id = 'time-chart';
+    leftPanel.replaceChildren(canvas);
   }
 
   if (!AppState.allTimeHistory) return;
@@ -408,12 +410,23 @@ export function updateDetailHeader(domain: string): void {
   if (summary) summary.textContent = `${formatTime(todaysTime.domain)} / ${formatTime(todaysTime.total)}`;
 }
 
+/** The shared "No data for this day" empty-state element. */
+function noDataMessage(): HTMLElement {
+  const div = document.createElement('div');
+  div.style.cssText = 'color: #888; font-style: italic;';
+  div.textContent = 'No data for this day';
+  return div;
+}
+
 export function displayMessage(selector: string, message: string, type: string = ''): void {
   const element = document.querySelector(selector);
   if (!element) return;
 
   const cssClass = type ? `message ${type}` : 'message';
-  element.innerHTML = `<p class="${cssClass}">${escapeHtml(message)}</p>`;
+  const p = document.createElement('p');
+  p.className = cssClass;
+  p.textContent = message; // text node — can't inject markup
+  element.replaceChildren(p);
 }
 
 export function updatePieChart(totalTimeData: GeneralViewData, dataIndex: number): void {
@@ -462,7 +475,7 @@ export function updateDailyBreakdown(totalTimeData: GeneralViewData, dataIndex: 
   const rawDayData = AppState.allTimeHistory[dateString];
 
   if (!rawDayData) {
-    breakdownBars.innerHTML = '<div style="color: #888; font-style: italic;">No data for this day</div>';
+    breakdownBars.replaceChildren(noDataMessage());
     return;
   }
 
@@ -522,28 +535,46 @@ export function calculateDomainBreakdown(rawDayData: Record<string, number>): Do
 
 export function renderBreakdownBars(container: HTMLElement, domainData: DomainPieData[]): void {
   if (domainData.length === 0) {
-    container.innerHTML = '<div style="color: #888; font-style: italic;">No data for this day</div>';
+    container.replaceChildren(noDataMessage());
     return;
   }
 
   const maxSeconds = domainData[0].seconds;
 
-  container.innerHTML = domainData.map(item => {
+  // Built with the DOM API (not innerHTML): domain names are untrusted, and
+  // textContent makes markup injection impossible without manual escaping.
+  const rows = domainData.map(item => {
     const widthPercent = Math.max((item.seconds / maxSeconds) * 100, 2);
-    const formattedTimeStr = formatTime(item.seconds);
-    const escapedDomain = escapeHtml(item.domain);
 
-    return `
-      <div class="breakdown-bar" data-domain="${escapedDomain}">
-        <div class="breakdown-color" style="background: ${item.color};"></div>
-        <div class="breakdown-label" title="${escapedDomain}">${escapedDomain}</div>
-        <div class="breakdown-fill">
-          <div class="breakdown-fill-inner" style="background: ${item.color}; width: ${widthPercent}%;"></div>
-        </div>
-        <div class="breakdown-time">${formattedTimeStr} (${item.percentage}%)</div>
-      </div>
-    `;
-  }).join('');
+    const bar = document.createElement('div');
+    bar.className = 'breakdown-bar';
+    bar.dataset.domain = item.domain;
+
+    const color = document.createElement('div');
+    color.className = 'breakdown-color';
+    color.style.background = item.color;
+
+    const label = document.createElement('div');
+    label.className = 'breakdown-label';
+    label.title = item.domain;
+    label.textContent = item.domain;
+
+    const fill = document.createElement('div');
+    fill.className = 'breakdown-fill';
+    const fillInner = document.createElement('div');
+    fillInner.className = 'breakdown-fill-inner';
+    fillInner.style.background = item.color;
+    fillInner.style.width = `${widthPercent}%`;
+    fill.appendChild(fillInner);
+
+    const time = document.createElement('div');
+    time.className = 'breakdown-time';
+    time.textContent = `${formatTime(item.seconds)} (${item.percentage}%)`;
+
+    bar.append(color, label, fill, time);
+    return bar;
+  });
+  container.replaceChildren(...rows);
 
   container.onclick = (e: MouseEvent) => {
     const bar = (e.target as HTMLElement).closest('.breakdown-bar') as HTMLElement | null;
