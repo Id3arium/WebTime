@@ -24,7 +24,7 @@ await build({
 });
 const mod = await import(pathToFileURL(outFile).href);
 const {
-  startSession, effectiveLength, endsAt, displayFor,
+  startSession, effectiveLength, displayFor,
   naturalEnd, endEarly, changeLength,
   computeGraceSeconds, computeNudgeTimes, nextNudgeToFire, markNudgeFired,
   windDownState, WIND_DOWN_DURATION,
@@ -39,7 +39,6 @@ const M = 60;
 test('effectiveLength sums base + carryover + grace', () => {
   const s = startSession({ dailyTotal: 0, baseLength: 30 * M, carryover: 5 * M, graceSeconds: 1 * M });
   assert.equal(effectiveLength(s), 36 * M);
-  assert.equal(endsAt(s), 36 * M); // startDaily 0
 });
 
 test('displayFor: fresh session shows full effective length', () => {

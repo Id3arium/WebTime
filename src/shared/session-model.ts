@@ -50,11 +50,6 @@ export function effectiveLength(s: ActiveSession): number {
   return s.baseLength + s.carryover + s.graceSeconds;
 }
 
-/** Absolute daily-seconds at which this session ends. */
-export function endsAt(s: ActiveSession): number {
-  return s.startDaily + effectiveLength(s);
-}
-
 export interface SessionDisplay {
   sessionTime: number;        // elapsed in this session
   sessionLimitSeconds: number; // effectiveLength
@@ -115,8 +110,9 @@ function cooldownLength(sessionNum: number, increment: number): number {
 }
 
 /**
- * Natural end: the user reached endsAt(session). Carryover is consumed; the
- * next session is a clean baseLength session anchored at the current daily.
+ * Natural end: the user reached the end of the session's effective length.
+ * Carryover is consumed; the next session is a clean baseLength session
+ * anchored at the current daily.
  */
 export function naturalEnd(s: ActiveSession, opts: {
   dailyTotal: number;

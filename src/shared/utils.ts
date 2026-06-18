@@ -32,18 +32,6 @@ export function formatTime(totalTime: number): string {
   return `${formattedHours}:${formattedMinutes}`;
 }
 
-/**
- * Format time in seconds to HH:MM:SS format (for content script timer)
- */
-export function formatTimeWithSeconds(timeInSeconds: number): string {
-  timeInSeconds = Math.max(0, Math.floor(timeInSeconds));
-
-  const hours = Math.floor(timeInSeconds / 3600);
-  const minutes = Math.floor((timeInSeconds % 3600) / 60);
-  const seconds = timeInSeconds % 60;
-
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
 
 /**
  * Get current date as YYYY-MM-DD string in local timezone,
@@ -156,28 +144,3 @@ export function compute7DayStats(
   return { days, averageSeconds, daysWithData };
 }
 
-/**
- * Escape HTML special characters to prevent XSS attacks
- */
-export function escapeHtml(text: string): string {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
-// Export as Utils object for backwards compatibility
-export const Utils = {
-  extractDomain,
-  formatTime,
-  formatTimeWithSeconds,
-  getLocalDateStr,
-  formatDateForDisplay,
-  getDayOfWeek,
-  formatDateWithDayOfWeek,
-  log,
-  formatTimeCompact,
-  compute7DayStats,
-  escapeHtml
-};
-
-export default Utils;

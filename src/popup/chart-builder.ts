@@ -579,19 +579,3 @@ export function buildPieChart(domainData: DomainPieData[]): ChartConfiguration {
   };
 }
 
-export const ChartBuilder = {
-  getGridColor,
-  createMovingAverageDataset,
-  createSingleDomainDataset,
-  getBaseChartOptions,
-  buildGeneralViewChart,
-  buildDetailViewChart,
-  getGeneralViewTooltipConfig,
-  getDetailViewTooltipConfig,
-  highlightBar,
-  removeBarHighlight,
-  showHoverPreview,
-  buildPieChart
-};
-
-export default ChartBuilder;

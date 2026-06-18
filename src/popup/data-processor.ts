@@ -234,15 +234,3 @@ export function calculateTodaysTotals(
   };
 }
 
-export const DataProcessor = {
-  getAllDomains,
-  calculateDomainTotals,
-  rankDomainsByUsage,
-  processGeneralViewData,
-  processDetailViewData,
-  calculateMovingAverage,
-  calculateMovingAverageTotal,
-  calculateTodaysTotals
-};
-
-export default DataProcessor;
