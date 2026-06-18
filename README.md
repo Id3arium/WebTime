@@ -5,7 +5,7 @@
 A Firefox browser extension that tracks how long you spend on each site, with a
 small timer in the corner of your screen, and gives you the tools to spend that
 time mindfully. It uses **session-based browsing** that's both disciplined and
-flexible — gentle nudges and cooldowns, not hard blocks.
+flexible — focused sessions, gentle nudges, and cooldowns when a limit is reached.
 
 ## Screenshots
 
@@ -25,11 +25,12 @@ File…**. (For development, see [Loading in Firefox](#loading-in-firefox) below
 
 ## Philosophy
 
-WebTime favors **autonomy over coercion**. Instead of slamming a wall in front
-of you, it nudges: a quick visual pulse early, an awareness popup when you're
-approaching your typical usage, a 60-second wind-down near a session's end, and
-a cooldown only once you've actually exceeded a session limit. The goal is to
-keep you informed enough to make your own choice.
+WebTime favors **awareness, then accountability**. Most of the time it just
+keeps you informed: a quick visual pulse early, an awareness popup when you're
+approaching your typical usage, and a 60-second wind-down near a session's end.
+Only once you've actually exceeded a session limit does a cooldown block the
+page — a real pause, made flexible by carryover and the option to end a session
+early on your own terms.
 
 ## Features
 
