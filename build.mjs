@@ -1,4 +1,12 @@
 import * as esbuild from 'esbuild';
+import { rm } from 'node:fs/promises';
+
+// Start from a clean dist so stale orphans from older build layouts can't
+// linger and ship inside the packaged extension. (A previous tsc-based build
+// emitted one .js per source file; esbuild now bundles to just three outputs,
+// and the leftovers — e.g. an old ui-manager.js — were getting flagged by
+// AMO's linter even though nothing loads them.)
+await rm('extension/dist', { recursive: true, force: true });
 
 const commonOptions = {
   bundle: true,
