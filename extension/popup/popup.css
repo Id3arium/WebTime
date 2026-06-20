@@ -1,58 +1,163 @@
+/* ===========================================================================
+   WebTime popup — REDESIGN (merged topbar). New design language:
+   #101216 frame, IBM Plex fonts, one merged 62px topbar, right-half settings
+   overlay that slides from the divider. The old flat layout's CSS lived here
+   before and is fully superseded by this file.
+   =========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
 :root {
-  /* --dark-bg: #1f252e; */
-  --dark-bg: #222222;
-  --light-bg: #3a3a3a;
-  --border-line: #444;
-  --light-text: #eeeeff;
-  --summary-text: #ccc;
-  /* The ONE edge inset for the whole popup. Change this to move every edge
-     (chart, headers, footer, divider lines) together. Nothing else should
-     define horizontal spacing against the popup edge. */
-  --pad: 16px;
+  --bg:            #101216;
+  --bg-raise:      #181b21;
+  --bg-input:      #1f232b;
+  --line:          rgba(255,255,255,0.06);
+  --line-strong:   rgba(255,255,255,0.10);
+  --text:          #eef1f5;
+  --text-dim:      #9aa1ac;
+  --text-faint:    #5d646f;
+  --accent:        #4f86f7;
+  --good:          #3fbf7f;
+  --warn:          #f0a52a;
+  --avg-line:      #bcd2ff;   /* light periwinkle moving-average line */
+  --topbar-h:      70px;
+  --carousel-h:    529px;
+  --ease:          cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
   width: 800px;
   height: 600px;
-  font-family: Arial, sans-serif;
-  margin: 0;
-  padding: 0;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background: var(--bg);
   overflow: hidden;
-
-  background-color: var(--dark-bg);
 }
 
-/* Full-width clipper for the carousel. It must NOT have horizontal padding:
-   overflow:hidden clips at the padding box, so any horizontal inset here would
-   sit INSIDE the clip region and let the adjacent sliding page bleed through it.
-   The horizontal --pad inset lives on .half-page instead.
-   No vertical padding either: the chart/panel heights are tuned to fill the
-   popup flush top-to-bottom; the bottom breathing room comes from the footer's
-   own padding and the chart's layout.padding, like the original design. */
-.content {
+.wt-frame {
+  width: 800px;
+  height: 600px;
+  position: relative;
+  background: var(--bg);
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  height: 100%;
-  overflow: hidden;
 }
 
-/* Carousel: each page is exactly one viewport (100%) wide and we slide by whole
-   viewports. This is padding-independent — unlike the old 200%-wide container +
-   translateX(-50%), which only lined up when .content had zero padding. */
+/* ---- scrollbars ---- */
+.wt-scroll::-webkit-scrollbar { width: 9px; }
+.wt-scroll::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); border-radius: 5px; }
+.wt-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 5px; }
+.wt-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.30); }
+
+/* ===========================================================================
+   MERGED TOPBAR
+   =========================================================================== */
+.topbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--topbar-h);
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+
+.topbar-left { display: flex; align-items: center; gap: 11px; min-width: 0; }
+
+.nav-btn {
+  border: 1px solid var(--line-strong);
+  cursor: pointer;
+  font: 600 12px 'IBM Plex Sans';
+  color: var(--text);
+  background: var(--bg-input);
+  padding: 6px 11px;
+  border-radius: 8px;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+.nav-btn:hover { background: #262b34; color: var(--text); }
+
+.topbar-context { display: flex; align-items: center; min-width: 0; }
+.site-id { display: flex; align-items: center; gap: 9px; min-width: 0; }
+/* [hidden] must win over the display:flex/inline above, or both the site block
+   and "All sites" show at once. */
+[hidden] { display: none !important; }
+.site-name {
+  font: 600 16px 'IBM Plex Sans'; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.topbar-date {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  display: flex; align-items: center; gap: 12px;
+}
+.date-label { font: 600 14.5px 'IBM Plex Sans'; color: var(--text); white-space: nowrap; }
+
+/* The gear centers against the whole hero stat block (value + caption), so the
+   numbers read as aligned with the gear in the taller header. */
+.topbar-right { display: flex; align-items: center; gap: 14px; }
+
+/* inline hero numbers — built by ui-manager. Markup convention (per design):
+   <div class="hero-stat"><div class="hero-val">4h 36m</div><div class="hero-cap">All sites</div></div> */
+.hero-numbers { display: flex; align-items: center; gap: 9px; }
+.hero-stat { text-align: right; }
+.hero-val { font: 600 22px 'IBM Plex Mono'; color: var(--text); line-height: 1; }
+.hero-val.dim { color: var(--text-dim); }
+.hero-val.good { color: var(--good); }
+.hero-cap { font: 500 9.5px 'IBM Plex Mono'; color: var(--text-dim); letter-spacing: 0.04em; margin-top: 3px; }
+/* Slash separator — reads "This site / All sites" like a fraction. */
+.hero-sep { font: 300 20px 'IBM Plex Mono'; color: var(--text-faint); line-height: 1; }
+
+.icon-btn {
+  width: 34px; height: 34px; border: none; border-radius: 8px;
+  background: transparent; color: var(--text-dim); font-size: 20px; cursor: pointer; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.icon-btn:hover { background: var(--bg-input); color: var(--text); }
+
+/* The topbar gear gets the same outline as the nav button so it reads as a real
+   control. Same button opens AND closes the panel: it rotates on open and back
+   on close, which (with the panel slide-in) signals it's a reversible toggle. */
+#settings-toggle-btn {
+  border: 1px solid var(--line-strong);
+  background: var(--bg-input);
+  color: var(--text);
+}
+#settings-toggle-btn:hover { background: #262b34; color: var(--text); }
+
+/* Inline SVG gear — crisp at any size and flex-centered (fixes the old ⚙ glyph
+   sitting below center). Rotates a notch when settings open, reverses on close. */
+.gear-icon {
+  display: block;
+  transition: transform 0.32s var(--ease);
+}
+.gear-btn.is-open { color: var(--text); }
+.gear-btn.is-open .gear-icon { transform: rotate(90deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .gear-icon { transition: none; }
+}
+
+/* ===========================================================================
+   CAROUSEL + PAGES
+   =========================================================================== */
+.carousel { position: relative; height: var(--carousel-h); overflow: hidden; flex: 1; }
+
 .pages-container {
   display: flex;
   width: 100%;
   height: 100%;
-  transition: transform 0.3s ease-in-out;
+  transition: transform 0.32s var(--ease);
 }
-
-.pages-container.show-general {
-  transform: translateX(0%);
-}
-
-.pages-container.show-detail {
-  transform: translateX(-100%);
-}
+.pages-container.show-general { transform: translateX(0%); }
+.pages-container.show-detail  { transform: translateX(-100%); }
 
 .half-page {
   width: 100%;
@@ -60,494 +165,261 @@ body {
   height: 100%;
   display: flex;
   flex-direction: column;
-  /* The horizontal edge inset lives HERE (not on .content) so the page fills the
-     full viewport width and clips cleanly — no neighbor-page sliver at the seam.
-     This is the single owner of the left/right --pad inset. */
-  padding: 0 var(--pad);
-  box-sizing: border-box;
 }
 
-.page-header {
-  color: var(--light-text);
-  background-color: var(--dark-bg); 
-  text-align: center;
-  padding: 16px 0;
-  margin: 0 0 8px 0;
-  border-bottom: 1px solid var(--border-line);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.header-row-buttons {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-}
-
-.header-row-context {
-  display: flex;
-  justify-content: center;
-  width: 100%;
-}
-
-.nav-btn-text {
-  background: none;
-  border: 1px solid var(--border-line);
-  color: var(--light-text);
-  font-size: 14px;
-  padding: 8px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  min-width: 80px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  white-space: nowrap;
-}
-
-.nav-btn-text:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-.nav-btn-text:active {
-  background-color: rgba(255, 255, 255, 0.2);
-}
-
-.header-text {
-  font-size: 16px;
-  font-weight: 400;
-  color: var(--summary-text);
-  transition: opacity 0.2s ease-in-out, transform 0.3s ease-in-out;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.time-summary {
-  font-size: 20px;
-  font-weight: 600;
-  margin: 0;
-  transition: opacity 0.2s ease-in-out, transform 0.3s ease-in-out;
+.page-body {
   flex: 1;
-  text-align: center;
-}
-
-.page-content {
-  flex: 1;
-  color: var(--light-text);
-  background-color: var(--dark-bg);
-  border-radius: 8px;
-  padding: 0;
-  margin: 0;
-  box-sizing: border-box;
   display: flex;
-  flex-direction: column;
-}
-
-.page-content.split-view {
-  flex-direction: row;
-  gap: 12px;
-  position: relative;
-}
-
-/* Vertical divider between chart and settings. Drawn as a positioned line (not a
-   panel border) so it can stop short of the edges: it extends up to meet the
-   header's horizontal line, and stops at the Save button's bottom so it doesn't
-   run into the bottom edge. Lines separate content without crashing into other
-   lines or the popup edge. */
-.page-content.split-view::after {
-  content: '';
-  position: absolute;
-  left: 406px;              /* centered in the 12px gap between chart and settings */
-  top: -8px;                /* reach up to touch the header line */
-  bottom: 24px;             /* stop flush with the Save button's bottom inset */
-  width: 1px;
-  background: var(--border-line);
-  pointer-events: none;
-}
-
-.left-panel {
-  width: 400px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
+  gap: 16px;
+  padding: 14px 16px 16px;
   min-height: 0;
-  height: 100%;
-  overflow: hidden;
 }
+
+.left-panel { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+.left-panel canvas { flex: 1; min-height: 0; }
 
 .right-panel {
-  /* Fill whatever remains after the fixed 400px chart + 12px gap, so the panel
-     fits the inset wrapper exactly at any --pad (no hardcoded width to drift). */
-  flex: 1;
-  min-width: 0;
+  flex: none;
+  width: 320px;
   display: flex;
   flex-direction: column;
-  height: 500px;
-  overflow: hidden;
-  /* Left padding is the INTERNAL gap from the chart/settings divider, not an
-     edge inset. The right edge is owned by --pad on .content, so no right pad. */
-  padding-left: 12px;
-  padding-right: 0;
-  /* Vertical divider is drawn by .split-view::after so it can stop short of the
-     edges; no border-left here. */
+  min-height: 0;
+}
+/* Detail view's right panel stacks two cards (rules + session) — space them. */
+#detail-page .right-panel { gap: 12px; }
+
+.panel-title {
+  font: 700 10.5px 'IBM Plex Mono'; letter-spacing: 0.1em; color: var(--text-faint);
+  text-transform: uppercase; margin-bottom: 6px; padding-left: 10px; flex: none;
 }
 
-#total-time-chart,
-#time-chart {
-  width: 400px;
-  height: 484px;
-}
-
-.pie-chart-wrapper {
-  height: 192px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: opacity 200ms ease-in-out;
-}
-
-#breakdown-pie-chart {
-  width: 180px;
-  height: 180px;
-}
-
-.breakdown-bars {
-  height: 278px;
-  overflow-y: scroll;
-  overflow-x: hidden;
-  padding-right: 4px;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.breakdown-bars::-webkit-scrollbar {
-  width: 10px;
-}
-
-.breakdown-bars::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 5px;
-}
-
-.breakdown-bars::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.4);
-  border-radius: 5px;
-}
-
-.breakdown-bars::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.6);
-}
-
-.breakdown-title {
-  font-size: 14px;
-  margin-bottom: 8px;
-  color: var(--summary-text);
-  font-weight: 500;
-  text-align: center;
-  height: 22px;
-  flex-shrink: 0;
-}
+/* ===========================================================================
+   BREAKDOWN LIST (existing renderBreakdownBars markup, restyled to monogram tiles)
+   .breakdown-bar > .breakdown-color .breakdown-label .breakdown-fill>.breakdown-fill-inner .breakdown-time
+   =========================================================================== */
+.breakdown-bars { flex: 1; min-height: 0; overflow-y: auto; padding-right: 5px; }
 
 .breakdown-bar {
-  display: flex;
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  grid-template-rows: auto auto;
   align-items: center;
-  min-height: 24px;
-  height: 24px;
-}
-
-.breakdown-bar:hover {
-  background-color: rgba(255, 255, 255, 0.1);
+  column-gap: 11px;
+  padding: 7px 10px;
+  border-radius: 9px;
   cursor: pointer;
 }
+.breakdown-bar:hover { background: rgba(255,255,255,0.04); }
 
 .breakdown-color {
-  width: 12px;
-  height: 12px;
-  border-radius: 2px;
-  margin-right: 8px;
-  flex-shrink: 0;
+  grid-row: 1 / 3; width: 28px; height: 28px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font: 600 12px 'IBM Plex Mono'; color: #fff;
 }
-
 .breakdown-label {
-  flex: 1;
-  min-width: 60px;
-  max-width: 150px;
-  font-size: 14px;
-  color: var(--light-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 2px 0;
-  margin-right: 8px;
+  grid-column: 2; grid-row: 1;
+  font: 500 13px 'IBM Plex Sans'; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-
-.breakdown-fill {
-  display: none;
-}
-
-.breakdown-fill-inner {
-  display: none;
-}
-
 .breakdown-time {
-  font-weight: 600;
-  font-size: 12px;
-  color: var(--light-text);
-  flex: 0 0 auto;
-  text-align: right;
-  white-space: nowrap;
+  grid-column: 3; grid-row: 1;
+  font: 500 11.5px 'IBM Plex Mono'; color: var(--text-dim); white-space: nowrap;
 }
+.breakdown-fill {
+  grid-column: 2 / 4; grid-row: 2; margin-top: 5px;
+  height: 4px; border-radius: 3px; background: rgba(255,255,255,0.06); overflow: hidden;
+}
+.breakdown-fill-inner { height: 100%; border-radius: 3px; }
 
-/* Settings Styles */
-.settings-panel {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
+/* ===========================================================================
+   SESSION CARD SLOT (filled by session-card.ts)
+   =========================================================================== */
+.session-card-slot { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto; }
+
+/* ===========================================================================
+   SETTINGS OVERLAY — covers the RIGHT HALF only, slides in from the divider.
+   The left (chart) half stays visible. translateX(-100%) → 0 with carousel easing.
+   The right half is 320px panel + 16px right pad + 16px gap region; we pin the
+   overlay to that region's left edge (the divider) and let it fill to the frame edge.
+   =========================================================================== */
+.settings-overlay {
+  position: absolute;
+  top: 0; bottom: 0; right: 0;
+  width: 352px;                    /* 320 panel + 16 gap + 16 edge pad */
   overflow: hidden;
+  pointer-events: none;            /* closed: let clicks through */
+  z-index: 5;
 }
+.settings-overlay.open { pointer-events: auto; }
 
-.settings-content {
-  padding: 14px;
-  overflow-y: auto;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.settings-sheet {
+  position: absolute; inset: 0;
+  background: #14171d;
+  border-left: 1px solid var(--line-strong);
+  box-shadow: -20px 0 50px rgba(0,0,0,0.4);
+  padding: 18px 18px 18px;
+  display: flex; flex-direction: column;
+  transform: translateX(100%);     /* hidden off the right edge */
+  transition: transform 0.32s var(--ease);
 }
+.settings-overlay.open .settings-sheet { transform: translateX(0); }  /* slides right → left */
 
-.settings-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
+.settings-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
+.settings-title { font: 700 15px 'IBM Plex Sans'; color: var(--text); }
+.settings-sub { font: 400 11px 'IBM Plex Sans'; color: var(--text-dim); margin-bottom: 14px; }
 
-.settings-row label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #aaa;
-  text-transform: uppercase;
-}
+/* A little horizontal gutter so a focused input's ring isn't clipped by the
+   scroll container's overflow on the left/right edges. */
+.settings-body { flex: 1; min-height: 0; overflow-y: auto; padding: 2px 4px; }
 
-.settings-row select,
-.settings-row input[type="text"],
-.settings-row input[type="number"] {
+.field { margin-bottom: 13px; }
+.field label,
+.interventions-header { display: block; font: 600 11px 'IBM Plex Sans'; color: var(--text-dim); margin-bottom: 7px; }
+.field-row { display: flex; gap: 11px; }
+.field-row .field { flex: 1; }
+
+.field input,
+.field select,
+.time-inputs input,
+.shortcut-row input {
   width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-  background: var(--light-bg);
-  border: 1px solid var(--border-line);
-  border-radius: 3px;
-  color: var(--light-text);
-  padding: 6px 8px;
-  font-size: 12px;
-  text-align: left;
-  outline: none;
-  transition: border-color 0.2s;
+  background: var(--bg-input);
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  height: 38px;
+  padding: 0 12px;
+  color: var(--text);
+  font: 500 13.5px 'IBM Plex Mono';
+}
+.field select { cursor: pointer; }
+
+/* Custom focus ring drawn as an inset+tight outline so it never spills past the
+   scroll container (the UA default outline was getting clipped on the left). */
+.field input:focus,
+.field select:focus,
+.shortcut-row input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: var(--accent);
 }
 
-.settings-row input[type="number"]:focus,
-.settings-row select:focus,
-.settings-row input[type="text"]:focus {
-  border-color: #4a9eff;
+.shortcut-row { display: flex; gap: 8px; align-items: center; }
+.shortcut-row input { flex: 1; cursor: pointer; }
+.shortcut-row button {
+  width: 40px; height: 38px; border: 1px solid var(--line-strong); border-radius: 9px;
+  background: var(--bg-input); color: var(--text-dim); font-size: 14px; cursor: pointer;
 }
 
-.settings-row input::placeholder {
-  color: #666;
-}
+.divider { height: 1px; background: var(--line); margin: 14px 0; }
 
-.settings-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 10px;
-}
+.interventions-header .domain { color: var(--accent); font-family: 'IBM Plex Mono'; }
+.rec-hint { color: var(--text-faint); font-size: 10px; font-weight: 400; margin-left: 4px; }
 
-.divider {
-  height: 1px;
-  background: var(--light-bg);
-  /* Slightly WIDER than the Save button (which the content padding matches),
-     but short of the panel edge — lines separate content without reaching the
-     edge. -7px from the 14px content padding => ~7px past the button each side. */
-  margin: 4px -7px;
-}
+.intervention-row { display: flex; gap: 10px; align-items: flex-start; }
+.intervention-row > input[type="checkbox"] { margin-top: 4px; flex: none; }
+.intervention-grid { flex: 1; display: flex; flex-direction: column; gap: 11px; }
+.intervention-group label { font: 600 11px 'IBM Plex Sans'; color: var(--text-dim); margin-bottom: 6px; }
+.time-inputs { display: flex; align-items: center; gap: 6px; }
+.time-inputs input { width: 64px; }
+.time-inputs span { font: 400 11px 'IBM Plex Sans'; color: var(--text-faint); }
 
-.interventions-header {
-  font-size: 12px;
-  font-weight: 600;
-  color: #aaa;
-  text-transform: uppercase;
-  margin-top: 4px;
-}
-
-.interventions-header .domain {
-  color: #4a9eff;
-}
-
-.intervention-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.intervention-row input[type="checkbox"] {
-  cursor: pointer;
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-}
-
-.intervention-grid {
-  flex: 1;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.intervention-group {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.intervention-group label {
-  font-size: 12px;
-  color: #aaa;
-  margin: 0;
-  text-transform: none;
-  font-weight: normal;
-}
-
-.time-inputs {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-}
-
-.time-inputs input[type="number"] {
-  width: 46px;
-  padding: 3px;
-  font-size: 12px;
-  text-align: center;
-  border-radius: 2px;
-  background: var(--light-bg);
-  border: 1px solid var(--border-line);
-  color: var(--light-text);
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.time-inputs input[type="number"]:focus {
-  border-color: #4a9eff;
-}
-
-.time-inputs span {
-  font-size: 13px;
-  color: #aaa;
-}
-
-/* Cooldown has two inputs (m + s) in one cell — tighten so both fit the column. */
-#cooldown-increment-minutes,
-#cooldown-increment-seconds {
-  width: 34px;
-}
-
-.intervention-group:has(#cooldown-increment-minutes) .time-inputs {
-  gap: 2px;
-}
-
-.intervention-group:has(#cooldown-increment-minutes) .time-inputs span {
-  font-size: 11px;
-}
-
-.intervention-row:has(input[type="checkbox"]:not(:checked)) .intervention-grid {
-  opacity: 0.4;
-  pointer-events: none;
-}
-
-.nudges-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.nudges-row label {
-  font-size: 12px;
-  color: #ddd;
-  margin: 0;
-}
-
-.nudges-input {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-}
-
-.nudges-input input[type="number"] {
-  width: 46px;
-  padding: 3px;
-  font-size: 12px;
-  text-align: center;
-  border-radius: 2px;
-  background: var(--light-bg);
-  border: 1px solid var(--border-line);
-  color: var(--light-text);
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.nudges-input input[type="number"]:focus {
-  border-color: #4a9eff;
-}
-
-.nudges-input span {
-  font-size: 13px;
-  color: #aaa;
-}
-
-.info-hint {
-  font-size: 12px;
-  color: #aaa;
-  padding: 6px 8px;
-  background: #2a2a2a;
-  border-radius: 3px;
-  border-left: 2px solid #4a9eff;
-  margin-top: 2px;
-}
-
-.settings-footer {
-  /* Horizontal padding (7px) makes the Save button line up with the middle
-     divider's width. No separator line here — the vertical divider already sets
-     this section apart, so the line was redundant clutter above the button. */
-  padding: 14px 7px 24px 7px;
-}
-
+.settings-footer { padding-top: 14px; flex: none; }
 .save-btn {
-  width: 100%;
-  background: #4a9eff;
-  border: none;
-  border-radius: 4px;
-  color: white;
-  padding: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.2s;
+  width: 100%; height: 42px; border: none; border-radius: 10px;
+  background: var(--accent); color: #fff; font: 600 13.5px 'IBM Plex Sans'; cursor: pointer;
+  transition: background 0.15s;
 }
+.save-btn:hover { background: #5e90f8; }
 
-.save-btn:hover {
-  background: #3a8eef;
+/* ===========================================================================
+   SESSION CARD (.sc-*) — rendered by session-card.ts into #session-card
+   =========================================================================== */
+.sc-card {
+  background: #161922;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  padding: 14px 15px 15px;
 }
+.sc-card.sc-off { background: #161922; border: 1px dashed var(--line-strong); padding: 15px; }
 
-.save-btn:active {
-  background: #2a7edf;
+.sc-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 11px; }
+.sc-title { font: 700 12px 'IBM Plex Sans'; color: var(--text); }
+
+.sc-badge {
+  font: 600 10px 'IBM Plex Mono'; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 6px;
 }
+.sc-badge-active   { color: #6fd6a0; background: rgba(63,191,127,0.14); border: 1px solid rgba(63,191,127,0.30); }
+.sc-badge-cooldown { color: #7fb0ff; background: rgba(79,134,247,0.14); border: 1px solid rgba(79,134,247,0.30); }
+
+.sc-time { font: 600 28px 'IBM Plex Mono'; color: var(--text); margin-bottom: 4px; }
+.sc-time-limit { color: var(--text-faint); font-size: 15px; }
+.sc-sub { font: 400 11px 'IBM Plex Sans'; color: var(--text-dim); margin-bottom: 11px; }
+
+.sc-bar-track {
+  height: 8px; border-radius: 5px; background: rgba(255,255,255,0.07);
+  overflow: hidden; margin: 11px 0;
+}
+.sc-bar-fill { height: 100%; border-radius: 5px; }
+
+.sc-note { font: 400 11.5px 'IBM Plex Sans'; color: var(--text-dim); margin-bottom: 13px; line-height: 1.4; }
+.sc-good { color: var(--good); font-weight: 600; }
+
+.sc-btn {
+  width: 100%; height: 38px; border: 1px solid var(--line-strong); border-radius: 9px;
+  background: var(--bg-input); color: var(--text); font: 600 12.5px 'IBM Plex Sans'; cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.sc-btn:hover { background: #2a2f38; border-color: var(--line-strong); }
+
+.sc-off-title { font: 600 12.5px 'IBM Plex Sans'; color: var(--text-dim); margin-bottom: 4px; }
+.sc-off-sub { font: 400 11.5px 'IBM Plex Sans'; color: var(--text-dim); line-height: 1.4; }
+
+/* ---- per-site "Session rules" card ---- */
+.sc-card.sc-settings { background: var(--bg-raise); border: 1px solid var(--line); padding: 15px 15px 17px; }
+.sc-settings .sc-head { margin-bottom: 15px; }
+.sc-settings-title {
+  font: 700 10.5px 'IBM Plex Mono'; letter-spacing: 0.1em; color: var(--text-dim);
+  text-transform: uppercase;
+}
+.sc-settings-body { transition: opacity 0.15s; }
+.sc-settings-twoup { display: flex; gap: 11px; }
+.sc-settings-twoup > .sc-stepper-group { flex: 1; }
+
+/* toggle switch */
+.sc-toggle {
+  width: 42px; height: 24px; border-radius: 999px; border: none; background: #2a2f38;
+  position: relative; cursor: pointer; transition: background 0.15s; flex: none;
+}
+.sc-toggle.on { background: var(--accent); }
+.sc-toggle-knob {
+  position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; transition: left 0.15s; box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+.sc-toggle.on .sc-toggle-knob { left: 21px; }
+
+/* steppers */
+.sc-stepper-group { margin-bottom: 13px; }
+.sc-settings-twoup .sc-stepper-group { margin-bottom: 0; }
+.sc-stepper-head { display: flex; align-items: baseline; gap: 6px; margin-bottom: 7px; }
+.sc-stepper-label { font: 600 11px 'IBM Plex Sans'; color: var(--text-dim); }
+.sc-stepper-rec { font: 400 10px 'IBM Plex Sans'; color: var(--text-dim); }
+.sc-stepper-box {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--bg-input); border: 1px solid var(--line-strong); border-radius: 9px;
+  height: 38px; padding: 0 5px 0 12px;
+}
+.sc-stepper-val { font: 500 13.5px 'IBM Plex Mono'; color: var(--text); }
+.sc-stepper-unit { color: var(--text-faint); font-size: 10.5px; margin-left: 4px; }
+.sc-stepper-btns { display: flex; flex-direction: column; gap: 2px; }
+.sc-stepper-btn {
+  width: 20px; height: 14px; border: none; border-radius: 4px;
+  background: rgba(255,255,255,0.07); color: var(--text-dim);
+  font-size: 8px; line-height: 1; cursor: pointer; padding: 0;
+  transition: background 0.12s, color 0.12s;
+}
+.sc-stepper-btn:hover { background: var(--accent); color: #fff; }
+
+/* shared message / empty-state */
+.message { color: var(--text-dim); font-style: italic; padding: 16px; }
+.message.error { color: #ff8a80; }

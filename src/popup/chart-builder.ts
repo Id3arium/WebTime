@@ -1,4 +1,4 @@
-import { CONFIG, COLORS } from './config.js';
+import { CONFIG, COLORS, CHART_COLORS } from './config.js';
 import { formatDateForDisplay, formatDateWithDayOfWeek, formatTime } from '../shared/utils.js';
 import { AppState } from './state.js';
 import type { GeneralViewData, DetailViewData, MovingAverageData } from './data-processor.js';
@@ -31,16 +31,21 @@ interface ExtendedDataset {
   formattedTimes?: string[];
   originalData?: number[];
   domainNames?: (string | null)[];
-  backgroundColor?: string | string[];
-  borderColor?: string | string[];
-  borderWidth?: number | number[];
+  // backgroundColor may also be a Chart.js scriptable fn returning a gradient.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  backgroundColor?: string | string[] | ((ctx: any) => string | CanvasGradient);
+  // borderColor/borderWidth may be Chart.js scriptable fns (per-bar highlight).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  borderColor?: string | string[] | ((ctx: any) => string);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  borderWidth?: number | number[] | ((ctx: any) => number);
+  borderRadius?: number;
   fill?: boolean;
   tension?: number;
   pointRadius?: number;
+  pointBackgroundColor?: string;
+  pointBorderColor?: string;
   order?: number;
-  _originalBackgroundColor?: string | string[];
-  _originalBorderColor?: string | string[];
-  _originalBorderWidth?: number | number[];
 }
 
 interface ExtendedChart {
@@ -65,8 +70,86 @@ interface ExtendedChart {
 }
 
 export function getGridColor(): string {
-  return getComputedStyle(document.documentElement)
-    .getPropertyValue('--dark-bg').trim();
+  return CHART_COLORS.grid;
+}
+
+/**
+ * Per-chart highlight state. The general view lets you hover/lock a day; the
+ * highlight is drawn by *scriptable* border functions (below) rather than by
+ * mutating `borderColor` into an array. This is critical: `backgroundColor` is
+ * itself a scriptable gradient function, and the old code used to do
+ * `Array(n).fill(dataset.backgroundColor)` — filling the array with the function
+ * REFERENCE, which Chart.js can't evaluate per-bar, so bars fell back to a black
+ * fill / white stroke. Keeping every per-bar color a function side-steps that
+ * entirely: highlight = update these indices + `chart.update('none')`.
+ */
+interface BarHighlightState {
+  locked: number | null;  // AppState mirror, set on the chart so scriptables read fast
+  hover: number | null;   // transient hover-preview index
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function highlightState(chart: any): BarHighlightState {
+  if (!chart._barHighlight) chart._barHighlight = { locked: null, hover: null };
+  return chart._barHighlight;
+}
+
+/**
+ * A Chart.js scriptable backgroundColor: a top→bottom vertical gradient per bar
+ * (lighter at top, deeper at bottom). The LAST bar (today, in progress) is the
+ * same gradient at ~50% opacity so it reads as "still running". Returns a flat
+ * fallback before the chart area exists (first paint).
+ *
+ * `lastIndex` is captured per-build so we know which bar is "today".
+ */
+function makeBarGradient(lastIndex: number) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (ctx: any): string | CanvasGradient => {
+    const { chart, dataIndex } = ctx;
+    const area = chart.chartArea;
+    if (!area) return CHART_COLORS.barTop; // pre-paint fallback
+    const today = dataIndex === lastIndex;
+    const g = chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
+    if (today) {
+      // half-opacity gradient for the in-progress day
+      g.addColorStop(0, 'rgba(94, 142, 251, 0.5)');   // #5e8efb @ 50%
+      g.addColorStop(1, 'rgba(63, 111, 224, 0.5)');   // #3f6fe0 @ 50%
+    } else {
+      g.addColorStop(0, CHART_COLORS.barTop);
+      g.addColorStop(1, CHART_COLORS.barBottom);
+    }
+    return g;
+  };
+}
+
+/**
+ * Scriptable borderColor: white outline on the locked bar, a softer grey on the
+ * hovered bar, transparent otherwise. Reading from per-chart highlight state
+ * keeps the color a function (never an array of functions) — see the note above.
+ *
+ * The today bar (lastIndex) is drawn at half opacity, so its outline is too —
+ * a full-strength white ring around a translucent bar looks mismatched.
+ */
+function makeBarBorderColor(lastIndex: number) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (ctx: any): string => {
+    const { chart, dataIndex } = ctx;
+    const hl = highlightState(chart);
+    const today = dataIndex === lastIndex;
+    if (dataIndex === hl.locked) return today ? 'rgba(255, 255, 255, 0.5)' : 'white';
+    if (dataIndex === hl.hover) return today ? 'rgba(200, 200, 200, 0.45)' : 'rgba(200, 200, 200, 0.9)';
+    return 'transparent';
+  };
+}
+
+/** Scriptable borderWidth: 2px on the locked/hovered bar, 0 otherwise. */
+function makeBarBorderWidth() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (ctx: any): number => {
+    const { chart, dataIndex } = ctx;
+    const hl = highlightState(chart);
+    return dataIndex === hl.locked || dataIndex === hl.hover ? 2 : 0;
+  };
 }
 
 export function createMovingAverageDataset(
@@ -82,8 +165,10 @@ export function createMovingAverageDataset(
     borderColor: COLORS.movingAverage.border,
     borderWidth: COLORS.movingAverage.width,
     fill: false,
-    tension: 0.2,
-    pointRadius: 3,
+    tension: 0.35,            // smooth, round joins like the design's polyline
+    pointRadius: 2,           // small dots
+    pointBackgroundColor: CHART_COLORS.avgLine,
+    pointBorderColor: CHART_COLORS.avgLine,
     order: -1
   };
 }
@@ -96,9 +181,10 @@ export function createSingleDomainDataset(
     type: 'bar',
     label: label,
     data: dailyData.map(day => day.domainHours),
-    backgroundColor: COLORS.currentDomain.background,
-    borderColor: COLORS.currentDomain.border,
-    borderWidth: 1,
+    backgroundColor: COLORS.currentDomain.background, // replaced w/ gradient in build
+    borderColor: makeBarBorderColor(dailyData.length - 1),
+    borderWidth: makeBarBorderWidth(),
+    borderRadius: 2,
     formattedTimes: dailyData.map(day => day.domainFormattedTime),
     order: 1
   };
@@ -118,19 +204,20 @@ export function getBaseChartOptions(_isGeneralView: boolean = false): Record<str
     },
     scales: {
       y: {
-        grid: { color: getGridColor() },
+        grid: { color: getGridColor(), drawBorder: false },
         beginAtZero: true,
         ticks: {
-          color: '#aaa',
+          color: CHART_COLORS.axisText,
           font: {
             size: 11,
-            weight: '500'
+            weight: '500',
+            family: "'IBM Plex Mono', monospace"
           }
         },
         title: {
           display: true,
           text: 'Hours',
-          color: '#ccc',
+          color: CHART_COLORS.axisTitle,
           font: {
             size: 12,
             weight: '600'
@@ -138,10 +225,12 @@ export function getBaseChartOptions(_isGeneralView: boolean = false): Record<str
         }
       },
       x: {
+        grid: { display: false },
         ticks: {
-          color: '#888',
+          color: CHART_COLORS.axisText,
           font: {
-            size: 10
+            size: 10,
+            family: "'IBM Plex Mono', monospace"
           }
         }
       }
@@ -162,9 +251,11 @@ export function buildGeneralViewChart(totalTimeData: GeneralViewData): ChartConf
     data: totalTimeData.dailyData.map(day => Math.pow(day.totalHours, CONFIG.scalingPower)),
     originalData: totalTimeData.dailyData.map(day => day.totalHours),
     formattedTimes: totalTimeData.dailyData.map(day => day.formattedTime),
-    backgroundColor: COLORS.currentDomain.background,
-    borderColor: COLORS.currentDomain.border,
-    borderWidth: 1,
+    // top→bottom gradient; last bar (today) at half opacity
+    backgroundColor: makeBarGradient(totalTimeData.dailyData.length - 1),
+    borderColor: makeBarBorderColor(totalTimeData.dailyData.length - 1),
+    borderWidth: makeBarBorderWidth(),
+    borderRadius: 2,
     order: 1
   };
   datasets.push(totalBarsDataset);
@@ -217,7 +308,7 @@ export function buildGeneralViewChart(totalTimeData: GeneralViewData): ChartConf
         title: {
           display: true,
           text: 'Hours',
-          color: '#ccc',
+          color: CHART_COLORS.axisTitle,
           font: {
             size: 12,
             weight: '600'
@@ -283,6 +374,7 @@ export function buildDetailViewChart(processedData: DetailViewData): ChartConfig
   const domainDataset = createSingleDomainDataset(processedData.dailyData);
   domainDataset.data = domainDataset.data.map(val => Math.pow(val, CONFIG.scalingPower));
   domainDataset.originalData = processedData.dailyData.map(day => day.domainHours);
+  domainDataset.backgroundColor = makeBarGradient(processedData.dailyData.length - 1);
   datasets.push(domainDataset);
 
   if (processedData.movingAverageData) {
@@ -333,7 +425,7 @@ export function buildDetailViewChart(processedData: DetailViewData): ChartConfig
         title: {
           display: true,
           text: 'Hours',
-          color: '#ccc',
+          color: CHART_COLORS.axisTitle,
           font: {
             size: 12,
             weight: '600'
@@ -422,110 +514,24 @@ export function getDetailViewTooltipConfig(processedData: DetailViewData): Recor
 }
 
 export function highlightBar(chart: ExtendedChart, barIndex: number): void {
-  chart.data.datasets.forEach((dataset: ExtendedDataset) => {
-    if (dataset.type === 'bar') {
-      if (!dataset._originalBackgroundColor) {
-        dataset._originalBackgroundColor = Array.isArray(dataset.backgroundColor)
-          ? [...dataset.backgroundColor]
-          : dataset.backgroundColor;
-        dataset._originalBorderColor = Array.isArray(dataset.borderColor)
-          ? [...(dataset.borderColor as string[])]
-          : dataset.borderColor;
-        dataset._originalBorderWidth = Array.isArray(dataset.borderWidth)
-          ? [...(dataset.borderWidth as number[])]
-          : dataset.borderWidth;
-      }
-
-      const numBars = dataset.data.length;
-      if (!Array.isArray(dataset.backgroundColor)) {
-        dataset.backgroundColor = Array(numBars).fill(dataset.backgroundColor);
-      }
-      if (!Array.isArray(dataset.borderColor)) {
-        dataset.borderColor = Array(numBars).fill(dataset.borderColor);
-      }
-      if (!Array.isArray(dataset.borderWidth)) {
-        dataset.borderWidth = Array(numBars).fill(dataset.borderWidth);
-      }
-
-      const origBg = dataset._originalBackgroundColor;
-      const origBorder = dataset._originalBorderColor;
-      const origWidth = dataset._originalBorderWidth;
-
-      dataset.backgroundColor = Array.isArray(origBg) ? [...origBg] : Array(numBars).fill(origBg);
-      dataset.borderColor = Array.isArray(origBorder) ? [...origBorder] : Array(numBars).fill(origBorder);
-      dataset.borderWidth = Array.isArray(origWidth) ? [...origWidth] : Array(numBars).fill(origWidth);
-
-      (dataset.borderColor as string[])[barIndex] = 'white';
-      (dataset.borderWidth as number[])[barIndex] = 2;
-    }
-  });
-
+  const hl = highlightState(chart);
+  hl.locked = barIndex;
+  hl.hover = null;
   chart.update('none');
 }
 
 export function removeBarHighlight(chart: ExtendedChart): void {
-  chart.data.datasets.forEach((dataset: ExtendedDataset) => {
-    if (dataset.type === 'bar' && dataset._originalBackgroundColor) {
-      const numBars = dataset.data.length;
-      const origBg = dataset._originalBackgroundColor;
-      const origBorder = dataset._originalBorderColor;
-      const origWidth = dataset._originalBorderWidth;
-
-      dataset.backgroundColor = Array.isArray(origBg) ? [...origBg] : Array(numBars).fill(origBg);
-      dataset.borderColor = Array.isArray(origBorder) ? [...origBorder] : Array(numBars).fill(origBorder);
-      dataset.borderWidth = Array.isArray(origWidth) ? [...origWidth] : Array(numBars).fill(origWidth);
-    }
-  });
-
+  const hl = highlightState(chart);
+  hl.locked = null;
+  hl.hover = null;
   chart.update('none');
 }
 
 export function showHoverPreview(chart: ExtendedChart, barIndex: number): void {
-  chart.data.datasets.forEach((dataset: ExtendedDataset) => {
-    if (dataset.type === 'bar') {
-      if (!dataset._originalBackgroundColor) {
-        dataset._originalBackgroundColor = Array.isArray(dataset.backgroundColor)
-          ? [...dataset.backgroundColor]
-          : dataset.backgroundColor;
-        dataset._originalBorderColor = Array.isArray(dataset.borderColor)
-          ? [...(dataset.borderColor as string[])]
-          : dataset.borderColor;
-        dataset._originalBorderWidth = Array.isArray(dataset.borderWidth)
-          ? [...(dataset.borderWidth as number[])]
-          : dataset.borderWidth;
-      }
-
-      const numBars = dataset.data.length;
-      if (!Array.isArray(dataset.backgroundColor)) {
-        dataset.backgroundColor = Array(numBars).fill(dataset.backgroundColor);
-      }
-      if (!Array.isArray(dataset.borderColor)) {
-        dataset.borderColor = Array(numBars).fill(dataset.borderColor);
-      }
-      if (!Array.isArray(dataset.borderWidth)) {
-        dataset.borderWidth = Array(numBars).fill(dataset.borderWidth);
-      }
-
-      const origBg = dataset._originalBackgroundColor;
-      const origBorder = dataset._originalBorderColor;
-      const origWidth = dataset._originalBorderWidth;
-
-      dataset.backgroundColor = Array.isArray(origBg) ? [...origBg] : Array(numBars).fill(origBg);
-      dataset.borderColor = Array.isArray(origBorder) ? [...origBorder] : Array(numBars).fill(origBorder);
-      dataset.borderWidth = Array.isArray(origWidth) ? [...origWidth] : Array(numBars).fill(origWidth);
-
-      if (AppState.isLocked() && AppState.lockedDayIndex !== null) {
-        (dataset.borderColor as string[])[AppState.lockedDayIndex] = 'white';
-        (dataset.borderWidth as number[])[AppState.lockedDayIndex] = 2;
-      }
-
-      if (barIndex !== AppState.lockedDayIndex) {
-        (dataset.borderColor as string[])[barIndex] = 'rgba(200, 200, 200, 0.9)';
-        (dataset.borderWidth as number[])[barIndex] = 2;
-      }
-    }
-  });
-
+  const hl = highlightState(chart);
+  // Locked stays the source of truth; hover only previews a different bar.
+  hl.locked = AppState.lockedDayIndex;
+  hl.hover = barIndex === AppState.lockedDayIndex ? null : barIndex;
   chart.update('none');
 }
 

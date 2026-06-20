@@ -32,6 +32,20 @@ export function formatTime(totalTime: number): string {
   return `${formattedHours}:${formattedMinutes}`;
 }
 
+/**
+ * Format a DURATION (seconds) as unit-labelled "4h 36m" / "25m" / "0m".
+ * Used for popup display numbers (hero stats, session card) where the colon
+ * "HH:MM" format is ambiguous against the on-screen timer's "MM:SS" clock.
+ * No colons → no confusion with a ticking timer. Always shows minutes; rounds
+ * down (these are elapsed/total figures, not a countdown to a deadline).
+ */
+export function formatDuration(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(s / 3600);
+  const minutes = Math.floor((s % 3600) / 60);
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+}
+
 
 /**
  * Get current date as YYYY-MM-DD string in local timezone,

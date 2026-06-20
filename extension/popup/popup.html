@@ -6,124 +6,136 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <div class="content">
-    <div class="pages-container show-detail">
-      <!-- General View Page -->
-      <div class="half-page" id="general-page">
-        <div class="page-header">
-          <div class="header-row-buttons">
-            <button id="general-detail-btn" class="nav-btn-text">This Site  ▶</button>
-            <div class="time-summary">Overview</div>
-            <div style="width: 80px;"></div>
+  <!--
+    REDESIGN (merged popup). The old flat two-header layout lived here before;
+    it is superseded by this file. The old *logic paths* in ui-manager.ts that
+    drove it are tagged `MARKED FOR DELETION (redesign)` and swept at cleanup.
+  -->
+  <div class="wt-frame">
+
+    <!-- ============ MERGED TOPBAR (shared across both carousel pages) ======= -->
+    <div class="topbar">
+      <div class="topbar-left">
+        <button id="nav-toggle-btn" class="nav-btn">This site&nbsp;&nbsp;▸</button>
+        <div class="topbar-context">
+          <!-- site identity (detail view) OR "All sites" (general view) -->
+          <div id="topbar-site" class="site-id" hidden>
+            <span id="topbar-site-name" class="site-name">youtube.com</span>
           </div>
-          <div class="header-row-context">
-            <div class="header-text">All Sites</div>
-          </div>
-        </div>
-        <div class="page-content split-view">
-          <div class="left-panel">
-            <canvas id="total-time-chart"></canvas>
-          </div>
-          <div class="right-panel">
-            <div class="breakdown-title">Hover over a day to see breakdown</div>
-            <div class="pie-chart-wrapper">
-              <canvas id="breakdown-pie-chart"></canvas>
-            </div>
-            <div class="breakdown-bars"></div>
-          </div>
+          <span id="topbar-all" class="site-name">All sites</span>
         </div>
       </div>
 
-      <!-- Detail View Page -->
-      <div class="half-page" id="detail-page">
-        <div class="page-header">
-          <div class="header-row-buttons">
-            <button id="detail-general-btn" class="nav-btn-text">◀ All Sites</button>
-            <div class="time-summary">0:00 / 0:00</div>
-            <div style="width: 80px;"></div>
-          </div>
-          <div class="header-row-context">
-            <div class="header-text">WebTime</div>
+      <div class="topbar-date">
+        <span id="topbar-date-label" class="date-label">Today</span>
+      </div>
+
+      <div class="topbar-right">
+        <!-- inline hero numbers: filled by ui-manager per view -->
+        <div id="hero-numbers" class="hero-numbers"></div>
+        <!-- Single toggle: a gear that rotates when settings open. Opens AND
+             closes from the same spot (slide-in + rotation signal the reverse). -->
+        <button id="settings-toggle-btn" class="icon-btn gear-btn" title="Settings" aria-label="Settings" aria-expanded="false">
+          <!-- 6-tooth gear -->
+          <svg class="gear-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M10.32 2.7a2 2 0 0 1 3.36 0l.62.97a2 2 0 0 0 2.27.83l1.1-.33a2 2 0 0 1 2.38 2.38l-.33 1.1a2 2 0 0 0 .83 2.27l.97.62a2 2 0 0 1 0 3.36l-.97.62a2 2 0 0 0-.83 2.27l.33 1.1a2 2 0 0 1-2.38 2.38l-1.1-.33a2 2 0 0 0-2.27.83l-.62.97a2 2 0 0 1-3.36 0l-.62-.97a2 2 0 0 0-2.27-.83l-1.1.33a2 2 0 0 1-2.38-2.38l.33-1.1a2 2 0 0 0-.83-2.27l-.97-.62a2 2 0 0 1 0-3.36l.97-.62a2 2 0 0 0 .83-2.27l-.33-1.1a2 2 0 0 1 2.38-2.38l1.1.33a2 2 0 0 0 2.27-.83z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- ============ CAROUSEL ============ -->
+    <div class="carousel">
+      <div class="pages-container show-detail">
+
+        <!-- ---------- PAGE: ALL SITES (general) ---------- -->
+        <div class="half-page" id="general-page">
+          <div class="page-body split-view">
+            <div class="left-panel">
+              <canvas id="total-time-chart"></canvas>
+            </div>
+            <div class="right-panel">
+              <div class="panel-title">Where it went</div>
+              <div class="breakdown-title" hidden>Hover over a day to see breakdown</div>
+              <!-- legacy pie canvas kept hidden so chart-builder calls don't crash;
+                   MARKED FOR DELETION (redesign) once breakdown no longer uses it -->
+              <div class="pie-chart-wrapper" hidden>
+                <canvas id="breakdown-pie-chart"></canvas>
+              </div>
+              <div class="breakdown-bars wt-scroll"></div>
+            </div>
           </div>
         </div>
-        <div class="page-content split-view">
-          <div class="left-panel">
-            <canvas id="time-chart"></canvas>
+
+        <!-- ---------- PAGE: THIS SITE (detail) ---------- -->
+        <div class="half-page" id="detail-page">
+          <div class="page-body split-view">
+            <div class="left-panel">
+              <canvas id="time-chart"></canvas>
+            </div>
+            <div class="right-panel">
+              <!-- per-site limits card (top) + live session card (below),
+                   both rendered by session-card.ts -->
+              <div id="session-settings-card" class="sc-settings-slot"></div>
+              <div id="session-card" class="session-card-slot"></div>
+            </div>
           </div>
-          <div class="right-panel">
-            <div class="settings-panel">
-              <div class="settings-content">
-                <div class="settings-row">
-                  <label>Day resets</label>
-                  <select id="day-reset-time">
-                    <option value="0">Midnight</option>
-                    <option value="1">1:00 AM</option>
-                    <option value="2">2:00 AM</option>
-                    <option value="3">3:00 AM</option>
-                    <option value="4">4:00 AM</option>
-                    <option value="5">5:00 AM</option>
-                    <option value="6">6:00 AM</option>
-                  </select>
-                </div>
-                <div class="settings-grid">
-                  <div class="settings-row">
-                    <label>Inactivity (s)</label>
-                    <input type="number" id="inactivity-timeout" value="30" min="1">
-                  </div>
-                  <div class="settings-row">
-                    <label>Chart scale</label>
-                    <input type="number" id="chart-scaling" value="0.8" min="0.3" max="1.0" step="0.05">
-                  </div>
-                </div>
-                <div class="settings-row">
-                  <label>End session shortcut</label>
-                  <div style="display: flex; gap: 4px; align-items: center;">
-                    <input type="text" id="end-session-shortcut" value="Ctrl+E" readonly placeholder="Click to set" style="flex: 1; cursor: pointer;">
-                    <button type="button" id="end-session-shortcut-clear" title="Disable shortcut" style="padding: 2px 6px;">×</button>
-                  </div>
-                </div>
-                <div class="divider"></div>
-                <div class="interventions-header">
-                  Interventions: <span class="domain" id="settings-domain-inline"></span>
-                </div>
-                <div class="intervention-row">
-                  <input type="checkbox" id="session-limit-enabled">
-                  <div class="intervention-grid">
-                    <div class="intervention-group">
-                      <label>Session limit</label>
-                      <div class="time-inputs">
-                        <input type="number" id="session-limit-minutes" min="1" value="30">
-                        <span>min</span>
-                      </div>
-                    </div>
-                    <div class="intervention-group">
-                      <label>Cooldown +<span id="cooldown-recommended" style="color: #888; font-size: 11px;"></span></label>
-                      <div class="time-inputs">
-                        <input type="number" id="cooldown-increment-minutes" min="0" value="3">
-                        <span>m</span>
-                        <input type="number" id="cooldown-increment-seconds" min="0" max="59" value="0">
-                        <span>s</span>
-                      </div>
-                    </div>
-                    <div class="intervention-group">
-                      <label>Nudges<span id="nudge-count-auto" style="color: #888; font-size: 11px;"></span></label>
-                      <div class="time-inputs">
-                        <input type="number" id="nudge-count" min="0" max="20">
-                      </div>
-                    </div>
-                  </div>
-                </div>
+        </div>
+
+      </div>
+
+      <!-- ============ SETTINGS OVERLAY (right-half only, slides from divider) === -->
+      <div id="settings-overlay" class="settings-overlay">
+        <div class="settings-sheet">
+          <div class="settings-head">
+            <div class="settings-title">Settings</div>
+          </div>
+          <div class="settings-sub">Applies to every site</div>
+
+          <div class="settings-body wt-scroll">
+            <div class="field">
+              <label for="day-reset-time">Day resets at</label>
+              <select id="day-reset-time">
+                <option value="0">Midnight</option>
+                <option value="1">1:00 AM</option>
+                <option value="2">2:00 AM</option>
+                <option value="3">3:00 AM</option>
+                <option value="4">4:00 AM</option>
+                <option value="5">5:00 AM</option>
+                <option value="6">6:00 AM</option>
+              </select>
+            </div>
+
+            <div class="field-row">
+              <div class="field">
+                <label for="inactivity-timeout">Inactivity (s)</label>
+                <input type="number" id="inactivity-timeout" value="30" min="1">
               </div>
-              <div class="settings-footer">
-                <button class="save-btn" id="save-settings-btn">Save</button>
+              <div class="field">
+                <label for="chart-scaling">Chart scale</label>
+                <input type="number" id="chart-scaling" value="0.8" min="0.3" max="1.0" step="0.05">
               </div>
             </div>
+
+            <div class="field">
+              <label for="end-session-shortcut">End-session shortcut</label>
+              <div class="shortcut-row">
+                <input type="text" id="end-session-shortcut" value="Ctrl+E" readonly placeholder="Click to set">
+                <button type="button" id="end-session-shortcut-clear" title="Disable shortcut">×</button>
+              </div>
+            </div>
+
+          </div>
+
+          <div class="settings-footer">
+            <button class="save-btn" id="save-settings-btn">Save</button>
           </div>
         </div>
       </div>
     </div>
   </div>
-  
+
   <script src="chart.min.js"></script>
   <script src="../dist/popup/popup-bundle.js"></script>
 </body>

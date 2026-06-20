@@ -1,7 +1,7 @@
 import { extractDomain } from '../shared/utils.js';
 import { AppState } from './state.js';
 import { UIManager } from './ui-manager.js';
-import { CONFIG } from './config.js';
+import { CONFIG, ViewState } from './config.js';
 
 declare const browser: typeof chrome;
 
@@ -22,26 +22,31 @@ export const App = {
   },
 
   setupEventListeners(): void {
-    const generalDetailBtn = document.getElementById('general-detail-btn');
-    const detailGeneralBtn = document.getElementById('detail-general-btn');
+    // Merged topbar: one nav button toggles between the two carousel pages.
+    const navToggleBtn = document.getElementById('nav-toggle-btn');
+    const settingsToggleBtn = document.getElementById('settings-toggle-btn');
     const saveSettingsBtn = document.getElementById('save-settings-btn');
 
-    if (generalDetailBtn) {
-      generalDetailBtn.addEventListener('click', () => {
-        UIManager.renderDetailView(AppState.selectedDomain);
-        UIManager.showDetailView();
+    if (navToggleBtn) {
+      navToggleBtn.addEventListener('click', () => {
+        if (AppState.currentView === ViewState.DETAIL) {
+          UIManager.showGeneralView();
+        } else {
+          UIManager.renderDetailView(AppState.selectedDomain);
+          UIManager.showDetailView();
+        }
       });
     }
 
-    if (detailGeneralBtn) {
-      detailGeneralBtn.addEventListener('click', () => {
-        UIManager.showGeneralView();
-      });
+    // One button toggles the right-half settings overlay; it morphs hamburger→✕.
+    if (settingsToggleBtn) {
+      settingsToggleBtn.addEventListener('click', () => UIManager.toggleSettings());
     }
 
     if (saveSettingsBtn) {
       saveSettingsBtn.addEventListener('click', () => {
         UIManager.saveSettings();
+        UIManager.closeSettings();
       });
     }
   },

@@ -55,6 +55,14 @@ let interventionState: InterventionState = {
 // first tick / settings change while it's the tracked domain).
 const sessions: Record<Domain, ActiveSession> = {};
 
+// Sessions whose rules were toggled OFF mid-session. We KEEP the object here
+// (out of `sessions`, so the tick/cooldown logic ignores it) instead of deleting
+// it, so flipping rules back ON resumes the SAME session rather than starting a
+// fresh Session 1. The clock is NOT frozen while suspended — elapsed time still
+// accrues against startDaily — so toggling off can't be used to dodge the limit;
+// it only suspends *enforcement*, not the count.
+const suspendedSessions: Record<Domain, ActiveSession> = {};
+
 // Inter-session / UI state — deliberately NOT on the session object, since it
 // describes the gap *between* sessions or transient overlay state:
 //   cooldownEndTime[domain]   = ms epoch when the active cooldown ends (absent = not in cooldown).
@@ -549,21 +557,32 @@ function handleMessageReceived(
           cooldownIncrement: domainCfg?.cooldownIncrement
         });
         const prev = previousInterventionSettings[domain];
+        const slEnabled = domainCfg?.sessionLimitEnabled || false;
         const settingsActuallyChanged = prev !== undefined && prev !== fingerprint;
+        // First time we've seen this domain's fingerprint: normally we just
+        // record it and wait. But if rules are ALREADY on for the tracked tab
+        // and no session is running, act now — otherwise the first toggle-on of
+        // a fresh domain does nothing until a refresh re-runs init.
+        const firstSeenNeedsStart = prev === undefined && slEnabled
+          && domain === trackedTabDomain && !sessions[domain];
         previousInterventionSettings[domain] = fingerprint;
 
-        if (!settingsActuallyChanged) continue;
-
-        const slEnabled = domainCfg?.sessionLimitEnabled || false;
+        if (!settingsActuallyChanged && !firstSeenNeedsStart) continue;
         const newLimitSeconds = slEnabled ? (domainCfg?.sessionLimit || 0) * 60 : 0;
         const cooldownIncrementSeconds = slEnabled ? (domainCfg?.cooldownIncrement || 0) * 60 : 0;
         cachedDomainSessionLimit[domain] = { sessionLimitSeconds: newLimitSeconds };
 
         if (newLimitSeconds <= 0) {
-          // Session limit turned off — drop the session entirely.
-          delete sessions[domain];
+          // Rules turned OFF. Don't delete the session — SUSPEND it (stash the
+          // object) so re-enabling resumes the same one instead of restarting at
+          // Session 1. Enforcement stops; the clock keeps running (no exploit).
+          if (sessions[domain]) {
+            suspendedSessions[domain] = sessions[domain];
+            delete sessions[domain];
+          }
           delete windDownActive[domain];
           saveSessionState();
+          if (domain === trackedTabDomain) updateTimerDisplay(todaysTotalTimeInActiveDomain);
           continue;
         }
 
@@ -573,10 +592,21 @@ function handleMessageReceived(
           continue;
         }
 
-        const existing = sessions[domain];
+        let existing = sessions[domain];
+        if (!existing && suspendedSessions[domain]) {
+          // Rules toggled back ON — resume the suspended session (same number,
+          // carryover, grace, anchor). It may have run past its end while off,
+          // which the changeLength/expired path below handles like any overrun.
+          existing = suspendedSessions[domain];
+          sessions[domain] = existing;
+          delete suspendedSessions[domain];
+        }
         if (!existing) {
-          // No session yet — it'll start lazily on the next tick at the new limit.
-          continue;
+          // No session ever existed — start one NOW (not "next tick"), so the
+          // timer appears immediately on the tracked tab instead of after a
+          // refresh. Anchored at the current daily total.
+          existing = getOrStartSession(domain, todaysTotalTimeInActiveDomain, newLimitSeconds);
+          updateTimerDisplay(todaysTotalTimeInActiveDomain);
         }
 
         // Live length change. Anchored to startDaily, so elapsed time is

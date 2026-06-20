@@ -6,6 +6,18 @@ set -e  # Exit immediately if a command fails
 echo "🔷 Compiling TypeScript..."
 npm run build
 
+# Archive any previously-built zips into old_versions/ so artifacts/
+# only ever holds the build we're about to make.
+echo ""
+echo "🗄  Archiving previous builds to old_versions/..."
+mkdir -p artifacts/old_versions
+shopt -s nullglob
+for zip in artifacts/*.zip; do
+    mv "$zip" artifacts/old_versions/
+    echo "   moved $(basename "$zip")"
+done
+shopt -u nullglob
+
 echo ""
 echo "🧪 Running tests..."
 echo ""
