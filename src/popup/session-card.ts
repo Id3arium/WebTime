@@ -348,10 +348,10 @@ function renderActive(host: HTMLElement, s: ActiveSession, dailyTotal: number, s
     r.append(val);
     return r;
   };
-  breakdown.append(row('time left', formatClock(remaining)));
+  breakdown.append(row('Time left', formatClock(remaining)));
   if (grace > 0) breakdown.append(row('10% bonus', formatClock(grace), { op: '+' }));
   breakdown.append(el('div', 'sc-breakdown-rule'));
-  breakdown.append(row(`rolls into Session ${s.sessionNum + 1}`, formatClock(rollover), { total: true }));
+  breakdown.append(row(`Time added to Session ${s.sessionNum + 1}`, formatClock(rollover), { total: true }));
 
   const btn = el('button', 'sc-btn');
   btn.id = 'session-end-early-btn';

@@ -215,9 +215,12 @@ body {
    delta picks it up. */
 .usage-headline { display: flex; align-items: flex-start; white-space: nowrap; color: var(--text-faint); }
 .usage-stat { display: flex; flex-direction: column; }
-.usage-val { font: 600 18px 'IBM Plex Mono'; color: var(--text); line-height: 1.1; }
+.usage-val { font: 600 20px 'IBM Plex Mono'; color: var(--text); line-height: 1.1; }
 .usage-cap { font: 400 12px 'IBM Plex Mono'; color: var(--text-dim); margin-top: 3px; }
-.usage-slash { font: 300 18px 'IBM Plex Mono'; color: var(--text-faint); margin: 0 11px; line-height: 1.1; }
+.usage-slash { font: 300 20px 'IBM Plex Mono'; color: var(--text-faint); margin: 0 11px; line-height: 1.1; }
+/* General head: value + delta on one baseline row (delta sits at the number's
+   bottom), caption hangs below. */
+.usage-valrow { display: flex; align-items: baseline; gap: 9px; }
 .usage-delta { font: 400 12px 'IBM Plex Sans'; }
 .usage-delta.good { color: var(--good); }
 .usage-delta.dim { color: var(--text-dim); }
@@ -231,12 +234,20 @@ body {
   border: 1px solid var(--line); border-radius: 12px; padding: 13px 15px;
 }
 
-/* General headline: flush above the breakdown bars (no border), with a hairline
-   rule beneath tying it to the list as one card. */
+/* General view: the headline + breakdown bars live in one bordered card (like
+   the detail-view cards). The card fills the panel; the bars scroll inside it. */
+.usage-breakdown-card {
+  flex: 1; min-height: 0; display: flex; flex-direction: column;
+  background: var(--bg-raise); border: 1px solid var(--line); border-radius: 12px;
+  padding: 13px 15px;
+}
+/* Headline sits at the card top, with a hairline rule under it tying it to the
+   list below. */
 .usage-head {
-  flex: none; padding: 0 10px 11px; margin-bottom: 6px;
+  flex: none; padding-bottom: 11px; margin-bottom: 8px;
   border-bottom: 1px solid var(--line);
 }
+.usage-breakdown-card .breakdown-bars { padding-right: 4px; }
 
 /* ===========================================================================
    BREAKDOWN LIST (existing renderBreakdownBars markup, restyled to monogram tiles)
@@ -407,6 +418,9 @@ body {
    was dropped as redundant with the ledger's "time left"). */
 /* Rides on the (uppercase) title; match its size, keep the live-accent color. */
 .sc-title-pct { font: 700 10.5px 'IBM Plex Mono'; letter-spacing: 0.05em; }
+/* Cooldown countdown number (the only remaining .sc-time — the active card's
+   elapsed/limit line was dropped). Prominent, white. */
+.sc-time { font: 600 20px 'IBM Plex Mono'; color: var(--text); margin-bottom: 4px; }
 .sc-sub { font: 400 11px 'IBM Plex Sans'; color: var(--text-dim); margin-bottom: 11px; }
 
 /* End-early breakdown: a ledger — quiet label left, value right-aligned, so the
@@ -415,7 +429,7 @@ body {
 .sc-breakdown { margin: 11px 0; display: flex; flex-direction: column; gap: 6px; }
 .sc-breakdown-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .sc-breakdown-label { font: 400 12px 'IBM Plex Sans'; color: var(--text-dim); }
-.sc-breakdown-val { font: 600 18px 'IBM Plex Mono'; color: var(--text); white-space: nowrap; }
+.sc-breakdown-val { font: 600 16px 'IBM Plex Mono'; color: var(--text); white-space: nowrap; }
 .sc-breakdown-op { color: var(--text-faint); }
 .sc-breakdown-rule { height: 1px; background: var(--line); margin: 1px 0; }
 .sc-breakdown-row.is-total .sc-breakdown-label { color: var(--text); }

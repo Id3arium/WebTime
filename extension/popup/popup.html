@@ -58,15 +58,18 @@
             </div>
             <div class="right-panel">
               <!-- Usage breakdown card: headline (total + vs-avg) acts as the
-                   section title, with the per-domain bars below. -->
-              <div id="usage-breakdown-head" class="usage-head"></div>
-              <div class="breakdown-title" hidden>Hover over a day to see breakdown</div>
-              <!-- legacy pie canvas kept hidden so chart-builder calls don't crash;
-                   MARKED FOR DELETION (redesign) once breakdown no longer uses it -->
-              <div class="pie-chart-wrapper" hidden>
-                <canvas id="breakdown-pie-chart"></canvas>
+                   section title, with the per-domain bars below — all in one
+                   bordered card like the detail-view cards. -->
+              <div class="usage-breakdown-card">
+                <div id="usage-breakdown-head" class="usage-head"></div>
+                <div class="breakdown-title" hidden>Hover over a day to see breakdown</div>
+                <!-- legacy pie canvas kept hidden so chart-builder calls don't crash;
+                     MARKED FOR DELETION (redesign) once breakdown no longer uses it -->
+                <div class="pie-chart-wrapper" hidden>
+                  <canvas id="breakdown-pie-chart"></canvas>
+                </div>
+                <div class="breakdown-bars wt-scroll"></div>
               </div>
-              <div class="breakdown-bars wt-scroll"></div>
             </div>
           </div>
         </div>

@@ -194,9 +194,9 @@ function updateDetailUsageCard(): void {
   const totals = calculateTodaysTotals(AppState.allTimeHistory, today, domain);
 
   const head = usageHeadline(
-    usageStat(formatDurationHM(totals.domain), 'this site'),
+    usageStat(formatDurationHM(totals.domain), 'This site'),
     usageSlash(),
-    usageStat(formatDurationHM(totals.total), 'all sites')
+    usageStat(formatDurationHM(totals.total), 'All sites')
   );
 
   const out: HTMLElement[] = [eyebrow('Usage'), head];
@@ -224,10 +224,24 @@ function updateGeneralUsageHead(selectedDate?: string): void {
   const stats = dayVsAverage(day);
   const totals = calculateTodaysTotals(AppState.allTimeHistory, day, '');
 
-  const head = usageHeadline(usageStat(formatDurationHM(totals.total), 'all sites'));
+  // Value + delta share a baseline row (so the delta sits at the big number's
+  // bottom); the "all sites" caption hangs below the value.
+  const stat = document.createElement('div');
+  stat.className = 'usage-stat';
+  const valRow = document.createElement('div');
+  valRow.className = 'usage-valrow';
+  const val = document.createElement('span');
+  val.className = 'usage-val';
+  val.textContent = formatDurationHM(totals.total);
+  valRow.append(val);
   const delta = deltaPhrase(stats?.delta ?? null);
-  if (delta) { head.append(document.createTextNode(' · ')); head.append(delta); }
+  if (delta) valRow.append(delta);
+  const cap = document.createElement('span');
+  cap.className = 'usage-cap';
+  cap.textContent = 'All sites';
+  stat.append(valRow, cap);
 
+  const head = usageHeadline(stat);
   host.replaceChildren(eyebrow('Usage breakdown'), head);
 }
 
