@@ -122,7 +122,7 @@ function stepper(opts: {
   const box = el('div', 'sc-stepper-box');
   const valWrap = el('span', 'sc-stepper-val');
   const setText = (v: number) => {
-    valWrap.textContent = String(v);
+    valWrap.replaceChildren(document.createTextNode(String(v)));
     if (opts.unit) valWrap.append(Object.assign(document.createElement('span'), {
       className: 'sc-stepper-unit', textContent: opts.unit,
     }));
@@ -136,7 +136,10 @@ function stepper(opts: {
     b.className = 'sc-stepper-btn';
     b.textContent = sym;
     b.addEventListener('click', () => {
-      cur = Math.max(opts.min, Math.min(opts.max, cur + dir * opts.step));
+      // Round to the step grid to keep fractional steps (e.g. 0.5) from
+      // accumulating binary floating-point dust like 3.4999999.
+      const next = cur + dir * opts.step;
+      cur = Math.round(Math.max(opts.min, Math.min(opts.max, next)) / opts.step) * opts.step;
       setText(cur);
       opts.onChange(cur);
     });
@@ -203,25 +206,23 @@ export async function renderSessionSettingsCard(
   });
   head.append(toggle);
 
-  // body: limit (full row) + cooldown/nudges (two-up)
+  // body: two two-up rows — [session length | nudges], then the cooldown
+  // increment split into [minutes | seconds] steppers.
   const body = el('div', 'sc-settings-body');
-  const recCooldown = `(rec ${Math.max(1, Math.round(cur.sessionLimit / 3))}m)`;
   const recNudges = `(rec ${Math.round(PHI * Math.sqrt(cur.sessionLimit / 15))})`;
 
-  body.append(
+  // Cooldown is stored as one fractional-minutes number; the two steppers each
+  // own a part and recombine on change. Read once so they share a baseline.
+  let coolMin = Math.floor(cur.cooldownIncrement);
+  let coolSec = Math.round((cur.cooldownIncrement - coolMin) * 60);
+  const persistCooldown = () => { cur.cooldownIncrement = coolMin + coolSec / 60; persist(); };
+
+  const rowOne = el('div', 'sc-settings-twoup');
+  rowOne.append(
     stepper({
       label: 'Session length', value: cur.sessionLimit, unit: 'min',
-      min: 1, max: 240, step: 5,
+      min: 1, max: 240, step: 1,
       onChange: v => { cur.sessionLimit = v; persist(); },
-    })
-  );
-
-  const twoUp = el('div', 'sc-settings-twoup');
-  twoUp.append(
-    stepper({
-      label: 'Cooldown', rec: recCooldown, value: cur.cooldownIncrement, unit: 'm',
-      min: 0, max: 120, step: 1,
-      onChange: v => { cur.cooldownIncrement = v; persist(); },
     }),
     stepper({
       label: 'Nudges', rec: recNudges, value: cur.nudgeCount, unit: '',
@@ -229,7 +230,21 @@ export async function renderSessionSettingsCard(
       onChange: v => { cur.nudgeCount = v; persist(); },
     })
   );
-  body.append(twoUp);
+
+  const rowTwo = el('div', 'sc-settings-twoup');
+  rowTwo.append(
+    stepper({
+      label: 'Cooldown', value: coolMin, unit: 'm',
+      min: 0, max: 120, step: 1,
+      onChange: v => { coolMin = v; persistCooldown(); },
+    }),
+    stepper({
+      label: 'Cooldown secs', value: coolSec, unit: 's',
+      min: 0, max: 30, step: 30,
+      onChange: v => { coolSec = v; persistCooldown(); },
+    })
+  );
+  body.append(rowOne, rowTwo);
 
   card.append(head, body);
   host.replaceChildren(card);

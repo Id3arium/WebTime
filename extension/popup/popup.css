@@ -406,7 +406,7 @@ body {
   margin: 13px 0; display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
 }
 .sc-breakdown-part { display: flex; flex-direction: column; gap: 1px; }
-.sc-breakdown-val { font: 600 13px 'IBM Plex Mono'; color: var(--good); }
+.sc-breakdown-val { font: 600 13px 'IBM Plex Mono'; color: var(--text); }
 .sc-breakdown-label { font: 400 10px 'IBM Plex Sans'; color: var(--text-dim); white-space: nowrap; }
 .sc-breakdown-op { font: 400 13px 'IBM Plex Mono'; color: var(--text-faint); }
 .sc-good { color: var(--good); font-weight: 600; }
@@ -430,6 +430,7 @@ body {
 }
 .sc-settings-body { transition: opacity 0.15s; }
 .sc-settings-twoup { display: flex; gap: 11px; }
+.sc-settings-twoup + .sc-settings-twoup { margin-top: 13px; }
 .sc-settings-twoup > .sc-stepper-group { flex: 1; }
 
 /* toggle switch */
