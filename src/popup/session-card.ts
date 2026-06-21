@@ -325,41 +325,39 @@ function renderActive(host: HTMLElement, s: ActiveSession, dailyTotal: number, s
 
   const card = cardShell();
 
+  // Title carries the live "· NN% left" — the old elapsed/limit line was
+  // redundant with the ledger's "time left" below, so it's gone.
   const head = el('div', 'sc-head');
-  head.append(el('span', 'sc-title', `Session ${s.sessionNum}`));
+  const title = el('span', 'sc-title', `Session ${s.sessionNum}`);
+  const pctEl = el('span', 'sc-title-pct', ` · ${pctLeft}% left`);
+  pctEl.style.color = leftColor;
+  title.append(pctEl);
+  head.append(title);
   head.append(el('span', 'sc-badge sc-badge-active', 'Active'));
 
-  // elapsed / limit, with "· NN% left" replacing the old fill-up bar.
-  const time = el('div', 'sc-time');
-  time.append(document.createTextNode(formatClock(sessionTime)));
-  time.append(el('span', 'sc-time-limit', ` / ${formatClock(sessionLimitSeconds)}`));
-  const pctEl = el('span', 'sc-time-pct', ` · ${pctLeft}% left`);
-  pctEl.style.color = leftColor;
-  time.append(pctEl);
-
-  // What "End early" does, as a plain inline equation (no nested card): the time
-  // still left + a 10% bonus = what carries into the next session. Each value is
-  // highlighted; the labels stay quiet so the math reads at a glance.
+  // What "End early" does, as a ledger: quiet label on the left, value
+  // right-aligned so the figures stack into a column that visibly adds up.
+  // A divider sits before the total, whose value is the green "what you keep".
   const breakdown = el('div', 'sc-breakdown');
-  const part = (value: string, label: string): HTMLElement => {
-    const p = el('span', 'sc-breakdown-part');
-    p.append(el('span', 'sc-breakdown-val', value));
-    p.append(el('span', 'sc-breakdown-label', label));
-    return p;
+  const row = (label: string, value: string, opts: { op?: string; total?: boolean } = {}): HTMLElement => {
+    const r = el('div', `sc-breakdown-row${opts.total ? ' is-total' : ''}`);
+    r.append(el('span', 'sc-breakdown-label', label));
+    const val = el('span', 'sc-breakdown-val');
+    if (opts.op) val.append(el('span', 'sc-breakdown-op', `${opts.op} `));
+    val.append(document.createTextNode(value));
+    r.append(val);
+    return r;
   };
-  const op = (sym: string) => el('span', 'sc-breakdown-op', sym);
-  breakdown.append(part(formatClock(remaining), 'time left'));
-  if (grace > 0) breakdown.append(op('+'), part(formatClock(grace), '10% bonus'));
-  breakdown.append(
-    op('='),
-    part(formatClock(rollover), `into Session ${s.sessionNum + 1}`)
-  );
+  breakdown.append(row('time left', formatClock(remaining)));
+  if (grace > 0) breakdown.append(row('10% bonus', formatClock(grace), { op: '+' }));
+  breakdown.append(el('div', 'sc-breakdown-rule'));
+  breakdown.append(row(`rolls into Session ${s.sessionNum + 1}`, formatClock(rollover), { total: true }));
 
   const btn = el('button', 'sc-btn');
   btn.id = 'session-end-early-btn';
   btn.textContent = shortcut ? `End session (${shortcut})` : 'End session early';
 
-  card.append(head, time, breakdown, btn);
+  card.append(head, breakdown, btn);
   host.replaceChildren(card);
 
   btn.addEventListener('click', () => {

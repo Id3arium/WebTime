@@ -15,27 +15,23 @@
 
     <!-- ============ MERGED TOPBAR (shared across both carousel pages) ======= -->
     <div class="topbar">
-      <!-- nav + gear pinned to the edges; the cluster between them is centered on
-           the content seam (chart|panel boundary) so the rule continues that
-           split line down through the body. -->
+      <!-- nav + gear pinned to the edges; date and domain flank the rule on the
+           content seam (chart|panel boundary), as equal-weight peers. -->
       <button id="nav-toggle-btn" class="nav-btn">This site&nbsp;&nbsp;▸</button>
 
-      <!-- Title, rule, and stats are each absolutely pinned to the card's left
-           edge (464px) so the rule continues the panel border and "9m" lines up
-           under the card text. Title hangs left of the rule; stats sit right. -->
+      <!-- Date — right-aligned against the rule (the content seam at 464px). -->
       <div class="topbar-title">
-        <!-- date is the PRIMARY line (white, big); the site identity is the
-             grey subtitle beneath it. -->
         <span id="topbar-date-label" class="date-label">Today</span>
-        <!-- site identity (detail view) OR "All sites" (general view) -->
+      </div>
+      <span class="topbar-rule"></span>
+      <!-- Domain (detail) OR "all sites" (general) — left of the rule, a 20px
+           white peer of the date. -->
+      <div id="hero-numbers" class="hero-numbers">
         <div id="topbar-site" class="site-id" hidden>
           <span id="topbar-site-name" class="site-name">youtube.com</span>
         </div>
         <span id="topbar-all" class="site-name">all sites</span>
       </div>
-      <span class="topbar-rule"></span>
-      <!-- inline hero numbers: filled by ui-manager per view -->
-      <div id="hero-numbers" class="hero-numbers"></div>
 
       <div class="topbar-right">
         <!-- Single toggle: a gear that rotates when settings open. Opens AND
@@ -61,7 +57,9 @@
               <canvas id="total-time-chart"></canvas>
             </div>
             <div class="right-panel">
-              <div class="panel-title">Where it went</div>
+              <!-- Usage breakdown card: headline (total + vs-avg) acts as the
+                   section title, with the per-domain bars below. -->
+              <div id="usage-breakdown-head" class="usage-head"></div>
               <div class="breakdown-title" hidden>Hover over a day to see breakdown</div>
               <!-- legacy pie canvas kept hidden so chart-builder calls don't crash;
                    MARKED FOR DELETION (redesign) once breakdown no longer uses it -->
@@ -80,8 +78,9 @@
               <canvas id="time-chart"></canvas>
             </div>
             <div class="right-panel">
-              <!-- per-site limits card (top) + live session card (below),
-                   both rendered by session-card.ts -->
+              <!-- usage card (this-site total + vs-avg), then per-site limits
+                   card + live session card, all rendered from TS. -->
+              <div id="detail-usage-card" class="usage-card"></div>
               <div id="session-settings-card" class="sc-settings-slot"></div>
               <div id="session-card" class="session-card-slot"></div>
             </div>

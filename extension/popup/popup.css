@@ -20,8 +20,8 @@
   --good:          #3fbf7f;
   --warn:          #f0a52a;
   --avg-line:      #bcd2ff;   /* light periwinkle moving-average line */
-  --topbar-h:      74px;
-  --carousel-h:    525px;
+  --topbar-h:      54px;
+  --carousel-h:    545px;
   --ease:          cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -69,38 +69,36 @@ body {
   flex: none;
 }
 
-/* Nav button left edge; gear (.topbar-right) right edge. Inset 16px on all of
-   top/left/right — the SAME 16px the body uses for the cards below, so the gear's
-   right edge lines up with the card's right edge and the corner spacing is
-   symmetric. Buttons sit in the top band; subtitles hang below them. */
-.nav-btn { position: absolute; left: 16px; top: 16px; z-index: 2; }
-.topbar-right { position: absolute; right: 16px; top: 16px; z-index: 2; display: flex; align-items: center; }
+/* Slim single-row header. Nav button (left edge) and gear (right edge) inset
+   16px — the SAME 16px the cards below use, so the gear's right edge lines up
+   with the card's right edge. Everything is vertically centered on the bar. */
+.nav-btn { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); z-index: 2; }
+.topbar-right { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); z-index: 2; display: flex; align-items: center; }
 
-/* The vertical RULE is pinned to the right panel's LEFT EDGE so it continues the
-   card border down through the header. That edge: popup 800 − 16 body padding −
-   320 panel width = 464px from the left. The rule lives at exactly that x; the
-   title block hangs to its left (right-aligned, reading into the rule) and the
-   stats sit to its right. The stats' inset from the rule equals the card's own
-   15px text padding, so "9m" lines up under "Session rules". */
-/* Rule spans from the button-top band down through the subtitle row, so it ties
-   the whole title/stats cluster together visually. */
+/* The vertical RULE is pinned to the right panel's LEFT EDGE (the content seam:
+   popup 800 − 16 body padding − 320 panel width = 464px) so it continues the
+   card border up through the header. The date reads INTO it from the left; the
+   domain sits to its right. All vertically centered. */
 .topbar-rule {
-  position: absolute; left: 464px; top: 14px;
-  width: 1px; height: 44px; background: var(--line-strong); z-index: 1;
+  position: absolute; left: 464px; top: 50%; transform: translateY(-50%);
+  width: 1px; height: 24px; background: var(--line-strong); z-index: 1;
 }
-/* Title block: date (primary) + domain (subtext), RIGHT-aligned so it reads INTO
-   the rule. TOP-anchored (not centered) so the date's top edge lines up with the
-   top of the buttons; the domain subtitle then hangs below the button row. */
+/* Date — right-aligned against the rule, reading into it. The 16px gap from the
+   rule mirrors the gear's 16px inset on the far side. */
 .topbar-title {
-  position: absolute; right: calc(800px - 464px + 16px); top: 14px;
-  display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
-  text-align: right; min-width: 0;
+  position: absolute; right: calc(800px - 464px + 16px); top: 50%; transform: translateY(-50%);
+  display: flex; align-items: center; text-align: right; min-width: 0;
+}
+/* Domain / "all sites" — left of the rule, inset by the card's own 15px text
+   padding so it lines up under the card text below. Now a PEER of the date:
+   same 20px Sans, same white. */
+.hero-numbers {
+  position: absolute; left: 479px; top: 50%; transform: translateY(-50%);
+  display: flex; align-items: center; min-width: 0;
 }
 
 .nav-btn {
-  height: 30px;                    /* same height as the gear; sized to the 20px
-                                     primary text so both buttons align with the
-                                     date line, subtitles hanging below them */
+  height: 30px;
   display: flex; align-items: center;
   border: 1px solid var(--line-strong);
   cursor: pointer;
@@ -114,42 +112,16 @@ body {
 }
 .nav-btn:hover { background: #262b34; color: var(--text); }
 
-/* The site identity is now the SUBTEXT (grey, small) beneath the date. */
-.site-id { display: flex; align-items: center; gap: 9px; min-width: 0; }
-/* [hidden] must win over the display:flex/inline above, or both the site block
-   and "All sites" show at once. */
 [hidden] { display: none !important; }
+
+/* Date (left of seam) and domain / "all sites" (right of seam) are PEERS now:
+   both 20px Sans, white. The domain truncates with an ellipsis if long. */
+.date-label { font: 600 20px 'IBM Plex Sans'; color: var(--text); white-space: nowrap; line-height: 1.05; }
 .site-name {
-  /* Match the "This site" / "All sites" captions exactly — same family, size,
-     weight, colour — so the domain reads as a sibling of them, not a smaller
-     mismatched line. */
-  font: 400 12px 'IBM Plex Mono'; color: var(--text-dim);
+  font: 600 20px 'IBM Plex Sans'; color: var(--text);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-
-/* Date is now the PRIMARY line of the title block: white, 20px — the shared
-   "big" size used by the stat numbers and the session card value too. */
-.date-label { font: 600 20px 'IBM Plex Sans'; color: var(--text); white-space: nowrap; line-height: 1.05; }
-
-/* inline hero numbers — built by ui-manager. Markup convention (per design):
-   <div class="hero-stat"><div class="hero-val">4h 36m</div><div class="hero-cap">All sites</div></div>
-   Items align to the TOP so the slash sits on the values' line (reads as a
-   fraction bar); the captions hang below it. */
-.hero-numbers {
-  position: absolute; left: 479px; top: 14px;
-  display: flex; align-items: flex-start; gap: 9px;
-}
-.hero-stat { text-align: left; }
-.hero-val { font: 600 20px 'IBM Plex Mono'; color: var(--text); line-height: 1; }
-.hero-val.dim { color: var(--text-dim); }
-.hero-val.good { color: var(--good); }
-/* Captions: 12px, the shared "small" size. Must NOT wrap — "This site" /
-   "All sites" stay on one line. */
-.hero-cap { font: 400 12px 'IBM Plex Mono'; color: var(--text-dim); margin-top: 3px; white-space: nowrap; }
-/* Slash separator — aligned to the value line so "This site / All sites" reads
-   like a fraction. line-height matches .hero-val so its baseline sits with the
-   numbers, not centered against the value+caption block. */
-.hero-sep { font: 300 20px 'IBM Plex Mono'; color: var(--text-faint); line-height: 1; }
+.site-id { display: flex; align-items: center; min-width: 0; }
 
 .icon-btn {
   width: 34px; height: 30px; border: none; border-radius: 8px;
@@ -222,12 +194,48 @@ body {
   flex-direction: column;
   min-height: 0;
 }
-/* Detail view's right panel stacks two cards (rules + session) — space them. */
-#detail-page .right-panel { gap: 12px; }
+/* Detail view's right panel stacks three cards (usage + rules + session) — space
+   them, and let the whole panel scroll as one unit if they overflow. */
+#detail-page .right-panel { gap: 10px; overflow-y: auto; padding-right: 4px; }
 
-.panel-title {
-  font: 700 10.5px 'IBM Plex Mono'; letter-spacing: 0.1em; color: var(--text-faint);
-  text-transform: uppercase; margin-bottom: 6px; padding-left: 10px; flex: none;
+/* ===========================================================================
+   USAGE CARDS — detail-page card (bordered) + general-page headline (flush).
+   Shared headline type: 20px Mono value + 12px caption, with a vs-avg delta.
+   =========================================================================== */
+/* Shared card-title (eyebrow) standard — uppercase Mono, white. Used by every
+   card header: USAGE, SESSION RULES, SESSION N. Keep these in sync. */
+.usage-eyebrow, .sc-settings-title, .sc-title {
+  font: 700 10.5px 'IBM Plex Mono'; letter-spacing: 0.1em; color: var(--text);
+  text-transform: uppercase;
+}
+.usage-eyebrow { margin-bottom: 9px; }
+/* Headline: two stat columns reading as a fraction (this site / all sites), each
+   a value over its own caption. Aligned to the value row so the slash sits with
+   the numbers; the row color is the faint tone so the " · " before the general
+   delta picks it up. */
+.usage-headline { display: flex; align-items: flex-start; white-space: nowrap; color: var(--text-faint); }
+.usage-stat { display: flex; flex-direction: column; }
+.usage-val { font: 600 18px 'IBM Plex Mono'; color: var(--text); line-height: 1.1; }
+.usage-cap { font: 400 12px 'IBM Plex Mono'; color: var(--text-dim); margin-top: 3px; }
+.usage-slash { font: 300 18px 'IBM Plex Mono'; color: var(--text-faint); margin: 0 11px; line-height: 1.1; }
+.usage-delta { font: 400 12px 'IBM Plex Sans'; }
+.usage-delta.good { color: var(--good); }
+.usage-delta.dim { color: var(--text-dim); }
+/* Detail card's delta line (below the fraction), with a quiet context suffix. */
+.usage-deltaline { margin-top: 7px; }
+.usage-deltactx { font: 400 12px 'IBM Plex Sans'; color: var(--text-faint); }
+
+/* Detail card: bordered surface, like the session cards below it. */
+.usage-card {
+  flex: none; background: var(--bg-raise);
+  border: 1px solid var(--line); border-radius: 12px; padding: 13px 15px;
+}
+
+/* General headline: flush above the breakdown bars (no border), with a hairline
+   rule beneath tying it to the list as one card. */
+.usage-head {
+  flex: none; padding: 0 10px 11px; margin-bottom: 6px;
+  border-bottom: 1px solid var(--line);
 }
 
 /* ===========================================================================
@@ -271,7 +279,10 @@ body {
 /* ===========================================================================
    SESSION CARD SLOT (filled by session-card.ts)
    =========================================================================== */
-.session-card-slot { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto; }
+/* The slot itself doesn't scroll — the whole detail panel is the single scroll
+   container (see #detail-page .right-panel), so a scrollbar only appears when the
+   three stacked cards genuinely overflow, not from internal flex sizing. */
+.session-card-slot { display: flex; flex-direction: column; gap: 12px; }
 
 /* ===========================================================================
    SETTINGS OVERLAY — covers the RIGHT HALF only, slides in from the divider.
@@ -282,7 +293,9 @@ body {
 .settings-overlay {
   position: absolute;
   top: 0; bottom: 0; right: 0;
-  width: 352px;                    /* 320 panel + 16 gap + 16 edge pad */
+  /* Left edge pinned to the content seam (the header divider at 464px), so the
+     sheet covers exactly the right half: 800 − 464 = 336px. */
+  width: 336px;
   overflow: hidden;
   pointer-events: none;            /* closed: let clicks through */
   z-index: 5;
@@ -301,9 +314,11 @@ body {
 }
 .settings-overlay.open .settings-sheet { transform: translateX(0); }  /* slides right → left */
 
-.settings-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
+/* Head + sub share the body's 4px horizontal gutter so the title and subtitle
+   line up vertically with the field labels below them. */
+.settings-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; padding: 0 4px; }
 .settings-title { font: 700 15px 'IBM Plex Sans'; color: var(--text); }
-.settings-sub { font: 400 11px 'IBM Plex Sans'; color: var(--text-dim); margin-bottom: 14px; }
+.settings-sub { font: 400 11px 'IBM Plex Sans'; color: var(--text-dim); margin-bottom: 14px; padding: 0 4px; }
 
 /* A little horizontal gutter so a focused input's ring isn't clipped by the
    scroll container's overflow on the left/right edges. */
@@ -375,12 +390,11 @@ body {
   background: #161922;
   border: 1px solid var(--line);
   border-radius: 13px;
-  padding: 14px 15px 15px;
+  padding: 10px 15px 11px;
 }
 .sc-card.sc-off { background: #161922; border: 1px dashed var(--line-strong); padding: 15px; }
 
 .sc-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 11px; }
-.sc-title { font: 700 12px 'IBM Plex Sans'; color: var(--text); }
 
 .sc-badge {
   font: 600 10px 'IBM Plex Mono'; letter-spacing: 0.08em; text-transform: uppercase;
@@ -389,26 +403,23 @@ body {
 .sc-badge-active   { color: #6fd6a0; background: rgba(63,191,127,0.14); border: 1px solid rgba(63,191,127,0.30); }
 .sc-badge-cooldown { color: #7fb0ff; background: rgba(79,134,247,0.14); border: 1px solid rgba(79,134,247,0.30); }
 
-/* Both numbers share the 20px "big" size (matches the header). The limit reads
-   quieter via colour (faint), not size. */
-.sc-time { font: 600 20px 'IBM Plex Mono'; color: var(--text); margin-bottom: 4px; }
-.sc-time-limit { color: var(--text-faint); font-size: 20px; }
-/* Percent-left replaces the old fill-up bar: same proportion-at-a-glance job,
-   but it moves down with the countdown timer instead of filling up against it.
-   12px = the shared "small" size. */
-.sc-time-pct { font: 600 12px 'IBM Plex Mono'; }
+/* The live "· NN% left" now rides on the session title (the elapsed/limit line
+   was dropped as redundant with the ledger's "time left"). */
+/* Rides on the (uppercase) title; match its size, keep the live-accent color. */
+.sc-title-pct { font: 700 10.5px 'IBM Plex Mono'; letter-spacing: 0.05em; }
 .sc-sub { font: 400 11px 'IBM Plex Sans'; color: var(--text-dim); margin-bottom: 11px; }
 
-/* End-early breakdown: an inline equation (no nested card) — "time left + 10%
-   bonus = into Session N+1". Each part stacks its value over a quiet label; the
-   + and = operators sit between them. */
-.sc-breakdown {
-  margin: 13px 0; display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
-}
-.sc-breakdown-part { display: flex; flex-direction: column; gap: 1px; }
-.sc-breakdown-val { font: 600 13px 'IBM Plex Mono'; color: var(--text); }
-.sc-breakdown-label { font: 400 10px 'IBM Plex Sans'; color: var(--text-dim); white-space: nowrap; }
-.sc-breakdown-op { font: 400 13px 'IBM Plex Mono'; color: var(--text-faint); }
+/* End-early breakdown: a ledger — quiet label left, value right-aligned, so the
+   figures stack into a column that adds up. A rule sits before the total; the
+   total's value is the green "what you keep". */
+.sc-breakdown { margin: 11px 0; display: flex; flex-direction: column; gap: 6px; }
+.sc-breakdown-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.sc-breakdown-label { font: 400 12px 'IBM Plex Sans'; color: var(--text-dim); }
+.sc-breakdown-val { font: 600 18px 'IBM Plex Mono'; color: var(--text); white-space: nowrap; }
+.sc-breakdown-op { color: var(--text-faint); }
+.sc-breakdown-rule { height: 1px; background: var(--line); margin: 1px 0; }
+.sc-breakdown-row.is-total .sc-breakdown-label { color: var(--text); }
+.sc-breakdown-row.is-total .sc-breakdown-val { color: var(--good); }
 .sc-good { color: var(--good); font-weight: 600; }
 
 .sc-btn {
@@ -422,12 +433,8 @@ body {
 .sc-off-sub { font: 400 11.5px 'IBM Plex Sans'; color: var(--text-dim); line-height: 1.4; }
 
 /* ---- per-site "Session rules" card ---- */
-.sc-card.sc-settings { background: var(--bg-raise); border: 1px solid var(--line); padding: 15px 15px 17px; }
-.sc-settings .sc-head { margin-bottom: 15px; }
-.sc-settings-title {
-  font: 700 10.5px 'IBM Plex Mono'; letter-spacing: 0.1em; color: var(--text-dim);
-  text-transform: uppercase;
-}
+.sc-card.sc-settings { background: var(--bg-raise); border: 1px solid var(--line); padding: 10px 15px 11px; }
+.sc-settings .sc-head { margin-bottom: 11px; }
 .sc-settings-body { transition: opacity 0.15s; }
 .sc-settings-twoup { display: flex; gap: 11px; }
 .sc-settings-twoup + .sc-settings-twoup { margin-top: 13px; }
@@ -454,7 +461,7 @@ body {
 .sc-stepper-box {
   display: flex; align-items: center; justify-content: space-between;
   background: var(--bg-input); border: 1px solid var(--line-strong); border-radius: 9px;
-  height: 38px; padding: 0 5px 0 12px;
+  height: 32px; padding: 0 5px 0 12px;
 }
 .sc-stepper-val { font: 500 13.5px 'IBM Plex Mono'; color: var(--text); }
 .sc-stepper-unit { color: var(--text-faint); font-size: 10.5px; margin-left: 4px; }

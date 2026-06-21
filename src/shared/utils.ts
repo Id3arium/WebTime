@@ -46,6 +46,18 @@ export function formatDuration(totalSeconds: number): string {
   return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 }
 
+/**
+ * Like formatDuration but ALWAYS shows the hours part ("0h 3m"), so a column of
+ * durations keeps a consistent "Xh Ym" shape even under an hour. Used by the
+ * usage card where the two figures sit side by side.
+ */
+export function formatDurationHM(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(s / 3600);
+  const minutes = Math.floor((s % 3600) / 60);
+  return `${hours}h ${minutes}m`;
+}
+
 
 /**
  * Format a DURATION (seconds) as a clock "M:SS" / "H:MM:SS". Used in the session

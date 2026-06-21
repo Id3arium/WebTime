@@ -14,7 +14,7 @@ import {
   highlightBar,
   type DomainPieData
 } from './chart-builder.js';
-import { formatDuration, getLocalDateStr, formatDateWithDayOfWeek } from '../shared/utils.js';
+import { formatDuration, formatDurationHM, getLocalDateStr, formatDateWithDayOfWeek } from '../shared/utils.js';
 import { renderSessionCard, renderSessionSettingsCard } from './session-card.js';
 import type { ChartInstance } from '../types.js';
 
@@ -139,79 +139,104 @@ function updateTopbar(): void {
   }
 }
 
-/** Build a hero-stat element: a big mono value + small caption. */
-function heroStat(value: string, caption: string, cls = ''): HTMLElement {
-  const wrap = document.createElement('div');
-  wrap.className = 'hero-stat';
-  const val = document.createElement('div');
-  val.className = `hero-val${cls ? ' ' + cls : ''}`;
+/** A "NN% below/above your avg" delta phrase, colored by direction. Green when
+ *  at/under the average (a win), grey — not red — when over (forgiving). Returns
+ *  null when there's no average yet (first day of data). */
+function deltaPhrase(delta: number | null): HTMLElement | null {
+  if (delta === null) return null;
+  const below = delta <= 0;
+  const el = document.createElement('span');
+  el.className = `usage-delta ${below ? 'good' : 'dim'}`;
+  // Arrow carries direction (↓ under = good, ↑ over), so the words drop out.
+  el.textContent = `${below ? '↓' : '↑'} ${Math.abs(delta)}% from avg`;
+  return el;
+}
+
+/** A stat column: big value over a quiet caption, both left-aligned in the
+ *  column so the caption sits directly under its number. */
+function usageStat(value: string, caption: string): HTMLElement {
+  const stat = document.createElement('div');
+  stat.className = 'usage-stat';
+  const val = document.createElement('span');
+  val.className = 'usage-val';
   val.textContent = value;
-  const cap = document.createElement('div');
-  cap.className = 'hero-cap';
+  const cap = document.createElement('span');
+  cap.className = 'usage-cap';
   cap.textContent = caption;
-  wrap.append(val, cap);
-  return wrap;
+  stat.append(val, cap);
+  return stat;
 }
 
-/** A slash separator between two hero stats, so "This site / All sites" reads
- *  like a fraction rather than two unrelated numbers. */
-function heroSep(): HTMLElement {
-  const sep = document.createElement('div');
-  sep.className = 'hero-sep';
-  sep.textContent = '/';
-  return sep;
+/** A headline row holding one or more stat columns. */
+function usageHeadline(...stats: HTMLElement[]): HTMLElement {
+  const row = document.createElement('div');
+  row.className = 'usage-headline';
+  row.append(...stats);
+  return row;
 }
 
-/** Fill the inline hero numbers in the topbar.
- *  `selectedDate` (general view) is the day picked on the chart; defaults to
- *  today. The detail view always reflects today. */
-function updateHeroNumbers(selectedDate?: string): void {
-  const host = document.getElementById('hero-numbers');
+/** A slash separator between two stat columns, aligned to the value row. */
+function usageSlash(): HTMLElement {
+  const s = document.createElement('span');
+  s.className = 'usage-slash';
+  s.textContent = '/';
+  return s;
+}
+
+/** Detail page Usage card: this-site / all-sites side by side (value over its
+ *  own caption), then how this site compares to THIS domain's 7-day average. */
+function updateDetailUsageCard(): void {
+  const host = document.getElementById('detail-usage-card');
+  if (!host || !AppState.allTimeHistory) return;
+
+  const today = getLocalDateStr(AppState.dayResetTime);
+  const domain = AppState.selectedDomain || '';
+  const totals = calculateTodaysTotals(AppState.allTimeHistory, today, domain);
+
+  const head = usageHeadline(
+    usageStat(formatDurationHM(totals.domain), 'this site'),
+    usageSlash(),
+    usageStat(formatDurationHM(totals.total), 'all sites')
+  );
+
+  const out: HTMLElement[] = [eyebrow('Usage'), head];
+  const delta = deltaPhrase(domainDayVsAverage(domain, today)?.delta ?? null);
+  if (delta) {
+    const sub = document.createElement('div');
+    sub.className = 'usage-deltaline';
+    const ctx = document.createElement('span');
+    ctx.className = 'usage-deltactx';
+    ctx.textContent = ' on this site';
+    sub.append(delta, ctx);
+    out.push(sub);
+  }
+  host.replaceChildren(...out);
+}
+
+/** General page Usage-breakdown headline: all-sites total for the selected day +
+ *  how it compares to the all-sites 7-day average. Sits atop the breakdown bars. */
+function updateGeneralUsageHead(selectedDate?: string): void {
+  const host = document.getElementById('usage-breakdown-head');
   if (!host || !AppState.allTimeHistory) return;
 
   const today = getLocalDateStr(AppState.dayResetTime);
   const day = selectedDate || today;
-  const totals = calculateTodaysTotals(
-    AppState.allTimeHistory, today, AppState.selectedDomain || ''
-  );
+  const stats = dayVsAverage(day);
+  const totals = calculateTodaysTotals(AppState.allTimeHistory, day, '');
 
-  if (AppState.currentView === ViewState.DETAIL) {
-    // "This site" / "All sites" — both same color (all-sites is context, not
-    // dimmed). Numbers as durations ("4h 36m") to avoid HH:MM/MM:SS ambiguity.
-    host.replaceChildren(
-      heroStat(formatDuration(totals.domain), 'this site'),
-      heroSep(),
-      heroStat(formatDuration(totals.total), 'all sites')
-    );
-  } else {
-    // General view: the 7-day average total as of the selected day (the big
-    // baseline number), plus that day's total vs the average as a delta.
-    const stats = dayVsAverage(day);
-    const isToday = day === today;
-    const deltaCaption = isToday ? 'Today' : shortDayLabel(day);
-    const children: HTMLElement[] = [
-      heroStat(formatDuration(stats?.avgSec ?? totals.total), '7-day avg')
-    ];
-    if (stats && stats.delta !== null) {
-      // Green celebrates a win (below average); grey — not red — forgives a day
-      // above average. Sign carries the direction (+ over, − under/equal).
-      const below = stats.delta <= 0;
-      const sign = below ? '−' : '+';
-      const cls = below ? 'good' : 'dim';
-      children.push(heroStat(`${sign}${Math.abs(stats.delta)}%`, deltaCaption, cls));
-    } else {
-      // First day (no prior history → no average) has no meaningful delta.
-      // Show a neutral "—" rather than a misleading 0%.
-      children.push(heroStat('—', deltaCaption, 'dim'));
-    }
-    host.replaceChildren(...children);
-  }
+  const head = usageHeadline(usageStat(formatDurationHM(totals.total), 'all sites'));
+  const delta = deltaPhrase(stats?.delta ?? null);
+  if (delta) { head.append(document.createTextNode(' · ')); head.append(delta); }
+
+  host.replaceChildren(eyebrow('Usage breakdown'), head);
 }
 
-/** Short weekday label for a date (e.g. "Mon"), for the delta caption. */
-function shortDayLabel(dateString: string): string {
-  const [y, m, d] = dateString.split('-').map(Number);
-  return new Date(y, m - 1, d, 12).toLocaleDateString(undefined, { weekday: 'short' });
+/** A small uppercase section eyebrow (the shared .usage-eyebrow title style). */
+function eyebrow(text: string): HTMLElement {
+  const e = document.createElement('div');
+  e.className = 'usage-eyebrow';
+  e.textContent = text;
+  return e;
 }
 
 /** The 7-day average (seconds) for a day and that day's % vs the average.
@@ -227,6 +252,19 @@ function dayVsAverage(dateString: string): { avgSec: number | null; delta: numbe
   return { avgSec: avg, delta: Math.round(((daySec - avg) / avg) * 100) };
 }
 
+/** As dayVsAverage, but for a single domain: today's time on `domain` vs that
+ *  domain's own 7-day moving average. */
+function domainDayVsAverage(domain: string, dateString: string): { avgSec: number | null; delta: number | null } | null {
+  if (!AppState.allTimeHistory || !domain) return null;
+  const data = processDetailViewData(AppState.allTimeHistory, domain);
+  const idx = data.dailyData.findIndex(d => d.date === dateString);
+  if (idx < 0) return null;
+  const avg = data.movingAverageData[idx]?.averageSeconds || 0;
+  if (avg <= 0) return { avgSec: null, delta: null };
+  const daySec = data.dailyData[idx].domainSeconds;
+  return { avgSec: avg, delta: Math.round(((daySec - avg) / avg) * 100) };
+}
+
 export function showGeneralView(): void {
   AppState.setView(ViewState.GENERAL);
   const container = document.querySelector('.pages-container');
@@ -235,7 +273,7 @@ export function showGeneralView(): void {
   }
 
   updateTopbar();
-  updateHeroNumbers();
+  updateGeneralUsageHead();
 
   if (!AppState.generalChartCreated) {
     renderGeneralView();
@@ -251,7 +289,7 @@ export function showDetailView(): void {
   }
 
   updateTopbar();
-  updateHeroNumbers();
+  updateDetailUsageCard();
 }
 
 export async function loadSettings(): Promise<void> {
@@ -428,7 +466,7 @@ export function updateDetailHeader(_domain: string): void {
   // topbar; refresh those instead of the old per-page .header-text/.time-summary.
   if (AppState.currentView === ViewState.DETAIL) {
     updateTopbar();
-    updateHeroNumbers();
+    updateDetailUsageCard();
     // Detail view always reflects today; show the same "<date> · Today" label.
     setTopbarDate(getLocalDateStr(AppState.dayResetTime));
   }
@@ -507,7 +545,7 @@ export function updateDailyBreakdown(totalTimeData: GeneralViewData, dataIndex: 
   renderBreakdownBars(breakdownBars as HTMLElement, domainData);
 
   updateGeneralViewHeader(dateString);
-  updateHeroNumbers(dateString);   // delta + avg track the selected day
+  updateGeneralUsageHead(dateString);   // delta + total track the selected day
 }
 
 export function updateGeneralViewHeader(dateString: string): void {
