@@ -352,17 +352,26 @@ body {
 .sc-badge-active   { color: #6fd6a0; background: rgba(63,191,127,0.14); border: 1px solid rgba(63,191,127,0.30); }
 .sc-badge-cooldown { color: #7fb0ff; background: rgba(79,134,247,0.14); border: 1px solid rgba(79,134,247,0.30); }
 
-.sc-time { font: 600 28px 'IBM Plex Mono'; color: var(--text); margin-bottom: 4px; }
-.sc-time-limit { color: var(--text-faint); font-size: 15px; }
+/* Both numbers share the 20px "big" size (matches the header). The limit reads
+   quieter via colour (faint), not size. */
+.sc-time { font: 600 20px 'IBM Plex Mono'; color: var(--text); margin-bottom: 4px; }
+.sc-time-limit { color: var(--text-faint); font-size: 20px; }
+/* Percent-left replaces the old fill-up bar: same proportion-at-a-glance job,
+   but it moves down with the countdown timer instead of filling up against it.
+   12px = the shared "small" size. */
+.sc-time-pct { font: 600 12px 'IBM Plex Mono'; }
 .sc-sub { font: 400 11px 'IBM Plex Sans'; color: var(--text-dim); margin-bottom: 11px; }
 
-.sc-bar-track {
-  height: 8px; border-radius: 5px; background: rgba(255,255,255,0.07);
-  overflow: hidden; margin: 11px 0;
+/* End-early breakdown: an inline equation (no nested card) — "time left + 10%
+   bonus = into Session N+1". Each part stacks its value over a quiet label; the
+   + and = operators sit between them. */
+.sc-breakdown {
+  margin: 13px 0; display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
 }
-.sc-bar-fill { height: 100%; border-radius: 5px; }
-
-.sc-note { font: 400 11.5px 'IBM Plex Sans'; color: var(--text-dim); margin-bottom: 13px; line-height: 1.4; }
+.sc-breakdown-part { display: flex; flex-direction: column; gap: 1px; }
+.sc-breakdown-val { font: 600 13px 'IBM Plex Mono'; color: var(--good); }
+.sc-breakdown-label { font: 400 10px 'IBM Plex Sans'; color: var(--text-dim); white-space: nowrap; }
+.sc-breakdown-op { font: 400 13px 'IBM Plex Mono'; color: var(--text-faint); }
 .sc-good { color: var(--good); font-weight: 600; }
 
 .sc-btn {

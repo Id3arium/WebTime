@@ -48,6 +48,26 @@ export function formatDuration(totalSeconds: number): string {
 
 
 /**
+ * Format a DURATION (seconds) as a clock "M:SS" / "H:MM:SS". Used in the session
+ * card, where the value is a live session/cooldown countdown and seconds matter —
+ * unlike the hero stats (daily totals) which use the unit-labelled formatDuration.
+ * Minutes are unpadded when there's no hours part ("4:05"), padded after hours
+ * ("1:04:05"); seconds always padded.
+ */
+export function formatClock(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(s / 3600);
+  const minutes = Math.floor((s % 3600) / 60);
+  const seconds = s % 60;
+  const ss = seconds.toString().padStart(2, '0');
+  if (hours > 0) {
+    const mm = minutes.toString().padStart(2, '0');
+    return `${hours}:${mm}:${ss}`;
+  }
+  return `${minutes}:${ss}`;
+}
+
+/**
  * Get current date as YYYY-MM-DD string in local timezone,
  * adjusted for custom day reset time
  */

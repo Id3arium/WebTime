@@ -8,7 +8,7 @@
 //   Cooldown — session ended, counting down until the next unlocks.
 //   Off      — limits disabled for this domain (or no session yet).
 
-import { formatDuration, getLocalDateStr } from '../shared/utils.js';
+import { formatClock, getLocalDateStr } from '../shared/utils.js';
 import { displayFor, type ActiveSession } from '../shared/session-model.js';
 
 declare const browser: typeof chrome;
@@ -148,15 +148,6 @@ function stepper(opts: {
   return group;
 }
 
-function progressBar(pct: number, color: string): HTMLElement {
-  const track = el('div', 'sc-bar-track');
-  const fill = el('div', 'sc-bar-fill');
-  fill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
-  fill.style.background = color;
-  track.appendChild(fill);
-  return track;
-}
-
 function cardShell(): HTMLElement {
   return el('div', 'sc-card');
 }
@@ -270,15 +261,17 @@ function renderIdle(host: HTMLElement, limitMinutes: number): void {
 function renderActive(host: HTMLElement, s: ActiveSession, dailyTotal: number): void {
   const { sessionTime, sessionLimitSeconds } = displayFor(s, dailyTotal);
   const remaining = Math.max(0, sessionLimitSeconds - sessionTime);
-  const pct = sessionLimitSeconds > 0 ? Math.round((sessionTime / sessionLimitSeconds) * 100) : 0;
+  // Percent LEFT (not spent) so the bar's gone-but-not-forgotten job — proportion
+  // at a glance — is carried by a number that moves the SAME direction as the
+  // countdown timer (down), instead of a bar that filled up against it.
+  const pctLeft = sessionLimitSeconds > 0 ? Math.round((remaining / sessionLimitSeconds) * 100) : 0;
   // endEarly() rolls the FULL remaining into the next session as carryover, plus
-  // a 10% grace bonus on top of it (computeGraceSeconds). The card shows the full
-  // rollover and flags the +10% — matching the model, not just the 10%.
+  // a 10% grace bonus on top of it (computeGraceSeconds). No new bonus if this
+  // session was already grace-extended (grace can't compound).
   const grace = s.graceSeconds > 0 ? 0 : Math.floor(remaining * 0.1);
   const rollover = remaining + grace;
-  // Active session reads green ("you're good"); only warms to amber as it nears
-  // the limit. Cooldown (below) is blue to match the rest of the extension.
-  const barColor = pct > 85 ? 'var(--warn)' : 'var(--good)';
+  // Near-the-end warmth lives on the percent now that the bar is gone.
+  const leftColor = pctLeft < 15 ? 'var(--warn)' : 'var(--good)';
 
   const card = cardShell();
 
@@ -286,21 +279,37 @@ function renderActive(host: HTMLElement, s: ActiveSession, dailyTotal: number): 
   head.append(el('span', 'sc-title', `Session ${s.sessionNum}`));
   head.append(el('span', 'sc-badge sc-badge-active', 'Active'));
 
+  // elapsed / limit, with "· NN% left" replacing the old fill-up bar.
   const time = el('div', 'sc-time');
-  time.append(document.createTextNode(formatDuration(sessionTime)));
-  time.append(el('span', 'sc-time-limit', ` / ${formatDuration(sessionLimitSeconds)}`));
+  time.append(document.createTextNode(formatClock(sessionTime)));
+  time.append(el('span', 'sc-time-limit', ` / ${formatClock(sessionLimitSeconds)}`));
+  const pctEl = el('span', 'sc-time-pct', ` · ${pctLeft}% left`);
+  pctEl.style.color = leftColor;
+  time.append(pctEl);
 
-  const carryLine = el('div', 'sc-note');
-  carryLine.append(document.createTextNode('End now and '));
-  carryLine.append(el('span', 'sc-good', `~${formatDuration(rollover)} rolls over`));
-  carryLine.append(document.createTextNode(
-    ` to Session ${s.sessionNum + 1}${grace > 0 ? ' (+10%)' : ''}`));
+  // What "End early" does, as a plain inline equation (no nested card): the time
+  // still left + a 10% bonus = what carries into the next session. Each value is
+  // highlighted; the labels stay quiet so the math reads at a glance.
+  const breakdown = el('div', 'sc-breakdown');
+  const part = (value: string, label: string): HTMLElement => {
+    const p = el('span', 'sc-breakdown-part');
+    p.append(el('span', 'sc-breakdown-val', value));
+    p.append(el('span', 'sc-breakdown-label', label));
+    return p;
+  };
+  const op = (sym: string) => el('span', 'sc-breakdown-op', sym);
+  breakdown.append(part(formatClock(remaining), 'time left'));
+  if (grace > 0) breakdown.append(op('+'), part(formatClock(grace), '10% bonus'));
+  breakdown.append(
+    op('='),
+    part(formatClock(rollover), `into Session ${s.sessionNum + 1}`)
+  );
 
   const btn = el('button', 'sc-btn');
   btn.id = 'session-end-early-btn';
   btn.textContent = 'End session early';
 
-  card.append(head, time, progressBar(pct, barColor), carryLine, btn);
+  card.append(head, time, breakdown, btn);
   host.replaceChildren(card);
 
   btn.addEventListener('click', () => {
@@ -311,8 +320,6 @@ function renderActive(host: HTMLElement, s: ActiveSession, dailyTotal: number): 
 /** Cooldown state. */
 function renderCooldown(host: HTMLElement, s: ActiveSession, endTime: number, totalSec: number): void {
   const remainSec = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
-  const elapsedSec = Math.max(0, totalSec - remainSec);
-  const pct = totalSec > 0 ? Math.round((elapsedSec / totalSec) * 100) : 0;
   // The session cooling down is the one before the (next) stored session.
   const endedNum = Math.max(1, s.sessionNum - 1);
 
@@ -322,11 +329,13 @@ function renderCooldown(host: HTMLElement, s: ActiveSession, endTime: number, to
   head.append(el('span', 'sc-title', `Session ${endedNum} ended`));
   head.append(el('span', 'sc-badge sc-badge-cooldown', 'Cooldown'));
 
+  // No fill-up bar here either — the countdown number is the whole story.
+  // (totalSec retained in the signature for callers; unused now the bar is gone.)
+  void totalSec;
   card.append(
     head,
-    el('div', 'sc-time', formatDuration(remainSec)),
-    el('div', 'sc-sub', `until Session ${s.sessionNum} unlocks`),
-    progressBar(pct, 'var(--accent)')
+    el('div', 'sc-time', formatClock(remainSec)),
+    el('div', 'sc-sub', `until Session ${s.sessionNum} unlocks`)
   );
   host.replaceChildren(card);
 }
