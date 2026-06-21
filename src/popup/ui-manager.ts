@@ -179,9 +179,9 @@ function updateHeroNumbers(selectedDate?: string): void {
     // "This site" / "All sites" — both same color (all-sites is context, not
     // dimmed). Numbers as durations ("4h 36m") to avoid HH:MM/MM:SS ambiguity.
     host.replaceChildren(
-      heroStat(formatDuration(totals.domain), 'This site'),
+      heroStat(formatDuration(totals.domain), 'this site'),
       heroSep(),
-      heroStat(formatDuration(totals.total), 'All sites')
+      heroStat(formatDuration(totals.total), 'all sites')
     );
   } else {
     // General view: the 7-day average total as of the selected day (the big

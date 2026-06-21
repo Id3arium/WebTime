@@ -435,7 +435,7 @@ export function buildDetailViewChart(processedData: DetailViewData): ChartConfig
     },
     plugins: {
       legend: {
-        labels: { boxHeight: 8, padding: 8, font: { size: 11 } }
+        labels: { boxHeight: 8, padding: 8, font: { size: 11, family: "'IBM Plex Sans', sans-serif" } }
       },
       tooltip: getDetailViewTooltipConfig(processedData)
     }

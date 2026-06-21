@@ -15,24 +15,29 @@
 
     <!-- ============ MERGED TOPBAR (shared across both carousel pages) ======= -->
     <div class="topbar">
-      <div class="topbar-left">
-        <button id="nav-toggle-btn" class="nav-btn">This site&nbsp;&nbsp;▸</button>
-        <div class="topbar-context">
-          <!-- site identity (detail view) OR "All sites" (general view) -->
-          <div id="topbar-site" class="site-id" hidden>
-            <span id="topbar-site-name" class="site-name">youtube.com</span>
-          </div>
-          <span id="topbar-all" class="site-name">All sites</span>
-        </div>
-      </div>
+      <!-- nav + gear pinned to the edges; the cluster between them is centered on
+           the content seam (chart|panel boundary) so the rule continues that
+           split line down through the body. -->
+      <button id="nav-toggle-btn" class="nav-btn">This site&nbsp;&nbsp;▸</button>
 
-      <div class="topbar-date">
+      <!-- Title, rule, and stats are each absolutely pinned to the card's left
+           edge (464px) so the rule continues the panel border and "9m" lines up
+           under the card text. Title hangs left of the rule; stats sit right. -->
+      <div class="topbar-title">
+        <!-- date is the PRIMARY line (white, big); the site identity is the
+             grey subtitle beneath it. -->
         <span id="topbar-date-label" class="date-label">Today</span>
+        <!-- site identity (detail view) OR "All sites" (general view) -->
+        <div id="topbar-site" class="site-id" hidden>
+          <span id="topbar-site-name" class="site-name">youtube.com</span>
+        </div>
+        <span id="topbar-all" class="site-name">all sites</span>
       </div>
+      <span class="topbar-rule"></span>
+      <!-- inline hero numbers: filled by ui-manager per view -->
+      <div id="hero-numbers" class="hero-numbers"></div>
 
       <div class="topbar-right">
-        <!-- inline hero numbers: filled by ui-manager per view -->
-        <div id="hero-numbers" class="hero-numbers"></div>
         <!-- Single toggle: a gear that rotates when settings open. Opens AND
              closes from the same spot (slide-in + rotation signal the reverse). -->
         <button id="settings-toggle-btn" class="icon-btn gear-btn" title="Settings" aria-label="Settings" aria-expanded="false">
