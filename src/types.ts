@@ -134,6 +134,13 @@ export interface EndSessionEarlyMessage {
   type: 'END_SESSION_EARLY';
 }
 
+/** Popup → background → active tab: open the end-session confirmation overlay
+ *  (the same one the keyboard shortcut shows) instead of ending immediately, so
+ *  an accidental click on the popup button is recoverable. */
+export interface ShowEndSessionConfirmMessage {
+  type: 'SHOW_END_SESSION_CONFIRM';
+}
+
 export interface EndSessionConfirmOpenMessage {
   type: 'END_SESSION_CONFIRM_OPEN';
 }
@@ -166,6 +173,7 @@ export type ExtensionMessage =
   | ShowBlockerMessage
   | HideBlockerMessage
   | EndSessionEarlyMessage
+  | ShowEndSessionConfirmMessage
   | EndSessionConfirmOpenMessage
   | EndSessionConfirmCloseMessage
   | RequestBlockerStateMessage

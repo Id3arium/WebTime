@@ -258,7 +258,7 @@ function renderIdle(host: HTMLElement, limitMinutes: number): void {
 }
 
 /** Active session state. */
-function renderActive(host: HTMLElement, s: ActiveSession, dailyTotal: number): void {
+function renderActive(host: HTMLElement, s: ActiveSession, dailyTotal: number, shortcut: string | null): void {
   const { sessionTime, sessionLimitSeconds } = displayFor(s, dailyTotal);
   const remaining = Math.max(0, sessionLimitSeconds - sessionTime);
   // Percent LEFT (not spent) so the bar's gone-but-not-forgotten job — proportion
@@ -307,13 +307,17 @@ function renderActive(host: HTMLElement, s: ActiveSession, dailyTotal: number): 
 
   const btn = el('button', 'sc-btn');
   btn.id = 'session-end-early-btn';
-  btn.textContent = 'End session early';
+  btn.textContent = shortcut ? `End session (${shortcut})` : 'End session early';
 
   card.append(head, time, breakdown, btn);
   host.replaceChildren(card);
 
   btn.addEventListener('click', () => {
-    browser.runtime.sendMessage({ type: 'END_SESSION_EARLY' });
+    // Don't end immediately — an accidental click would be unrecoverable. Ask the
+    // active tab to show the confirmation overlay (same as the keyboard shortcut),
+    // then close the popup so the user confirms in context.
+    browser.runtime.sendMessage({ type: 'SHOW_END_SESSION_CONFIRM' });
+    window.close();
   });
 }
 
@@ -383,7 +387,9 @@ export async function renderSessionCard(domain: string | null, dayResetTime: num
     // Genuinely running only while time remains; otherwise the background has
     // moved on (cooldown just ended or a new session is pending) — show Idle.
     if (remaining > 0) {
-      renderActive(host, session, dailyTotal);
+      const sc = settings.global?.endSessionShortcut;
+      const shortcut = sc === null ? null : (sc || 'Ctrl+E');
+      renderActive(host, session, dailyTotal, shortcut);
       return;
     }
   }

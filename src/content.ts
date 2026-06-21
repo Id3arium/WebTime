@@ -818,6 +818,10 @@ function handleIncomingMessage(
     } else {
       console.error("Timer text element not found when trying to update time!");
     }
+  } else if (message.type === "SHOW_END_SESSION_CONFIRM") {
+    // Popup's "End session early" button routes here (via background) so an
+    // accidental click shows the same recoverable confirmation as the shortcut.
+    showEndSessionConfirm();
   } else if (message.type === "NUDGE") {
     showNudge();
   } else if (message.type === "SHOW_AVERAGE_POPUP") {

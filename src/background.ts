@@ -496,6 +496,15 @@ function handleMessageReceived(
     void endSessionEarly();
   }
 
+  if (message.type === "SHOW_END_SESSION_CONFIRM") {
+    // Popup asks us to open the confirmation overlay on the active tab (instead
+    // of ending immediately). The popup closes itself; the user confirms there.
+    if (activeTabId !== null) {
+      browser.tabs.sendMessage(activeTabId, { type: "SHOW_END_SESSION_CONFIRM" })
+        .catch(() => { /* tab may have closed or have no content script */ });
+    }
+  }
+
   if (message.type === "END_SESSION_CONFIRM_OPEN") {
     endSessionConfirmOpen = true;
   }
