@@ -108,12 +108,25 @@ async function writeDomainLimits(domain: string, next: DomainLimits): Promise<vo
   browser.runtime.sendMessage({ type: 'SETTINGS_UPDATED' });
 }
 
-/** A labelled stepper: value + unit, with ▲/▼ buttons. */
+/** A stepper handle: its element plus a setter to drive it from outside (e.g. a
+ *  sibling stepper carrying into it) without re-firing onChange. */
+interface Stepper {
+  el: HTMLElement;
+  /** Update the displayed value (and `cur`) silently — no onChange. */
+  setValue: (v: number) => void;
+}
+
+/** A labelled stepper: value + unit, with ▲/▼ buttons. When `onCarry` is set,
+ *  stepping past min/max wraps around (within [min,max]) and reports the
+ *  direction so a neighbour (e.g. minutes) can absorb the carry. */
 function stepper(opts: {
   label: string; rec?: string; value: number; unit?: string;
   min: number; max: number; step: number;
   onChange: (v: number) => void;
-}): HTMLElement {
+  /** Called when a step crosses min/max. Return false to veto the wrap (the
+   *  value stays pinned at the edge it tried to cross). */
+  onCarry?: (dir: number) => boolean;
+}): Stepper {
   const group = el('div', 'sc-stepper-group');
   const head = el('div', 'sc-stepper-head');
   head.append(el('span', 'sc-stepper-label', opts.label));
@@ -136,10 +149,20 @@ function stepper(opts: {
     b.className = 'sc-stepper-btn';
     b.textContent = sym;
     b.addEventListener('click', () => {
+      const span = opts.max - opts.min + opts.step; // wrap modulus, in step units
+      const raw = cur + dir * opts.step;
+      if (opts.onCarry && (raw > opts.max || raw < opts.min)) {
+        // Past an edge: let the neighbour absorb the carry. If it accepts, wrap
+        // within [min,max]; if it vetoes (e.g. minutes already 0), stay put.
+        if (opts.onCarry(dir)) {
+          cur = ((((raw - opts.min) % span) + span) % span) + opts.min;
+        }
+      } else {
+        cur = Math.max(opts.min, Math.min(opts.max, raw));
+      }
       // Round to the step grid to keep fractional steps (e.g. 0.5) from
       // accumulating binary floating-point dust like 3.4999999.
-      const next = cur + dir * opts.step;
-      cur = Math.round(Math.max(opts.min, Math.min(opts.max, next)) / opts.step) * opts.step;
+      cur = Math.round(cur / opts.step) * opts.step;
       setText(cur);
       opts.onChange(cur);
     });
@@ -148,7 +171,10 @@ function stepper(opts: {
   btns.append(mk('▲', 1), mk('▼', -1));
   box.append(valWrap, btns);
   group.append(head, box);
-  return group;
+  return {
+    el: group,
+    setValue: (v: number) => { cur = v; setText(cur); },
+  };
 }
 
 function cardShell(): HTMLElement {
@@ -223,27 +249,36 @@ export async function renderSessionSettingsCard(
       label: 'Session length', value: cur.sessionLimit, unit: 'min',
       min: 1, max: 240, step: 1,
       onChange: v => { cur.sessionLimit = v; persist(); },
-    }),
+    }).el,
     stepper({
       label: 'Nudges', rec: recNudges, value: cur.nudgeCount, unit: '',
       min: 0, max: 20, step: 1,
       onChange: v => { cur.nudgeCount = v; persist(); },
-    })
+    }).el
   );
 
+  // Minutes + seconds steppers. Seconds runs 0/15/30/45 and rolls into minutes
+  // when it crosses an edge — ▲ at 45s bumps a minute, ▼ at 0s borrows one
+  // (vetoed when already at 0m so the cooldown can't go negative).
+  const minStepper = stepper({
+    label: 'Cooldown', value: coolMin, unit: 'm',
+    min: 0, max: 120, step: 1,
+    onChange: v => { coolMin = v; persistCooldown(); },
+  });
+  const secStepper = stepper({
+    label: 'Cooldown secs', value: coolSec, unit: 's',
+    min: 0, max: 45, step: 15,
+    onChange: v => { coolSec = v; persistCooldown(); },
+    onCarry: dir => {
+      if (dir < 0 && coolMin <= 0) return false; // can't borrow below 0m
+      coolMin = Math.min(120, Math.max(0, coolMin + dir));
+      minStepper.setValue(coolMin);
+      return true; // persisted by the seconds onChange that follows
+    },
+  });
+
   const rowTwo = el('div', 'sc-settings-twoup');
-  rowTwo.append(
-    stepper({
-      label: 'Cooldown', value: coolMin, unit: 'm',
-      min: 0, max: 120, step: 1,
-      onChange: v => { coolMin = v; persistCooldown(); },
-    }),
-    stepper({
-      label: 'Cooldown secs', value: coolSec, unit: 's',
-      min: 0, max: 30, step: 30,
-      onChange: v => { coolSec = v; persistCooldown(); },
-    })
-  );
+  rowTwo.append(minStepper.el, secStepper.el);
   body.append(rowOne, rowTwo);
 
   card.append(head, body);
