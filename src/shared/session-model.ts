@@ -144,9 +144,10 @@ export function endEarly(s: ActiveSession, opts: {
   if (carryover <= 0) return null;
 
   const cooldownSeconds = cooldownLength(s.sessionNum, opts.cooldownIncrement);
-  // Grace only earned if this session wasn't itself already grace-extended,
-  // so grace can't compound session over session.
-  const graceEarned = s.graceSeconds > 0 ? 0 : computeGraceSeconds(carryover);
+  // 10% of the given-up time is always earned, regardless of whether this
+  // session was itself grace-extended — the bonus tracks time left, not the
+  // session's pedigree.
+  const graceEarned = computeGraceSeconds(carryover);
 
   return {
     cooldownSeconds,

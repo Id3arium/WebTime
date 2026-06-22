@@ -128,19 +128,19 @@ test('endEarly: returns null when nothing left to claim', () => {
 });
 
 // ---------------------------------------------------------------------------
-// CASE 5 — grace does not compound
+// CASE 5 — grace tracks time left, not the session's pedigree
 // ---------------------------------------------------------------------------
 
-test('endEarly: a grace-extended session earns no new grace', () => {
+test('endEarly: a grace-extended session still earns 10% of time left', () => {
   // This session was BORN with grace (graceSeconds > 0).
   const s = startSession({ dailyTotal: 0, baseLength: 30 * M, graceSeconds: 1 * M, sessionNum: 2 });
-  // End it early with time left — should NOT earn more grace.
+  // End it early with time left — 10% is earned regardless of prior grace.
   const r = endEarly(s, { dailyTotal: 20 * M, cooldownIncrement: 5 * M });
   assert.ok(r !== null);
-  assert.equal(r.graceEarned, 0);
-  assert.equal(r.nextSession.graceSeconds, 0);
-  // Carryover still rolls (the unused time is real regardless of grace).
-  assert.equal(r.nextSession.carryover, 11 * M); // effLen 31 min, 20 in → 11 left
+  // effLen 31 min, 20 in → 11 left; 10% of 11 min = 66s.
+  assert.equal(r.nextSession.carryover, 11 * M);
+  assert.equal(r.graceEarned, 66);
+  assert.equal(r.nextSession.graceSeconds, 66);
 });
 
 // ---------------------------------------------------------------------------
