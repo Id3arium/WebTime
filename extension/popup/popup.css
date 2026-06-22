@@ -88,13 +88,6 @@ body {
 .nav-btn { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); z-index: 2; }
 .topbar-right { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); z-index: 2; display: flex; align-items: center; }
 
-/* The domain / "all sites" text swaps with a blur on a view change (the page
-   content slides, so a hard swap would read as a teleport against that motion).
-   The text blurs + fades out, swaps while soft, then sharpens back in. The date
-   is the SAME on both views, so it stays put — only .hero-numbers animates. The
-   topbar gets .is-swapping for the blur-out half, cleared for the focus-in. */
-.hero-numbers { transition: opacity 0.15s var(--ease), filter 0.15s var(--ease); }
-.topbar.is-swapping .hero-numbers { opacity: 0; filter: blur(4px); }
 
 /* The vertical RULE sits on the content seam (--seam) so it continues the right
    panel's card border up through the header. The date reads INTO it from the
@@ -396,6 +389,36 @@ body {
   outline-offset: -1px;
   border-color: var(--accent);
 }
+
+/* Custom dropdown (replaces the native <select> for "Day resets at"). The button
+   matches the input boxes exactly; the panel opens DOWNWARD, full field width. */
+.dd { position: relative; }
+.dd-button {
+  width: 100%; height: 38px; padding: 0 12px;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: var(--bg-input); border: 1px solid var(--line-strong); border-radius: 9px;
+  color: var(--text); font: 500 13.5px 'IBM Plex Mono'; cursor: pointer; text-align: left;
+}
+.dd.open .dd-button { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+.dd-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-caret { flex: none; color: var(--text-dim); font-size: 10px; transition: transform 0.15s var(--ease); }
+.dd.open .dd-caret { transform: rotate(180deg); }
+/* The list: absolutely positioned just below the button, opening downward. A
+   high z-index keeps it above the cards; the sheet itself scrolls if needed. */
+.dd-panel {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 20;
+  background: var(--bg-input); border: 1px solid var(--line-strong); border-radius: 9px;
+  padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+  display: none; max-height: 220px; overflow-y: auto;
+}
+.dd.open .dd-panel { display: block; }
+.dd-option {
+  display: block; width: 100%; text-align: left;
+  padding: 7px 9px; border: none; border-radius: 6px; background: transparent;
+  color: var(--text); font: 500 13px 'IBM Plex Mono'; cursor: pointer;
+}
+.dd-option:hover { background: rgba(255,255,255,0.06); }
+.dd-option.is-selected { background: rgba(79,134,247,0.16); color: var(--text); }
 
 .shortcut-row { display: flex; gap: 8px; align-items: center; }
 .shortcut-row input { flex: 1; cursor: pointer; }

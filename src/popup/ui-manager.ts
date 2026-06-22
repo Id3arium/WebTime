@@ -121,22 +121,6 @@ export function toggleSettings(): void {
 
 /** Update the merged topbar's nav label, site context, and hero numbers
  *  for the current view. The nav button toggles to the *other* view. */
-// Crossfade the header text on a view change: fade the date/domain out, swap
-// them (updateTopbar + the date label) at the low point, fade back in — so the
-// header doesn't hard-cut against the sliding page content. Falls back to an
-// instant swap if the topbar element is missing.
-let topbarFadeTimer: ReturnType<typeof setTimeout> | undefined;
-function crossfadeTopbar(swap: () => void): void {
-  const topbar = document.querySelector('.topbar');
-  if (!topbar) { swap(); return; }
-  clearTimeout(topbarFadeTimer);
-  topbar.classList.add('is-swapping');           // fade out (150ms via CSS)
-  topbarFadeTimer = setTimeout(() => {
-    swap();                                       // swap text while invisible
-    topbar.classList.remove('is-swapping');       // fade back in
-  }, 150);
-}
-
 function updateTopbar(): void {
   const isDetail = AppState.currentView === ViewState.DETAIL;
 
@@ -314,7 +298,7 @@ export function showGeneralView(): void {
     container.className = 'pages-container show-general';
   }
 
-  crossfadeTopbar(updateTopbar);
+  updateTopbar();
   updateGeneralUsageHead();
 
   if (!AppState.generalChartCreated) {
@@ -330,7 +314,7 @@ export function showDetailView(): void {
     container.className = 'pages-container show-detail';
   }
 
-  crossfadeTopbar(updateTopbar);
+  updateTopbar();
   updateDetailUsageCard();
 }
 
@@ -360,15 +344,87 @@ function mountSettingsStepper(
   settingsSteppers[mountId] = s;
 }
 
+// Live handles for the custom settings dropdowns, so repeated loadSettings calls
+// just re-sync the selection instead of stacking duplicate controls.
+const settingsDropdowns: Record<string, { setValue: (v: string) => void }> = {};
+
+/** Mount (once) a custom dropdown into `mountId` mirroring the hidden `select`
+ *  (the save/load data store). Built ourselves so it opens DOWNWARD and spans
+ *  the full field width — the native <select> list flipped upward inside the
+ *  transformed settings sheet. On later calls it just re-syncs the value. */
+function mountSettingsDropdown(mountId: string, select: HTMLSelectElement | null): void {
+  const mount = document.getElementById(mountId);
+  if (!mount || !select) return;
+
+  const opts = Array.from(select.options).map(o => ({ value: o.value, label: o.text }));
+  const labelFor = (v: string) => opts.find(o => o.value === v)?.label ?? '';
+
+  const existing = settingsDropdowns[mountId];
+  if (existing) { existing.setValue(select.value); return; }
+
+  const root = document.createElement('div');
+  root.className = 'dd';
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'dd-button';
+  const labelEl = document.createElement('span');
+  labelEl.className = 'dd-label';
+  const caret = document.createElement('span');
+  caret.className = 'dd-caret';
+  caret.textContent = '▾';
+  button.append(labelEl, caret);
+  const panel = document.createElement('div');
+  panel.className = 'dd-panel';
+
+  const setValue = (v: string) => {
+    select.value = v;
+    labelEl.textContent = labelFor(v);
+    panel.querySelectorAll('.dd-option').forEach(el => {
+      el.classList.toggle('is-selected', (el as HTMLElement).dataset.value === v);
+    });
+  };
+
+  for (const o of opts) {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'dd-option';
+    item.dataset.value = o.value;
+    item.textContent = o.label;
+    item.addEventListener('click', () => {
+      setValue(o.value);
+      select.dispatchEvent(new Event('change', { bubbles: true })); // keep any listeners live
+      close();
+    });
+    panel.append(item);
+  }
+
+  const open = () => { root.classList.add('open'); button.setAttribute('aria-expanded', 'true'); };
+  const close = () => { root.classList.remove('open'); button.setAttribute('aria-expanded', 'false'); };
+  button.setAttribute('aria-expanded', 'false');
+  button.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (root.classList.contains('open')) close(); else open();
+  });
+  // Click anywhere else closes it.
+  document.addEventListener('click', () => close());
+
+  root.append(button, panel);
+  mount.replaceChildren(root);
+  setValue(select.value);
+  settingsDropdowns[mountId] = { setValue };
+}
+
 export async function loadSettings(): Promise<void> {
   try {
     const data = await browser.storage.local.get('webTimeSettings');
     const settings = data.webTimeSettings || { global: {}, domains: {} };
 
     const global = settings.global || {};
-    const dayResetTimeEl = document.getElementById('day-reset-time') as HTMLInputElement | null;
+    const dayResetTimeEl = document.getElementById('day-reset-time') as HTMLSelectElement | null;
 
     if (dayResetTimeEl) dayResetTimeEl.value = String(global.dayResetTime || 0);
+    // Mount (or re-sync) the custom dropdown that mirrors the hidden select.
+    mountSettingsDropdown('day-reset-dropdown', dayResetTimeEl);
 
     const inactivityEl = document.getElementById('inactivity-timeout') as HTMLInputElement | null;
     const chartScalingEl = document.getElementById('chart-scaling') as HTMLInputElement | null;
