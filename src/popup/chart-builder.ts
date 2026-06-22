@@ -97,7 +97,7 @@ function highlightState(chart: any): BarHighlightState {
 /**
  * A Chart.js scriptable backgroundColor: a top→bottom vertical gradient per bar
  * (lighter at top, deeper at bottom). The LAST bar (today, in progress) is the
- * same gradient at ~50% opacity so it reads as "still running". Returns a flat
+ * same gradient at 80% opacity so it reads as "still running". Returns a flat
  * fallback before the chart area exists (first paint).
  *
  * `lastIndex` is captured per-build so we know which bar is "today".
@@ -111,9 +111,10 @@ function makeBarGradient(lastIndex: number) {
     const today = dataIndex === lastIndex;
     const g = chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
     if (today) {
-      // half-opacity gradient for the in-progress day
-      g.addColorStop(0, 'rgba(94, 142, 251, 0.5)');   // #5e8efb @ 50%
-      g.addColorStop(1, 'rgba(63, 111, 224, 0.5)');   // #3f6fe0 @ 50%
+      // 80%-opacity gradient for the in-progress day — dimmed enough to read as
+      // "still running" but no longer washed out against the solid past bars.
+      g.addColorStop(0, 'rgba(94, 142, 251, 0.8)');   // #5e8efb @ 80%
+      g.addColorStop(1, 'rgba(63, 111, 224, 0.8)');   // #3f6fe0 @ 80%
     } else {
       g.addColorStop(0, CHART_COLORS.barTop);
       g.addColorStop(1, CHART_COLORS.barBottom);
@@ -127,8 +128,8 @@ function makeBarGradient(lastIndex: number) {
  * hovered bar, transparent otherwise. Reading from per-chart highlight state
  * keeps the color a function (never an array of functions) — see the note above.
  *
- * The today bar (lastIndex) is drawn at half opacity, so its outline is too —
- * a full-strength white ring around a translucent bar looks mismatched.
+ * The today bar (lastIndex) is drawn at 80% opacity, so its outline is dimmed
+ * to match — a full-strength white ring around a translucent bar looks mismatched.
  */
 function makeBarBorderColor(lastIndex: number) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -136,8 +137,8 @@ function makeBarBorderColor(lastIndex: number) {
     const { chart, dataIndex } = ctx;
     const hl = highlightState(chart);
     const today = dataIndex === lastIndex;
-    if (dataIndex === hl.locked) return today ? 'rgba(255, 255, 255, 0.5)' : 'white';
-    if (dataIndex === hl.hover) return today ? 'rgba(200, 200, 200, 0.45)' : 'rgba(200, 200, 200, 0.9)';
+    if (dataIndex === hl.locked) return today ? 'rgba(255, 255, 255, 0.8)' : 'white';
+    if (dataIndex === hl.hover) return today ? 'rgba(200, 200, 200, 0.75)' : 'rgba(200, 200, 200, 0.9)';
     return 'transparent';
   };
 }

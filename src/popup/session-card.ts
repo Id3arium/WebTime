@@ -126,11 +126,17 @@ function stepper(opts: {
   /** Called when a step crosses min/max. Return false to veto the wrap (the
    *  value stays pinned at the edge it tried to cross). */
   onCarry?: (dir: number) => boolean;
+  /** Omit the label row — used when several boxes share one external heading
+   *  (e.g. the cooldown's minutes+seconds pair sit under a single "Cooldown"). */
+  noHead?: boolean;
 }): Stepper {
   const group = el('div', 'sc-stepper-group');
-  const head = el('div', 'sc-stepper-head');
-  head.append(el('span', 'sc-stepper-label', opts.label));
-  if (opts.rec) head.append(el('span', 'sc-stepper-rec', opts.rec));
+  if (!opts.noHead) {
+    const head = el('div', 'sc-stepper-head');
+    head.append(el('span', 'sc-stepper-label', opts.label));
+    if (opts.rec) head.append(el('span', 'sc-stepper-rec', opts.rec));
+    group.append(head);
+  }
 
   const box = el('div', 'sc-stepper-box');
   const valWrap = el('span', 'sc-stepper-val');
@@ -170,7 +176,7 @@ function stepper(opts: {
   };
   btns.append(mk('▲', 1), mk('▼', -1));
   box.append(valWrap, btns);
-  group.append(head, box);
+  group.append(box);
   return {
     el: group,
     setValue: (v: number) => { cur = v; setText(cur); },
@@ -259,14 +265,16 @@ export async function renderSessionSettingsCard(
 
   // Minutes + seconds steppers. Seconds runs 0/15/30/45 and rolls into minutes
   // when it crosses an edge — ▲ at 45s bumps a minute, ▼ at 0s borrows one
-  // (vetoed when already at 0m so the cooldown can't go negative).
+  // (vetoed when already at 0m so the cooldown can't go negative). Both boxes
+  // sit under ONE "Cooldown" heading (the units m/s carry their roles), so the
+  // pair reads as a single setting without a separate "Cooldown secs" label.
   const minStepper = stepper({
-    label: 'Cooldown', value: coolMin, unit: 'm',
+    label: 'Cooldown', value: coolMin, unit: 'm', noHead: true,
     min: 0, max: 120, step: 1,
     onChange: v => { coolMin = v; persistCooldown(); },
   });
   const secStepper = stepper({
-    label: 'Cooldown secs', value: coolSec, unit: 's',
+    label: 'Cooldown', value: coolSec, unit: 's', noHead: true,
     min: 0, max: 45, step: 15,
     onChange: v => { coolSec = v; persistCooldown(); },
     onCarry: dir => {
@@ -277,8 +285,16 @@ export async function renderSessionSettingsCard(
     },
   });
 
+  // One labelled group: "Cooldown" heading over the [m][s] box pair.
+  const coolGroup = el('div', 'sc-stepper-group sc-cooldown-group');
+  const coolHead = el('div', 'sc-stepper-head');
+  coolHead.append(el('span', 'sc-stepper-label', 'Cooldown'));
+  const coolBoxes = el('div', 'sc-cooldown-boxes');
+  coolBoxes.append(minStepper.el, secStepper.el);
+  coolGroup.append(coolHead, coolBoxes);
+
   const rowTwo = el('div', 'sc-settings-twoup');
-  rowTwo.append(minStepper.el, secStepper.el);
+  rowTwo.append(coolGroup);
   body.append(rowOne, rowTwo);
 
   card.append(head, body);
@@ -316,9 +332,9 @@ function renderActive(host: HTMLElement, s: ActiveSession, dailyTotal: number, s
   // countdown timer (down), instead of a bar that filled up against it.
   const pctLeft = sessionLimitSeconds > 0 ? Math.round((remaining / sessionLimitSeconds) * 100) : 0;
   // endEarly() rolls the FULL remaining into the next session as carryover, plus
-  // a 10% grace bonus on top of it (computeGraceSeconds). No new bonus if this
-  // session was already grace-extended (grace can't compound).
-  const grace = s.graceSeconds > 0 ? 0 : Math.floor(remaining * 0.1);
+  // a 10% grace bonus on top of it (computeGraceSeconds) — always, tracking time
+  // left rather than the session's pedigree.
+  const grace = Math.floor(remaining * 0.1);
   const rollover = remaining + grace;
   // Near-the-end warmth lives on the percent now that the bar is gone.
   const leftColor = pctLeft < 15 ? 'var(--warn)' : 'var(--good)';
@@ -333,7 +349,6 @@ function renderActive(host: HTMLElement, s: ActiveSession, dailyTotal: number, s
   pctEl.style.color = leftColor;
   title.append(pctEl);
   head.append(title);
-  head.append(el('span', 'sc-badge sc-badge-active', 'Active'));
 
   // What "End early" does, as a ledger: quiet label on the left, value
   // right-aligned so the figures stack into a column that visibly adds up.
@@ -349,7 +364,9 @@ function renderActive(host: HTMLElement, s: ActiveSession, dailyTotal: number, s
     return r;
   };
   breakdown.append(row('Time left', formatClock(remaining)));
-  if (grace > 0) breakdown.append(row('10% bonus', formatClock(grace), { op: '+' }));
+  // Always show the bonus row so the ledger reads as a complete sum, even when
+  // this session was already grace-extended (grace can't compound → +0:00).
+  breakdown.append(row('10% bonus', formatClock(grace), { op: '+' }));
   breakdown.append(el('div', 'sc-breakdown-rule'));
   breakdown.append(row(`Time added to Session ${s.sessionNum + 1}`, formatClock(rollover), { total: true }));
 
@@ -371,7 +388,6 @@ function renderActive(host: HTMLElement, s: ActiveSession, dailyTotal: number, s
 
 /** Cooldown state. */
 function renderCooldown(host: HTMLElement, s: ActiveSession, endTime: number, totalSec: number): void {
-  const remainSec = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
   // The session cooling down is the one before the (next) stored session.
   const endedNum = Math.max(1, s.sessionNum - 1);
 
@@ -379,15 +395,15 @@ function renderCooldown(host: HTMLElement, s: ActiveSession, endTime: number, to
 
   const head = el('div', 'sc-head');
   head.append(el('span', 'sc-title', `Session ${endedNum} ended`));
-  head.append(el('span', 'sc-badge sc-badge-cooldown', 'Cooldown'));
 
-  // No fill-up bar here either — the countdown number is the whole story.
-  // (totalSec retained in the signature for callers; unused now the bar is gone.)
-  void totalSec;
+  // Show the TOTAL cooldown length, not a live countdown — this panel doesn't
+  // tick in real time, so a frozen remaining figure would read as wrong the
+  // moment it's stale. The fixed duration is always accurate.
+  void endTime;
   card.append(
     head,
-    el('div', 'sc-time', formatClock(remainSec)),
-    el('div', 'sc-sub', `until Session ${s.sessionNum} unlocks`)
+    el('div', 'sc-time', formatClock(totalSec)),
+    el('div', 'sc-sub', `cooldown before Session ${s.sessionNum} unlocks`)
   );
   host.replaceChildren(card);
 }
