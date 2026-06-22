@@ -399,7 +399,9 @@ body {
   background: var(--bg-input); border: 1px solid var(--line-strong); border-radius: 9px;
   color: var(--text); font: 500 13.5px 'IBM Plex Mono'; cursor: pointer; text-align: left;
 }
-.dd.open .dd-button { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+/* Open state: just a slightly brighter border (no blue accent ring — overkill). */
+.dd.open .dd-button { border-color: var(--text-faint); }
+.dd-button:focus { outline: none; }
 .dd-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dd-caret { flex: none; color: var(--text-dim); font-size: 10px; transition: transform 0.15s var(--ease); }
 .dd.open .dd-caret { transform: rotate(180deg); }
