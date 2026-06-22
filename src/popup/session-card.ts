@@ -453,13 +453,16 @@ function renderActive(host: HTMLElement, s: ActiveSession, dailyTotal: number, s
 function renderCooldown(host: HTMLElement, s: ActiveSession, endTime: number, totalSec: number): void {
   const card = cardShell();
 
-  // One line: "Xm cooldown before Session N". The TOTAL cooldown length, not a
-  // live countdown — this panel doesn't tick, so a frozen remaining figure would
-  // read as wrong the moment it's stale; the fixed duration is always accurate.
+  // The big TOTAL-cooldown number with its label on the SAME line (the label was
+  // a small sub-line below before — too quiet). Not a live countdown: this panel
+  // doesn't tick, so a frozen remaining figure would read as wrong the moment
+  // it's stale; the fixed duration is always accurate.
   void endTime;
   const line = el('div', 'sc-cooldown-line');
-  const dur = el('span', 'sc-cooldown-dur', formatClock(totalSec));
-  line.append(dur, document.createTextNode(` cooldown before Session ${s.sessionNum}`));
+  line.append(
+    el('span', 'sc-time', formatClock(totalSec)),
+    el('span', 'sc-cooldown-sub', `cooldown before Session ${s.sessionNum}`),
+  );
 
   card.append(line);
   host.replaceChildren(card);

@@ -442,10 +442,11 @@ body {
    was dropped as redundant with the ledger's "time left"). */
 /* Rides on the (uppercase) title; match its size, keep the live-accent color. */
 .sc-title-pct { font: 700 10.5px 'IBM Plex Mono'; letter-spacing: 0.05em; }
-/* Cooldown card: one line, "Xm cooldown before Session N". The duration is the
-   emphasized white Mono figure; the rest is the quiet sentence around it. */
-.sc-cooldown-line { font: 400 13px 'IBM Plex Sans'; color: var(--text-dim); line-height: 1.4; }
-.sc-cooldown-dur { font: 600 13px 'IBM Plex Mono'; color: var(--text); }
+/* Cooldown card: the big total-cooldown number with its label beside it on the
+   same baseline (the label used to sit small below — too quiet). */
+.sc-cooldown-line { display: flex; align-items: baseline; gap: 8px; }
+.sc-time { font: 600 20px 'IBM Plex Mono'; color: var(--text); }
+.sc-cooldown-sub { font: 400 12px 'IBM Plex Sans'; color: var(--text-dim); }
 
 /* End-early breakdown: a ledger — quiet label left, value right-aligned, so the
    figures stack into a column that adds up. A rule sits before the total; the
