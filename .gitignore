@@ -7,6 +7,9 @@ extension/dist/
 # Build artifacts
 artifacts/
 
+# Design working files (mockups, plans, derived style guide) — local only
+designs/
+
 # OS files
 .DS_Store
 Thumbs.db
