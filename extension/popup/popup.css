@@ -304,9 +304,10 @@ body {
 .settings-overlay {
   position: absolute;
   top: 0; bottom: 0; right: 0;
-  /* Left edge pinned to the content seam (the header divider at 464px), so the
-     sheet covers exactly the right half: 800 − 464 = 336px. */
-  width: 336px;
+  /* Left edge pinned to the content seam by the SAME 464px the header rule uses
+     (left:464 rather than width:336), so the sheet's border-left lands exactly
+     on the divider regardless of the frame's border eating into the width. */
+  left: 464px;
   overflow: hidden;
   pointer-events: none;            /* closed: let clicks through */
   z-index: 5;
