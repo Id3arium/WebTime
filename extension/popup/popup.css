@@ -239,15 +239,22 @@ body {
 .usage-breakdown-card {
   flex: 1; min-height: 0; display: flex; flex-direction: column;
   background: var(--bg-raise); border: 1px solid var(--line); border-radius: 12px;
-  padding: 13px 15px;
+  /* Top + sides padded for the headline; NO bottom padding — the scroll list
+     runs clean to the card's bottom edge so the leftover gap doesn't read as a
+     phantom border. */
+  padding: 13px 15px 0;
 }
-/* Headline sits at the card top, with a hairline rule under it tying it to the
-   list below. */
+/* Headline sits at the card top; its hairline rule spans the FULL card width
+   (negative side margins cancel the 15px padding) so the divider reads as a
+   true seam, and the list below scrolls edge-to-edge beneath it. */
 .usage-head {
-  flex: none; padding-bottom: 11px; margin-bottom: 8px;
+  flex: none; padding-bottom: 11px; margin: 0 -15px 0;
   border-bottom: 1px solid var(--line);
 }
-.usage-breakdown-card .breakdown-bars { padding-right: 4px; }
+.usage-head > * { padding: 0 15px; }
+/* List spans full width (cancel side padding) and runs to the bottom edge; the
+   rows' own padding keeps the content off the walls. */
+.usage-breakdown-card .breakdown-bars { margin: 0 -15px; padding: 8px 11px 13px; }
 
 /* ===========================================================================
    BREAKDOWN LIST (existing renderBreakdownBars markup, restyled to monogram tiles)
