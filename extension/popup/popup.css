@@ -358,6 +358,9 @@ body {
 .field { margin-bottom: 13px; }
 .field label,
 .interventions-header { display: block; font: 600 11px 'IBM Plex Sans'; color: var(--text-dim); margin-bottom: 7px; }
+/* A mounted stepper provides its own label + box; drop the stepper group's own
+   bottom margin so the surrounding .field owns the spacing. */
+.settings-stepper-mount > .sc-stepper-group { margin-bottom: 0; }
 .field-row { display: flex; gap: 11px; }
 .field-row .field { flex: 1; }
 
@@ -499,13 +502,23 @@ body {
   background: var(--bg-input); border: 1px solid var(--line-strong); border-radius: 9px;
   height: 32px; padding: 0 5px 0 12px;
 }
-.sc-stepper-val { font: 500 13.5px 'IBM Plex Mono'; color: var(--text); }
-.sc-stepper-unit { color: var(--text-faint); font-size: 10.5px; margin-left: 4px; }
-.sc-stepper-btns { display: flex; flex-direction: column; gap: 2px; }
+.sc-stepper-val { display: flex; align-items: baseline; font: 500 13.5px 'IBM Plex Mono'; color: var(--text); min-width: 0; }
+/* The editable number itself: no field chrome (it lives inside the styled box),
+   a visible caret, and a subtle accent underline only while focused for typing. */
+.sc-stepper-num {
+  outline: none; cursor: text; caret-color: var(--accent);
+  min-width: 1ch; border-bottom: 1px solid transparent; transition: border-color 0.12s;
+}
+.sc-stepper-num:focus { border-bottom-color: var(--accent); }
+.sc-stepper-unit { color: var(--text-faint); font-size: 10.5px; margin-left: 4px; flex: none; }
+.sc-stepper-btns { display: flex; flex-direction: column; gap: 2px; flex: none; }
 .sc-stepper-btn {
   width: 20px; height: 14px; border: none; border-radius: 4px;
   background: rgba(255,255,255,0.07); color: var(--text-dim);
   font-size: 8px; line-height: 1; cursor: pointer; padding: 0;
+  /* Hold-to-repeat: suppress text selection and browser touch gestures so a
+     long press just repeats the step. */
+  user-select: none; touch-action: none;
   transition: background 0.12s, color 0.12s;
 }
 .sc-stepper-btn:hover { background: var(--accent); color: #fff; }

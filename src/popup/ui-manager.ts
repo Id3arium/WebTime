@@ -15,7 +15,7 @@ import {
   type DomainPieData
 } from './chart-builder.js';
 import { formatDuration, formatDurationHM, getLocalDateStr, formatDateWithDayOfWeek } from '../shared/utils.js';
-import { renderSessionCard, renderSessionSettingsCard } from './session-card.js';
+import { renderSessionCard, renderSessionSettingsCard, stepper } from './session-card.js';
 import type { ChartInstance } from '../types.js';
 
 declare const browser: typeof chrome;
@@ -318,6 +318,32 @@ export function showDetailView(): void {
   updateDetailUsageCard();
 }
 
+// Live handles for the global-settings steppers, so repeated loadSettings calls
+// update the displayed value instead of stacking duplicate controls.
+const settingsSteppers: Record<string, { setValue: (v: number) => void }> = {};
+
+/** Mount (once) a styled stepper into `mountId` that mirrors its value into the
+ *  hidden number `input` (the save/load data store). On later calls it just
+ *  pushes the new value into the existing stepper. */
+function mountSettingsStepper(
+  mountId: string,
+  input: HTMLInputElement | null,
+  label: string,
+  unit: string,
+  opts: { value: number; min: number; max: number; step: number },
+): void {
+  const mount = document.getElementById(mountId);
+  if (!mount || !input) return;
+  const existing = settingsSteppers[mountId];
+  if (existing) { existing.setValue(opts.value); return; }
+  const s = stepper({
+    label, unit, value: opts.value, min: opts.min, max: opts.max, step: opts.step,
+    onChange: v => { input.value = String(v); },
+  });
+  mount.replaceChildren(s.el);
+  settingsSteppers[mountId] = s;
+}
+
 export async function loadSettings(): Promise<void> {
   try {
     const data = await browser.storage.local.get('webTimeSettings');
@@ -330,8 +356,16 @@ export async function loadSettings(): Promise<void> {
 
     const inactivityEl = document.getElementById('inactivity-timeout') as HTMLInputElement | null;
     const chartScalingEl = document.getElementById('chart-scaling') as HTMLInputElement | null;
-    if (inactivityEl) inactivityEl.value = String(global.inactivityTimeoutS ?? 30);
-    if (chartScalingEl) chartScalingEl.value = String(global.scalingPower ?? 0.8);
+    const inactivityVal = global.inactivityTimeoutS ?? 30;
+    const scalingVal = global.scalingPower ?? 0.8;
+    if (inactivityEl) inactivityEl.value = String(inactivityVal);
+    if (chartScalingEl) chartScalingEl.value = String(scalingVal);
+    // Mount (or refresh) the styled steppers that mirror the hidden inputs, so
+    // the global settings use the same control as the per-site Session rules.
+    mountSettingsStepper('inactivity-stepper', inactivityEl, 'Inactivity', 's',
+      { value: inactivityVal, min: 1, max: 600, step: 1 });
+    mountSettingsStepper('chart-scaling-stepper', chartScalingEl, 'Chart scale', '',
+      { value: scalingVal, min: 0.3, max: 1.0, step: 0.05 });
 
     // End-session shortcut: undefined = default Ctrl+E, null = disabled, string = custom
     const endSessionShortcutEl = document.getElementById('end-session-shortcut') as HTMLInputElement | null;

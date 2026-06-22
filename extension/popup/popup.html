@@ -114,14 +114,17 @@
               </select>
             </div>
 
+            <!-- Inactivity + chart-scale: the <input>s are the data store that
+                 save/loadSettings read; they're hidden and mirrored by styled
+                 steppers (mounted from ui-manager.ts) for a consistent look. -->
             <div class="field-row">
               <div class="field">
-                <label for="inactivity-timeout">Inactivity (s)</label>
-                <input type="number" id="inactivity-timeout" value="30" min="1">
+                <input type="number" id="inactivity-timeout" value="30" min="1" hidden>
+                <div id="inactivity-stepper" class="settings-stepper-mount"></div>
               </div>
               <div class="field">
-                <label for="chart-scaling">Chart scale</label>
-                <input type="number" id="chart-scaling" value="0.8" min="0.3" max="1.0" step="0.05">
+                <input type="number" id="chart-scaling" value="0.8" min="0.3" max="1.0" step="0.05" hidden>
+                <div id="chart-scaling-stepper" class="settings-stepper-mount"></div>
               </div>
             </div>
 

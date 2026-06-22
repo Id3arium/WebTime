@@ -116,10 +116,12 @@ interface Stepper {
   setValue: (v: number) => void;
 }
 
-/** A labelled stepper: value + unit, with ▲/▼ buttons. When `onCarry` is set,
+/** A labelled stepper: an editable value + unit with ▲/▼ buttons that support
+ *  click, press-and-hold-to-repeat, and direct typing. When `onCarry` is set,
  *  stepping past min/max wraps around (within [min,max]) and reports the
- *  direction so a neighbour (e.g. minutes) can absorb the carry. */
-function stepper(opts: {
+ *  direction so a neighbour (e.g. minutes) can absorb the carry. Exported so the
+ *  global settings panel can use the same control instead of native inputs. */
+export function stepper(opts: {
   label: string; rec?: string; value: number; unit?: string;
   min: number; max: number; step: number;
   onChange: (v: number) => void;
@@ -139,39 +141,83 @@ function stepper(opts: {
   }
 
   const box = el('div', 'sc-stepper-box');
+  // The value is an editable field so users can TYPE a number directly; the unit
+  // sits beside it as a static suffix. contentEditable (not <input>) keeps the
+  // existing inline-value styling and lets the unit ride alongside in the box.
   const valWrap = el('span', 'sc-stepper-val');
-  const setText = (v: number) => {
-    valWrap.replaceChildren(document.createTextNode(String(v)));
-    if (opts.unit) valWrap.append(Object.assign(document.createElement('span'), {
+  const valEl = el('span', 'sc-stepper-num');
+  valEl.contentEditable = 'true';
+  valEl.spellcheck = false;
+  // Round to the step grid so fractional steps (e.g. 0.5) don't accumulate
+  // binary floating-point dust like 3.4999999. Quantize relative to min so a
+  // non-zero min with a fractional step still lands on grid.
+  const quantize = (v: number) => opts.min + Math.round((v - opts.min) / opts.step) * opts.step;
+  const setNum = (v: number) => { valEl.textContent = String(v); };
+  if (opts.unit) {
+    valWrap.append(valEl, Object.assign(document.createElement('span'), {
       className: 'sc-stepper-unit', textContent: opts.unit,
     }));
-  };
+  } else {
+    valWrap.append(valEl);
+  }
   let cur = opts.value;
-  setText(cur);
+  setNum(cur);
+
+  // Commit a step in `dir`, honouring carry-over at the edges. Factored out so
+  // both the initial click and the hold-to-repeat timer call the same path.
+  const stepOnce = (dir: number) => {
+    const span = opts.max - opts.min + opts.step; // wrap modulus, in step units
+    const raw = cur + dir * opts.step;
+    if (opts.onCarry && (raw > opts.max || raw < opts.min)) {
+      // Past an edge: let the neighbour absorb the carry. If it accepts, wrap
+      // within [min,max]; if it vetoes (e.g. minutes already 0), stay put.
+      if (opts.onCarry(dir)) {
+        cur = ((((raw - opts.min) % span) + span) % span) + opts.min;
+      }
+    } else {
+      cur = Math.max(opts.min, Math.min(opts.max, raw));
+    }
+    cur = quantize(cur);
+    setNum(cur);
+    opts.onChange(cur);
+  };
+
+  // Parse + clamp a typed value on commit (blur / Enter). Reverts to the last
+  // good value on garbage so the field can never hold something un-persistable.
+  const commitTyped = () => {
+    const parsed = parseFloat(valEl.textContent ?? '');
+    if (Number.isFinite(parsed)) {
+      cur = quantize(Math.max(opts.min, Math.min(opts.max, parsed)));
+      opts.onChange(cur);
+    }
+    setNum(cur); // normalize display (clamp/round, or revert on NaN)
+  };
+  valEl.addEventListener('blur', commitTyped);
+  valEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); valEl.blur(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); stepOnce(1); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); stepOnce(-1); }
+  });
 
   const btns = el('div', 'sc-stepper-btns');
   const mk = (sym: string, dir: number): HTMLButtonElement => {
     const b = document.createElement('button');
     b.className = 'sc-stepper-btn';
     b.textContent = sym;
-    b.addEventListener('click', () => {
-      const span = opts.max - opts.min + opts.step; // wrap modulus, in step units
-      const raw = cur + dir * opts.step;
-      if (opts.onCarry && (raw > opts.max || raw < opts.min)) {
-        // Past an edge: let the neighbour absorb the carry. If it accepts, wrap
-        // within [min,max]; if it vetoes (e.g. minutes already 0), stay put.
-        if (opts.onCarry(dir)) {
-          cur = ((((raw - opts.min) % span) + span) % span) + opts.min;
-        }
-      } else {
-        cur = Math.max(opts.min, Math.min(opts.max, raw));
-      }
-      // Round to the step grid to keep fractional steps (e.g. 0.5) from
-      // accumulating binary floating-point dust like 3.4999999.
-      cur = Math.round(cur / opts.step) * opts.step;
-      setText(cur);
-      opts.onChange(cur);
+    // Press-and-hold to repeat: one immediate step, then accelerating repeats
+    // after a short delay. pointer events (not click) so we can catch the hold
+    // and release; cleared on up/leave/cancel so it can't run away.
+    let holdTimer: ReturnType<typeof setTimeout> | undefined;
+    let repeatTimer: ReturnType<typeof setInterval> | undefined;
+    const stop = () => { clearTimeout(holdTimer); clearInterval(repeatTimer); holdTimer = repeatTimer = undefined; };
+    b.addEventListener('pointerdown', (e) => {
+      e.preventDefault();          // don't steal focus from / blur the value field
+      stepOnce(dir);
+      holdTimer = setTimeout(() => { repeatTimer = setInterval(() => stepOnce(dir), 60); }, 350);
     });
+    b.addEventListener('pointerup', stop);
+    b.addEventListener('pointerleave', stop);
+    b.addEventListener('pointercancel', stop);
     return b;
   };
   btns.append(mk('▲', 1), mk('▼', -1));
@@ -179,7 +225,7 @@ function stepper(opts: {
   group.append(box);
   return {
     el: group,
-    setValue: (v: number) => { cur = v; setText(cur); },
+    setValue: (v: number) => { cur = v; setNum(cur); },
   };
 }
 
