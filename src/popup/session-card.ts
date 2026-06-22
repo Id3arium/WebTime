@@ -419,7 +419,10 @@ export async function renderSessionCard(domain: string | null, dayResetTime: num
 
   const host = document.getElementById('session-card');
   if (!host) return;
-  if (!domain) { renderOff(host); return; }
+  // No real domain (new-tab / settings / extension page) → render nothing. The
+  // "No limit on this site" Off card only makes sense for an actual site that's
+  // being tracked; here there's no site at all.
+  if (!domain) { host.replaceChildren(); return; }
 
   const data = await browser.storage.local.get([SESSION_STATE_KEY, 'webTimeSettings', 'trackedTime']);
   const settings = data.webTimeSettings || { global: {}, domains: {} };

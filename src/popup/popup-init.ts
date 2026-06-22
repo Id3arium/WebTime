@@ -53,9 +53,14 @@ export const App = {
 
   async loadData(): Promise<void> {
     const activeTabs = await browser.tabs.query({ active: true, currentWindow: true });
-    const currentDomain = activeTabs.length > 0 && activeTabs[0].url
-      ? extractDomain(activeTabs[0].url)
-      : null;
+    // Only http(s) pages are trackable (mirrors the background's isWebUrl /
+    // tab-query filter). On a new-tab page, settings page, extension page, etc.
+    // extractDomain would still return junk like "newtab" — gate on the scheme
+    // so the detail view falls through to its "go to a real site" empty state
+    // instead of showing a bogus domain + usage card.
+    const activeUrl = activeTabs.length > 0 ? activeTabs[0].url : undefined;
+    const isWebUrl = activeUrl?.startsWith('http://') || activeUrl?.startsWith('https://');
+    const currentDomain = isWebUrl && activeUrl ? extractDomain(activeUrl) : null;
 
     const storedData = await browser.storage.local.get(["trackedTime", "webTimeSettings"]);
     const timeHistory = storedData.trackedTime?.timeHistory || {};

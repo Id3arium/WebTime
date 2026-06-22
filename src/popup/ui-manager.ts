@@ -127,13 +127,16 @@ function updateTopbar(): void {
   const navBtn = document.getElementById('nav-toggle-btn');
   if (navBtn) navBtn.textContent = isDetail ? '◂  All sites' : 'This site  ▸';
 
-  // Left context: site identity (detail) vs. "All sites" (general).
+  // Left context: site identity (detail) vs. "All sites" (general). On a
+  // non-trackable page (no real domain) the detail view shows neither — the
+  // header right stays blank, matching the "go to a real site" empty state.
+  const hasDomain = isDetail && !!AppState.selectedDomain;
   const siteId = document.getElementById('topbar-site');
   const allId = document.getElementById('topbar-all');
-  if (siteId) siteId.hidden = !isDetail;
+  if (siteId) siteId.hidden = !hasDomain;
   if (allId) allId.hidden = isDetail;
 
-  if (isDetail && AppState.selectedDomain) {
+  if (hasDomain) {
     const nameEl = document.getElementById('topbar-site-name');
     if (nameEl) nameEl.textContent = AppState.selectedDomain;
   }
@@ -187,10 +190,19 @@ function usageSlash(): HTMLElement {
  *  own caption), then how this site compares to THIS domain's 7-day average. */
 function updateDetailUsageCard(): void {
   const host = document.getElementById('detail-usage-card');
-  if (!host || !AppState.allTimeHistory) return;
+  if (!host) return;
+
+  // No real domain (new-tab / settings / extension page) → no usage card at all;
+  // the left panel's "go to a real site" message stands on its own.
+  if (!AppState.selectedDomain || !AppState.allTimeHistory) {
+    host.replaceChildren();
+    host.hidden = true;
+    return;
+  }
+  host.hidden = false;
 
   const today = getLocalDateStr(AppState.dayResetTime);
-  const domain = AppState.selectedDomain || '';
+  const domain = AppState.selectedDomain;
   const totals = calculateTodaysTotals(AppState.allTimeHistory, today, domain);
 
   const head = usageHeadline(
@@ -436,7 +448,11 @@ export function renderGeneralView(): void {
 export function renderDetailView(domain: string | null): void {
   if (!domain) {
     displayMessage('#detail-page .left-panel',
-      "Cannot detect current domain. Make sure you're on a web page.", 'error');
+      "No site to show here. Open a website (any http or https page), then reopen this popup to see its stats.");
+    // Also clear the right-panel cards so nothing bogus lingers beside the message.
+    updateDetailUsageCard();
+    renderSessionSettingsCard(null, AppState.dayResetTime).catch(() => {});
+    renderSessionCard(null, AppState.dayResetTime).catch(() => {});
     return;
   }
 
