@@ -23,6 +23,19 @@
   --topbar-h:      54px;
   --carousel-h:    545px;
   --ease:          cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* The content seam: the x-coordinate of the right panel's left card border,
+     where the header divider, the settings overlay's left edge, and the domain
+     text inset all line up. With box-sizing:border-box the frame's 1px borders
+     sit INSIDE its 800px width, so the content box is 798px wide; the seam is
+     that minus the 320px panel and the body's 16px right padding. Everything
+     that touches the seam derives from this one var so they can't drift.
+       --seam-pad  = the cards' own 15px text inset (domain text aligns to it). */
+  --frame-w:       798px;          /* 800 − 2×1px frame border */
+  --panel-w:       320px;
+  --body-pad:      16px;
+  --seam:          calc(var(--frame-w) - var(--panel-w) - var(--body-pad)); /* 462px */
+  --seam-pad:      15px;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -62,9 +75,9 @@ body {
   display: flex;
   align-items: center;
   height: var(--topbar-h);
-  /* No horizontal padding: the topbar's positioned children (rule at 464px,
-     stats at 479px) are measured from the popup's true left edge, matching the
-     body's content geometry below. Nav/gear inset themselves with left/right:12px. */
+  /* No horizontal padding: the topbar's positioned children (rule + stats, both
+     derived from --seam) are measured from the popup's true left edge, matching
+     the body's content geometry below. Nav/gear inset themselves with l/r:12px. */
   border-bottom: 1px solid var(--line);
   flex: none;
 }
@@ -75,26 +88,24 @@ body {
 .nav-btn { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); z-index: 2; }
 .topbar-right { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); z-index: 2; display: flex; align-items: center; }
 
-/* The vertical RULE is pinned to the right panel's actual card border. The
-   nominal seam is 800 − 16 body padding − 320 panel = 464px, but the frame's
-   1px borders shave the card border to ~462px, so the rule (and the settings
-   overlay) sit at 462 to line up with the real card edge and fully cover it.
-   The date reads INTO it from the left; the domain sits to its right. */
+/* The vertical RULE sits on the content seam (--seam) so it continues the right
+   panel's card border up through the header. The date reads INTO it from the
+   left; the domain sits to its right. All vertically centered. */
 .topbar-rule {
-  position: absolute; left: 462px; top: 50%; transform: translateY(-50%);
+  position: absolute; left: var(--seam); top: 50%; transform: translateY(-50%);
   width: 1px; height: 24px; background: var(--line-strong); z-index: 1;
 }
 /* Date — right-aligned against the rule, reading into it. The 16px gap from the
    rule mirrors the gear's 16px inset on the far side. */
 .topbar-title {
-  position: absolute; right: calc(800px - 462px + 16px); top: 50%; transform: translateY(-50%);
+  position: absolute; right: calc(var(--frame-w) - var(--seam) + 16px); top: 50%; transform: translateY(-50%);
   display: flex; align-items: center; text-align: right; min-width: 0;
 }
-/* Domain / "all sites" — left of the rule, inset by the card's own 15px text
-   padding (462 card border + 15) so it lines up under the card text below. Now
-   a PEER of the date: same 20px Sans, same white. */
+/* Domain / "all sites" — left of the rule, inset by the card's own text padding
+   (--seam + --seam-pad) so it lines up under the card text below. Now a PEER of
+   the date: same 20px Sans, same white. */
 .hero-numbers {
-  position: absolute; left: 477px; top: 50%; transform: translateY(-50%);
+  position: absolute; left: calc(var(--seam) + var(--seam-pad)); top: 50%; transform: translateY(-50%);
   display: flex; align-items: center; min-width: 0;
 }
 
@@ -190,7 +201,7 @@ body {
 
 .right-panel {
   flex: none;
-  width: 320px;
+  width: var(--panel-w);  /* same panel width the --seam math assumes */
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -312,10 +323,10 @@ body {
 .settings-overlay {
   position: absolute;
   top: 0; bottom: 0; right: 0;
-  /* Left edge pinned to the same 462px the header rule uses (the real card
-     border), so the sheet's border-left lands exactly on the divider AND covers
-     the cards completely — no sliver of card peeking past its left edge. */
-  left: 462px;
+  /* Left edge pinned to the content seam (--seam) — the same coordinate the
+     header rule uses — so the sheet's border-left lands exactly on the divider
+     AND covers the cards completely, no sliver of card peeking past its edge. */
+  left: var(--seam);
   overflow: hidden;
   pointer-events: none;            /* closed: let clicks through */
   z-index: 5;
