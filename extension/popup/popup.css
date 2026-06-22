@@ -404,12 +404,13 @@ body {
 .dd-caret { flex: none; color: var(--text-dim); font-size: 10px; transition: transform 0.15s var(--ease); }
 .dd.open .dd-caret { transform: rotate(180deg); }
 /* The list: absolutely positioned just below the button, opening downward. A
-   high z-index keeps it above the cards; the sheet itself scrolls if needed. */
+   high z-index keeps it above the cards. The 7 fixed options always fit, so no
+   max-height / scroll — the panel sizes to its content. */
 .dd-panel {
   position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 20;
   background: var(--bg-input); border: 1px solid var(--line-strong); border-radius: 9px;
   padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,0.45);
-  display: none; max-height: 220px; overflow-y: auto;
+  display: none;
 }
 .dd.open .dd-panel { display: block; }
 .dd-option {
