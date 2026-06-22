@@ -121,6 +121,22 @@ export function toggleSettings(): void {
 
 /** Update the merged topbar's nav label, site context, and hero numbers
  *  for the current view. The nav button toggles to the *other* view. */
+// Crossfade the header text on a view change: fade the date/domain out, swap
+// them (updateTopbar + the date label) at the low point, fade back in — so the
+// header doesn't hard-cut against the sliding page content. Falls back to an
+// instant swap if the topbar element is missing.
+let topbarFadeTimer: ReturnType<typeof setTimeout> | undefined;
+function crossfadeTopbar(swap: () => void): void {
+  const topbar = document.querySelector('.topbar');
+  if (!topbar) { swap(); return; }
+  clearTimeout(topbarFadeTimer);
+  topbar.classList.add('is-swapping');           // fade out (150ms via CSS)
+  topbarFadeTimer = setTimeout(() => {
+    swap();                                       // swap text while invisible
+    topbar.classList.remove('is-swapping');       // fade back in
+  }, 150);
+}
+
 function updateTopbar(): void {
   const isDetail = AppState.currentView === ViewState.DETAIL;
 
@@ -298,7 +314,7 @@ export function showGeneralView(): void {
     container.className = 'pages-container show-general';
   }
 
-  updateTopbar();
+  crossfadeTopbar(updateTopbar);
   updateGeneralUsageHead();
 
   if (!AppState.generalChartCreated) {
@@ -314,7 +330,7 @@ export function showDetailView(): void {
     container.className = 'pages-container show-detail';
   }
 
-  updateTopbar();
+  crossfadeTopbar(updateTopbar);
   updateDetailUsageCard();
 }
 

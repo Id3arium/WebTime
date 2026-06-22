@@ -88,6 +88,13 @@ body {
 .nav-btn { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); z-index: 2; }
 .topbar-right { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); z-index: 2; display: flex; align-items: center; }
 
+/* The date + domain text crossfades on a view change (the page content slides,
+   so a hard text swap would read as a teleport against that motion). The topbar
+   gets .is-swapping for the fade-out half, cleared for the fade-in. */
+.topbar-title, .hero-numbers { transition: opacity 0.15s var(--ease); }
+.topbar.is-swapping .topbar-title,
+.topbar.is-swapping .hero-numbers { opacity: 0; }
+
 /* The vertical RULE sits on the content seam (--seam) so it continues the right
    panel's card border up through the header. The date reads INTO it from the
    left; the domain sits to its right. All vertically centered. */
