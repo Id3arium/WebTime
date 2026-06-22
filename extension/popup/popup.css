@@ -88,11 +88,11 @@ body {
 .nav-btn { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); z-index: 2; }
 .topbar-right { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); z-index: 2; display: flex; align-items: center; }
 
-/* The date + domain text crossfades on a view change (the page content slides,
-   so a hard text swap would read as a teleport against that motion). The topbar
-   gets .is-swapping for the fade-out half, cleared for the fade-in. */
-.topbar-title, .hero-numbers { transition: opacity 0.15s var(--ease); }
-.topbar.is-swapping .topbar-title,
+/* The domain / "all sites" text crossfades on a view change (the page content
+   slides, so a hard swap would read as a teleport against that motion). The date
+   is the SAME on both views, so it stays put — only .hero-numbers fades. The
+   topbar gets .is-swapping for the fade-out half, cleared for the fade-in. */
+.hero-numbers { transition: opacity 0.15s var(--ease); }
 .topbar.is-swapping .hero-numbers { opacity: 0; }
 
 /* The vertical RULE sits on the content seam (--seam) so it continues the right
