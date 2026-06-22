@@ -88,12 +88,13 @@ body {
 .nav-btn { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); z-index: 2; }
 .topbar-right { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); z-index: 2; display: flex; align-items: center; }
 
-/* The domain / "all sites" text crossfades on a view change (the page content
-   slides, so a hard swap would read as a teleport against that motion). The date
-   is the SAME on both views, so it stays put — only .hero-numbers fades. The
-   topbar gets .is-swapping for the fade-out half, cleared for the fade-in. */
-.hero-numbers { transition: opacity 0.15s var(--ease); }
-.topbar.is-swapping .hero-numbers { opacity: 0; }
+/* The domain / "all sites" text swaps with a blur on a view change (the page
+   content slides, so a hard swap would read as a teleport against that motion).
+   The text blurs + fades out, swaps while soft, then sharpens back in. The date
+   is the SAME on both views, so it stays put — only .hero-numbers animates. The
+   topbar gets .is-swapping for the blur-out half, cleared for the focus-in. */
+.hero-numbers { transition: opacity 0.15s var(--ease), filter 0.15s var(--ease); }
+.topbar.is-swapping .hero-numbers { opacity: 0; filter: blur(4px); }
 
 /* The vertical RULE sits on the content seam (--seam) so it continues the right
    panel's card border up through the header. The date reads INTO it from the
