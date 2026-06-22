@@ -222,6 +222,23 @@ export function stepper(opts: {
   };
   btns.append(mk('▲', 1), mk('▼', -1));
   box.append(valWrap, btns);
+
+  // The whole box is a click target for the value field — clicking anywhere in
+  // the padding (not on a ▲/▼ button) focuses the number and drops the caret at
+  // the end, so you don't have to hit the digits precisely.
+  box.addEventListener('mousedown', (e) => {
+    if (e.target === valEl || btns.contains(e.target as Node)) return;
+    e.preventDefault();
+    valEl.focus();
+    const sel = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(valEl);
+    range.collapse(false); // caret to end
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+  });
+  box.style.cursor = 'text';
+
   group.append(box);
   return {
     el: group,
@@ -254,9 +271,9 @@ export async function renderSessionSettingsCard(
   // Working copy persisted on each control change.
   const cur: Required<DomainLimits> = {
     sessionLimitEnabled: d.sessionLimitEnabled || false,
-    sessionLimit: d.sessionLimit || 30,
-    cooldownIncrement: d.cooldownIncrement || 3,
-    nudgeCount: d.nudgeCount ?? Math.round(PHI * Math.sqrt((d.sessionLimit || 30) / 15)),
+    sessionLimit: d.sessionLimit || 40,
+    cooldownIncrement: d.cooldownIncrement || 5,
+    nudgeCount: d.nudgeCount ?? Math.round(PHI * Math.sqrt((d.sessionLimit || 40) / 15)),
   };
   // Just persist. The live session card re-renders REACTIVELY via the storage
   // listener (on both our settings write and the background's session-state
@@ -484,7 +501,7 @@ export async function renderSessionCard(domain: string | null, dayResetTime: num
   if (!state || state.date !== today) { renderOff(host); return; }
 
   const session = state.sessions?.[domain];
-  const limitMinutes = domainSettings.sessionLimit || 30;
+  const limitMinutes = domainSettings.sessionLimit || 40;
 
   // Cooldown takes precedence — there's a future cooldown end for this domain.
   const cooldownEnd = state.cooldownEndTime?.[domain] || 0;

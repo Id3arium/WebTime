@@ -357,7 +357,7 @@ export async function loadSettings(): Promise<void> {
     const inactivityEl = document.getElementById('inactivity-timeout') as HTMLInputElement | null;
     const chartScalingEl = document.getElementById('chart-scaling') as HTMLInputElement | null;
     const inactivityVal = global.inactivityTimeoutS ?? 30;
-    const scalingVal = global.scalingPower ?? 0.8;
+    const scalingVal = global.scalingPower ?? 1.0;
     if (inactivityEl) inactivityEl.value = String(inactivityVal);
     if (chartScalingEl) chartScalingEl.value = String(scalingVal);
     // Mount (or refresh) the styled steppers that mirror the hidden inputs, so
@@ -398,7 +398,7 @@ export async function saveSettings(): Promise<void> {
     const inactivityTimeoutEl = document.getElementById('inactivity-timeout') as HTMLInputElement | null;
     const chartScalingEl = document.getElementById('chart-scaling') as HTMLInputElement | null;
 
-    const scalingPower = parseFloat(chartScalingEl?.value || '0.8') || 0.8;
+    const scalingPower = parseFloat(chartScalingEl?.value || '1.0') || 1.0;
 
     const endSessionShortcutEl = document.getElementById('end-session-shortcut') as HTMLInputElement | null;
     let endSessionShortcut: string | null | undefined;
