@@ -435,11 +435,10 @@ body {
    was dropped as redundant with the ledger's "time left"). */
 /* Rides on the (uppercase) title; match its size, keep the live-accent color. */
 .sc-title-pct { font: 700 10.5px 'IBM Plex Mono'; letter-spacing: 0.05em; }
-/* Cooldown total-duration number (the only remaining .sc-time — the active
-   card's elapsed/limit line was dropped, and the live countdown was replaced
-   by the fixed total since this panel doesn't tick). Prominent, white. */
-.sc-time { font: 600 20px 'IBM Plex Mono'; color: var(--text); margin-bottom: 4px; }
-.sc-sub { font: 400 11px 'IBM Plex Sans'; color: var(--text-dim); margin-bottom: 11px; }
+/* Cooldown card: one line, "Xm cooldown before Session N". The duration is the
+   emphasized white Mono figure; the rest is the quiet sentence around it. */
+.sc-cooldown-line { font: 400 13px 'IBM Plex Sans'; color: var(--text-dim); line-height: 1.4; }
+.sc-cooldown-dur { font: 600 13px 'IBM Plex Mono'; color: var(--text); }
 
 /* End-early breakdown: a ledger — quiet label left, value right-aligned, so the
    figures stack into a column that adds up. A rule sits before the total; the
