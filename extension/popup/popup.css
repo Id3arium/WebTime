@@ -469,9 +469,10 @@ body {
 .sc-title-pct { font: 700 10.5px 'IBM Plex Mono'; letter-spacing: 0.05em; }
 /* Cooldown card: the big total-cooldown number with its label beside it on the
    same baseline (the label used to sit small below — too quiet). */
-.sc-cooldown-line { display: flex; align-items: baseline; gap: 8px; }
-.sc-time { font: 600 20px 'IBM Plex Mono'; color: var(--text); }
-.sc-cooldown-sub { font: 400 12px 'IBM Plex Sans'; color: var(--text-dim); }
+/* Cooldown card: the big total-duration number with its label on the line below.
+   Not a live countdown — the fixed total can't go stale on this non-ticking panel. */
+.sc-time { font: 600 20px 'IBM Plex Mono'; color: var(--text); margin-bottom: 4px; }
+.sc-sub { font: 400 11px 'IBM Plex Sans'; color: var(--text-dim); margin-bottom: 11px; }
 
 /* End-early breakdown: a ledger — quiet label left, value right-aligned, so the
    figures stack into a column that adds up. A rule sits before the total; the

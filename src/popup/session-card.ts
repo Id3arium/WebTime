@@ -451,20 +451,23 @@ function renderActive(host: HTMLElement, s: ActiveSession, dailyTotal: number, s
 
 /** Cooldown state. */
 function renderCooldown(host: HTMLElement, s: ActiveSession, endTime: number, totalSec: number): void {
+  // The session cooling down is the one before the (next) stored session.
+  const endedNum = Math.max(1, s.sessionNum - 1);
+
   const card = cardShell();
 
-  // The big TOTAL-cooldown number with its label on the SAME line (the label was
-  // a small sub-line below before — too quiet). Not a live countdown: this panel
-  // doesn't tick, so a frozen remaining figure would read as wrong the moment
-  // it's stale; the fixed duration is always accurate.
-  void endTime;
-  const line = el('div', 'sc-cooldown-line');
-  line.append(
-    el('span', 'sc-time', formatClock(totalSec)),
-    el('span', 'sc-cooldown-sub', `cooldown before Session ${s.sessionNum}`),
-  );
+  const head = el('div', 'sc-head');
+  head.append(el('span', 'sc-title', `Session ${endedNum} ended`));
 
-  card.append(line);
+  // Show the TOTAL cooldown length, not a live countdown — this panel doesn't
+  // tick in real time, so a frozen remaining figure would read as wrong the
+  // moment it's stale. The fixed duration is always accurate.
+  void endTime;
+  card.append(
+    head,
+    el('div', 'sc-time', formatClock(totalSec)),
+    el('div', 'sc-sub', `cooldown before Session ${s.sessionNum} unlocks`)
+  );
   host.replaceChildren(card);
 }
 
