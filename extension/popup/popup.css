@@ -75,25 +75,26 @@ body {
 .nav-btn { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); z-index: 2; }
 .topbar-right { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); z-index: 2; display: flex; align-items: center; }
 
-/* The vertical RULE is pinned to the right panel's LEFT EDGE (the content seam:
-   popup 800 − 16 body padding − 320 panel width = 464px) so it continues the
-   card border up through the header. The date reads INTO it from the left; the
-   domain sits to its right. All vertically centered. */
+/* The vertical RULE is pinned to the right panel's actual card border. The
+   nominal seam is 800 − 16 body padding − 320 panel = 464px, but the frame's
+   1px borders shave the card border to ~462px, so the rule (and the settings
+   overlay) sit at 462 to line up with the real card edge and fully cover it.
+   The date reads INTO it from the left; the domain sits to its right. */
 .topbar-rule {
-  position: absolute; left: 464px; top: 50%; transform: translateY(-50%);
+  position: absolute; left: 462px; top: 50%; transform: translateY(-50%);
   width: 1px; height: 24px; background: var(--line-strong); z-index: 1;
 }
 /* Date — right-aligned against the rule, reading into it. The 16px gap from the
    rule mirrors the gear's 16px inset on the far side. */
 .topbar-title {
-  position: absolute; right: calc(800px - 464px + 16px); top: 50%; transform: translateY(-50%);
+  position: absolute; right: calc(800px - 462px + 16px); top: 50%; transform: translateY(-50%);
   display: flex; align-items: center; text-align: right; min-width: 0;
 }
 /* Domain / "all sites" — left of the rule, inset by the card's own 15px text
-   padding so it lines up under the card text below. Now a PEER of the date:
-   same 20px Sans, same white. */
+   padding (462 card border + 15) so it lines up under the card text below. Now
+   a PEER of the date: same 20px Sans, same white. */
 .hero-numbers {
-  position: absolute; left: 479px; top: 50%; transform: translateY(-50%);
+  position: absolute; left: 477px; top: 50%; transform: translateY(-50%);
   display: flex; align-items: center; min-width: 0;
 }
 
@@ -311,10 +312,10 @@ body {
 .settings-overlay {
   position: absolute;
   top: 0; bottom: 0; right: 0;
-  /* Left edge pinned to the content seam by the SAME 464px the header rule uses
-     (left:464 rather than width:336), so the sheet's border-left lands exactly
-     on the divider regardless of the frame's border eating into the width. */
-  left: 464px;
+  /* Left edge pinned to the same 462px the header rule uses (the real card
+     border), so the sheet's border-left lands exactly on the divider AND covers
+     the cards completely — no sliver of card peeking past its left edge. */
+  left: 462px;
   overflow: hidden;
   pointer-events: none;            /* closed: let clicks through */
   z-index: 5;
@@ -432,7 +433,7 @@ body {
 .sc-breakdown { margin: 11px 0; display: flex; flex-direction: column; gap: 6px; }
 .sc-breakdown-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .sc-breakdown-label { font: 400 12px 'IBM Plex Sans'; color: var(--text-dim); }
-.sc-breakdown-val { font: 600 16px 'IBM Plex Mono'; color: var(--text); white-space: nowrap; }
+.sc-breakdown-val { font: 600 14px 'IBM Plex Mono'; color: var(--text); white-space: nowrap; }
 .sc-breakdown-op { color: var(--text-faint); }
 .sc-breakdown-rule { height: 1px; background: var(--line); margin: 1px 0; }
 .sc-breakdown-row.is-total .sc-breakdown-label { color: var(--text); }
