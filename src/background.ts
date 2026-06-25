@@ -101,12 +101,30 @@ function getOrStartSession(domain: Domain, dailyTotal: number, baseLength: numbe
   return s;
 }
 
+/**
+ * Drop the wind-down overlay for a domain. Forgetting the flag and telling the
+ * page to hide must happen together — clearing the flag alone leaves the bar
+ * painted, since the content script holds whatever it last drew until told
+ * otherwise. Route every "wind-down is over" path through here so the two can't
+ * drift (the stale-bar-after-rollover bug was exactly that drift).
+ */
+function clearWindDown(domain: Domain): void {
+  if (!windDownActive[domain]) return;
+  delete windDownActive[domain];
+  sendMessageToAllTabsOfDomain(domain, { type: 'HIDE_WIND_DOWN' });
+}
+
 function clearAllCooldowns(): void {
   for (const domain of Object.keys(cooldownTickers)) {
     clearInterval(cooldownTickers[domain]);
     delete cooldownTickers[domain];
   }
   for (const domain of Object.keys(cooldownEndTime)) {
+    // Drop the blocker on any page still showing the cooldown screen. As with
+    // wind-down, deleting the state only makes the background forget — the
+    // content script keeps the blur painted until told to hide. Without this, a
+    // page left mid-cooldown keeps the blocker after the day rolls over.
+    sendHideBlockerToAllTabsOfDomain(domain);
     delete cooldownEndTime[domain];
     delete cooldownTotalSec[domain];
   }
@@ -295,7 +313,7 @@ function incrementTimer(): void {
     // what used to be seven parallel maps into one delete.
     clearAllCooldowns();
     for (const domain of Object.keys(sessions)) delete sessions[domain];
-    for (const domain of Object.keys(windDownActive)) delete windDownActive[domain];
+    for (const domain of Object.keys(windDownActive)) clearWindDown(domain);
     clearSessionState(); // drop persisted state for the old day
     log("New day, reset timer.");
   }
@@ -589,7 +607,7 @@ function handleMessageReceived(
             suspendedSessions[domain] = sessions[domain];
             delete sessions[domain];
           }
-          delete windDownActive[domain];
+          clearWindDown(domain);
           saveSessionState();
           if (domain === trackedTabDomain) updateTimerDisplay(todaysTotalTimeInActiveDomain);
           continue;
@@ -788,9 +806,8 @@ function checkWindDown(settings: InterventionSettings): void {
       progress: wd.progress,
       remainingSeconds: wd.remaining
     });
-  } else if (windDownActive[domain]) {
-    windDownActive[domain] = false;
-    sendMessageToAllTabsOfDomain(domain, { type: 'HIDE_WIND_DOWN' });
+  } else {
+    clearWindDown(domain);
   }
 }
 
@@ -876,12 +893,11 @@ function startCooldownTicker(domain: Domain, totalCooldownSeconds: number, sessi
       delete cooldownTickers[domain];
       delete cooldownEndTime[domain];
       delete cooldownTotalSec[domain];
-      delete windDownActive[domain];
       saveSessionState(); // cooldown cleared — persist so a restart doesn't re-arm it
       // The next session was already created when the cooldown was fired and
       // anchored at the daily total of that moment — nothing to start here.
       sendHideBlockerToAllTabsOfDomain(domain);
-      sendMessageToAllTabsOfDomain(domain, { type: 'HIDE_WIND_DOWN' });
+      clearWindDown(domain);
       // Push a fresh timer update so all tabs of this domain immediately show
       // the new session's full extended length (sessionTime=0, limit=base+carry).
       if (trackedTabDomain === domain) {
@@ -915,10 +931,9 @@ function fireCooldown(
   cooldownEndTime[domain] = Date.now() + cooldownSeconds * 1000;
   cooldownTotalSec[domain] = cooldownSeconds; // the bar's denominator — never recompute it
   sessions[domain] = nextSession;
-  delete windDownActive[domain];
+  clearWindDown(domain);
   saveSessionState(); // persist new session number + active cooldown
 
-  sendMessageToAllTabsOfDomain(domain, { type: 'HIDE_WIND_DOWN' });
   sendBlockerToAllTabsOfDomain(domain, cooldownSeconds, cooldownSeconds, endedSessionNum, cooldownIncrementSeconds);
   startCooldownTicker(domain, cooldownSeconds, endedSessionNum, cooldownIncrementSeconds);
   updateTimerDisplay(todaysTotalTimeInActiveDomain);
