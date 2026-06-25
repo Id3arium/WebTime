@@ -149,6 +149,14 @@ export interface EndSessionConfirmCloseMessage {
   type: 'END_SESSION_CONFIRM_CLOSE';
 }
 
+export interface AveragePopupOpenMessage {
+  type: 'AVERAGE_POPUP_OPEN';
+}
+
+export interface AveragePopupCloseMessage {
+  type: 'AVERAGE_POPUP_CLOSE';
+}
+
 export interface RequestBlockerStateMessage {
   type: 'REQUEST_BLOCKER_STATE';
 }
@@ -176,6 +184,8 @@ export type ExtensionMessage =
   | ShowEndSessionConfirmMessage
   | EndSessionConfirmOpenMessage
   | EndSessionConfirmCloseMessage
+  | AveragePopupOpenMessage
+  | AveragePopupCloseMessage
   | RequestBlockerStateMessage
   | ShowWindDownMessage
   | HideWindDownMessage;

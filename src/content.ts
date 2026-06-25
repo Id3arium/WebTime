@@ -383,11 +383,17 @@ function showAveragePopup(minutesLeft: number, averageMinutes: number, stats: Se
   blockKeyboard(true);
   averagePopupPausedMedia = pauseAllMedia();
 
+  // Freeze the daily clock while the popup blocks the page, mirroring the
+  // end-session confirmation popup.
+  browser.runtime.sendMessage({ type: 'AVERAGE_POPUP_OPEN' }).catch(() => {});
+
   setTimeout(() => { el.style.opacity = '1'; }, 100);
 }
 
 function hideAveragePopup(): void {
   hideBlurOverlay();
+
+  browser.runtime.sendMessage({ type: 'AVERAGE_POPUP_CLOSE' }).catch(() => {});
 
   blockKeyboard(false);
   averagePopupPausedMedia.forEach(m => m.play().catch(() => {}));

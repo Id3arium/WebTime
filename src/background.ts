@@ -85,6 +85,11 @@ const previousInterventionSettings: Record<Domain, string> = {};
 // Freezes the timer (no daily increment) so the user has time to decide.
 let endSessionConfirmOpen = false;
 
+// True while the 7-day-average popup is open. Like the confirmation popup, it
+// blurs the page and pauses media, so the clock should freeze too — otherwise
+// time keeps accruing against a page the user can't actually use.
+let averagePopupOpen = false;
+
 /**
  * Get the current session for a domain, lazily starting one anchored at the
  * current daily total if none exists yet. Runs on the first tick after a domain
@@ -298,6 +303,10 @@ function incrementTimer(): void {
   // End-session confirmation popup is open — freeze daily count so the
   // displayed remaining/elapsed time stays put while the user decides.
   if (endSessionConfirmOpen) return;
+
+  // Average popup is open — same deal: the page is blurred and media paused,
+  // so don't count time the user can't spend.
+  if (averagePopupOpen) return;
 
   todaysTotalTimeInActiveDomain++;
 
@@ -531,6 +540,14 @@ function handleMessageReceived(
     endSessionConfirmOpen = false;
   }
 
+  if (message.type === "AVERAGE_POPUP_OPEN") {
+    averagePopupOpen = true;
+  }
+
+  if (message.type === "AVERAGE_POPUP_CLOSE") {
+    averagePopupOpen = false;
+  }
+
   // A tab is asking for the current blocker state — typically on visibilitychange
   // after waking from a discarded/hidden state. Respond with SHOW or HIDE so the
   // tab's UI matches reality (it may have missed the original HIDE_BLOCKER while
@@ -734,7 +751,10 @@ function checkPhiNudges(settings: InterventionSettings): void {
   }
 }
 
-const AVERAGE_POPUP_MIN_DAYS = 4; // require at least this many days of history
+// Require a full week of history before the average is meaningful: all 7 days
+// in the compute7DayStats window (the 7 days BEFORE today) must have usage on
+// this domain. A partial week makes the "average" jumpy and the popup noisy.
+const AVERAGE_POPUP_MIN_DAYS = 7;
 
 function persistAveragePopupShown(): void {
   browser.storage.local.set({
