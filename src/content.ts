@@ -129,7 +129,7 @@ function createTimerElement(): void {
 
   timerText = document.createElement("div");
   timerText.textContent = "00:00:00";
-  timerText.style.cssText = "color: #f7f7f7 !important;";
+  timerText.style.cssText = "color: #f7f7f7 !important; transition: opacity 0.12s ease !important;";
 
   timer.appendChild(timerText);
 
@@ -161,20 +161,42 @@ function hasSession(): boolean {
   return lastSessionTime !== undefined && !!lastSessionLimitSeconds && lastSessionLimitSeconds > 0;
 }
 
+// 'session' = countdown view, 'daily' = total view. Tracked so we can fade only
+// when the VIEW flips (peek in / revert out), not on every per-second tick.
+let lastTimerMode: 'session' | 'daily' | null = null;
+
 function updateTimerText(): void {
   if (!timerText) return;
   let text: string;
+  let mode: 'session' | 'daily';
   // Session is the default view; daily only while peeking, or when there is no
   // session for this site at all.
   if (hasSession() && !peekingDaily) {
     const remaining = Math.max(0, lastSessionLimitSeconds! - lastSessionTime!);
     text = `⏱ ${formatTimeAdaptive(remaining)}`;
+    mode = 'session';
   } else {
     text = formatTimeAdaptive(lastDailyTime);
+    mode = 'daily';
   }
-  if (timerText.textContent !== text) {
+
+  if (timerText.textContent === text) return;
+
+  // Same view, just the seconds advancing — swap instantly so the clock doesn't
+  // flicker every tick. Only a view flip (session ⇄ daily) gets the fade.
+  if (mode === lastTimerMode || lastTimerMode === null) {
+    lastTimerMode = mode;
     timerText.textContent = text;
+    return;
   }
+
+  lastTimerMode = mode;
+  const node = timerText;
+  node.style.opacity = '0';
+  setTimeout(() => {
+    node.textContent = text;
+    node.style.opacity = '1';
+  }, 120);
 }
 
 /**
