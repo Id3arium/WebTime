@@ -292,7 +292,45 @@ async function loadTimeData(): Promise<void> {
   }
 }
 
+/**
+ * If the day has rolled over, reset the daily total and all session state.
+ * Returns true if a rollover happened.
+ *
+ * MUST run before the freeze gates below: a cooldown (or an open popup) that
+ * spans midnight would otherwise return early every tick and the day would
+ * never reset — leaving the timer stuck on yesterday's total and session state
+ * anchored to a stale daily. That was the "frozen after midnight, sessions look
+ * disabled" bug.
+ */
+function rolloverIfNewDay(): boolean {
+  const newDateStr = getLocalDateStrWithReset();
+  if (newDateStr === currentDateStr) return false;
+
+  saveTimeData();
+  currentDateStr = newDateStr;
+  todaysTotalTimeInActiveDomain = 0;
+  interventionState = {
+    averagePopupShown: {}
+  };
+  // Reset session limit state on day rollover. The session object collapses
+  // what used to be seven parallel maps into one delete.
+  clearAllCooldowns();
+  for (const domain of Object.keys(sessions)) delete sessions[domain];
+  for (const domain of Object.keys(windDownActive)) clearWindDown(domain);
+  clearSessionState(); // drop persisted state for the old day
+  log("New day, reset timer.");
+  return true;
+}
+
 function incrementTimer(): void {
+  // Roll the day FIRST — before any freeze gate — so midnight always resets even
+  // mid-cooldown. On a rollover we reset and bail; the next tick counts normally
+  // against the fresh day.
+  if (rolloverIfNewDay()) {
+    updateTimerDisplay(todaysTotalTimeInActiveDomain);
+    return;
+  }
+
   // Cooldown gate: if the current domain is in an active cooldown, freeze the
   // timer entirely. No daily increment, no interventions, nothing. The
   // cooldown ticker (startCooldownTicker) handles the blocker UI countdown.
@@ -309,23 +347,6 @@ function incrementTimer(): void {
   if (averagePopupOpen) return;
 
   todaysTotalTimeInActiveDomain++;
-
-  const newDateStr = getLocalDateStrWithReset();
-  if (newDateStr !== currentDateStr) {
-    saveTimeData();
-    currentDateStr = newDateStr;
-    todaysTotalTimeInActiveDomain = 0;
-    interventionState = {
-      averagePopupShown: {}
-    };
-    // Reset session limit state on day rollover. The session object collapses
-    // what used to be seven parallel maps into one delete.
-    clearAllCooldowns();
-    for (const domain of Object.keys(sessions)) delete sessions[domain];
-    for (const domain of Object.keys(windDownActive)) clearWindDown(domain);
-    clearSessionState(); // drop persisted state for the old day
-    log("New day, reset timer.");
-  }
   updateTimerDisplay(todaysTotalTimeInActiveDomain);
 
   if (todaysTotalTimeInActiveDomain % SAVE_INTERVAL_SECONDS === 0) {
