@@ -482,12 +482,18 @@ export async function saveSettings(): Promise<void> {
       endSessionShortcut = undefined; // use default
     }
 
+    const clampedScaling = Math.max(0.3, Math.min(1.0, scalingPower));
     settings.global = {
       dayResetTime: parseInt(dayResetTimeEl?.value || '0'),
       inactivityTimeoutS: parseInt(inactivityTimeoutEl?.value || '30') || 30,
-      scalingPower: Math.max(0.3, Math.min(1.0, scalingPower)),
+      scalingPower: clampedScaling,
       endSessionShortcut
     };
+    // Apply the new scale to the live chart config so the currently open chart
+    // reflects it immediately — otherwise it only took effect on the NEXT popup
+    // open (popup-init sets CONFIG.scalingPower on load), making the setting look
+    // like it did nothing. The caller re-renders the active view after saving.
+    CONFIG.scalingPower = clampedScaling;
     // Per-site limits are persisted by the in-panel "Session rules" card
     // (session-card.ts) on each change, so saveSettings only writes globals
     // and preserves whatever domains map already exists.
@@ -771,7 +777,10 @@ export function renderBreakdownBars(container: HTMLElement, domainData: DomainPi
 
     const time = document.createElement('div');
     time.className = 'breakdown-time';
-    time.textContent = `${formatDuration(item.seconds)} (${item.percentage}%)`;
+    // Every row here has real usage (calculateDomainBreakdown drops zeros), so a
+    // sub-minute site reads "<1m" rather than a confusing "0m" that still shows up.
+    const durationLabel = item.seconds < 60 ? '<1m' : formatDuration(item.seconds);
+    time.textContent = `${durationLabel} (${item.percentage}%)`;
 
     bar.append(color, label, fill, time);
     return bar;
