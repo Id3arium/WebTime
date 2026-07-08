@@ -151,7 +151,12 @@ export function stepper(opts: {
   // Round to the step grid so fractional steps (e.g. 0.5) don't accumulate
   // binary floating-point dust like 3.4999999. Quantize relative to min so a
   // non-zero min with a fractional step still lands on grid.
-  const quantize = (v: number) => opts.min + Math.round((v - opts.min) / opts.step) * opts.step;
+  // Snap to the step grid, then round off float dust (0.05 * 13 = 0.650000…1) so
+  // neither the display nor the persisted value carries it. 2 decimals covers the
+  // finest step (0.05); trailing zeros are dropped so integers read "40" not
+  // "40.00".
+  const quantize = (v: number) =>
+    parseFloat((opts.min + Math.round((v - opts.min) / opts.step) * opts.step).toFixed(2));
   const setNum = (v: number) => { valEl.textContent = String(v); };
   if (opts.unit) {
     valWrap.append(valEl, Object.assign(document.createElement('span'), {
@@ -160,7 +165,7 @@ export function stepper(opts: {
   } else {
     valWrap.append(valEl);
   }
-  let cur = opts.value;
+  let cur = quantize(opts.value);
   setNum(cur);
 
   // Commit a step in `dir`, honouring carry-over at the edges. Factored out so

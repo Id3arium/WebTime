@@ -44,9 +44,15 @@ export const App = {
     }
 
     if (saveSettingsBtn) {
-      saveSettingsBtn.addEventListener('click', () => {
-        UIManager.saveSettings();
+      saveSettingsBtn.addEventListener('click', async () => {
+        await UIManager.saveSettings();
         UIManager.closeSettings();
+        // Re-render so chart-affecting settings (e.g. scale) show immediately.
+        if (AppState.currentView === ViewState.GENERAL) {
+          UIManager.renderGeneralView();
+        } else {
+          UIManager.renderDetailView(AppState.selectedDomain);
+        }
       });
     }
   },
