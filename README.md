@@ -9,9 +9,9 @@ flexible — focused sessions, gentle nudges, and cooldowns when a limit is reac
 
 ## Screenshots
 
-| Usage overview | Single site |
+| All sites | Single site |
 |:---:|:---:|
-| ![Usage overview — 30-day chart and top domains](extension/images/GeneralView.png) | ![Single-site breakdown](extension/images/SingleDomainView.png) |
+| ![All-sites view — daily usage chart with 7-day average and a per-site breakdown](extension/images/GeneralView.png) | ![Single-site view — usage vs. all sites, session rules, and the live session card](extension/images/SingleDomainView.png) |
 
 ## Install
 
