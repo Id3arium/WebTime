@@ -225,8 +225,8 @@ function createBlurOverlay(): void {
     left: 0;
     width: 100%;
     height: 100%;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(9px);
+    -webkit-backdrop-filter: blur(9px);
     background: rgba(0, 0, 0, 0.3);
     z-index: 999999;
     pointer-events: none;
@@ -243,17 +243,47 @@ function createBlurOverlay(): void {
   blurOverlay = overlay;
 }
 
+// Pending "flip to hidden after the fade-out" handler, so a re-show mid-fade can
+// cancel it and the overlay never gets stuck hidden with opacity still animating.
+let blurHideEnd: ((e: TransitionEvent) => void) | null = null;
+
+function clearPendingBlurHide(): void {
+  if (blurOverlay && blurHideEnd) {
+    blurOverlay.removeEventListener('transitionend', blurHideEnd);
+  }
+  blurHideEnd = null;
+}
+
 function showBlurOverlay(): HTMLDivElement {
   if (!blurOverlay) createBlurOverlay();
+  clearPendingBlurHide();
   blurOverlay!.style.visibility = 'visible';
   return blurOverlay!;
 }
 
 function hideBlurOverlay(): void {
   if (!blurOverlay) return;
-  blurOverlay.style.opacity = '0';
+  clearPendingBlurHide();
   blurOverlay.style.pointerEvents = 'none';
-  blurOverlay.style.visibility = 'hidden';
+  // Already faded out (or never shown): no opacity transition will fire, so flip
+  // visibility now rather than waiting for a transitionend that won't come.
+  const wasVisible = getComputedStyle(blurOverlay).opacity !== '0';
+  blurOverlay.style.opacity = '0';
+  if (!wasVisible) {
+    blurOverlay.style.visibility = 'hidden';
+    return;
+  }
+  // Keep the element visible until the opacity fade finishes, THEN flip
+  // visibility so the backdrop-filter stops compositing without cutting the
+  // fade-out short. Guard on opacity in case a re-show interrupted us.
+  blurHideEnd = (e: TransitionEvent) => {
+    if (e.propertyName !== 'opacity') return;
+    if (blurOverlay && blurOverlay.style.opacity === '0') {
+      blurOverlay.style.visibility = 'hidden';
+    }
+    clearPendingBlurHide();
+  };
+  blurOverlay.addEventListener('transitionend', blurHideEnd);
 }
 
 function buildBarChart(days: SessionStartStats['days']): HTMLElement[] {
