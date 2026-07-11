@@ -219,12 +219,25 @@ function peekDaily(): void {
 function createBlurOverlay(): void {
   const overlay = document.createElement('div');
   overlay.className = 'web-time-blur-overlay';
+  // Promote into the browser TOP LAYER via the Popover API. z-index only orders
+  // within a stacking context, so a site's high-z-index media layer (e.g. X's
+  // inline video/GIF player) can out-paint a fixed overlay no matter how big its
+  // z-index. A top-layer popover renders above ALL normal DOM, so the blur
+  // actually covers those players. The UA popover styles also force a centered
+  // auto-margin box, so we override inset/margin/max-* to stay full-bleed.
+  overlay.setAttribute('popover', 'manual');
   overlay.style.cssText = `
     position: fixed;
+    inset: 0;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: 0;
+    border: none;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     background: rgba(0, 0, 0, 0.3);
@@ -269,6 +282,10 @@ function exitFullscreenIfActive(): void {
 function showBlurOverlay(): HTMLDivElement {
   if (!blurOverlay) createBlurOverlay();
   clearPendingBlurHide();
+  // Enter the top layer so the blur paints above high-z-index site players.
+  // Guard: showPopover throws if already open or unsupported; the fixed-position
+  // fallback still covers most content in that case.
+  try { blurOverlay!.showPopover(); } catch { /* already open or unsupported */ }
   blurOverlay!.style.visibility = 'visible';
   return blurOverlay!;
 }
@@ -283,15 +300,18 @@ function hideBlurOverlay(): void {
   blurOverlay.style.opacity = '0';
   if (!wasVisible) {
     blurOverlay.style.visibility = 'hidden';
+    try { blurOverlay.hidePopover(); } catch { /* not open or unsupported */ }
     return;
   }
   // Keep the element visible until the opacity fade finishes, THEN flip
-  // visibility so the backdrop-filter stops compositing without cutting the
-  // fade-out short. Guard on opacity in case a re-show interrupted us.
+  // visibility and leave the top layer so the backdrop-filter stops compositing
+  // without cutting the fade-out short. Guard on opacity in case a re-show
+  // interrupted us.
   blurHideEnd = (e: TransitionEvent) => {
     if (e.propertyName !== 'opacity') return;
     if (blurOverlay && blurOverlay.style.opacity === '0') {
       blurOverlay.style.visibility = 'hidden';
+      try { blurOverlay.hidePopover(); } catch { /* not open or unsupported */ }
     }
     clearPendingBlurHide();
   };
