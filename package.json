@@ -1,6 +1,6 @@
 {
   "name": "webtime",
-  "version": "2.7.5",
+  "version": "2.7.6",
   "description": "Track and take control of your time.",
   "scripts": {
     "test": "node --test test/*.test.mjs",
