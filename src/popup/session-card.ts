@@ -122,7 +122,7 @@ interface Stepper {
  *  direction so a neighbour (e.g. minutes) can absorb the carry. Exported so the
  *  global settings panel can use the same control instead of native inputs. */
 export function stepper(opts: {
-  label: string; rec?: string; value: number; unit?: string;
+  label: string; value: number; unit?: string;
   min: number; max: number; step: number;
   onChange: (v: number) => void;
   /** Called when a step crosses min/max. Return false to veto the wrap (the
@@ -136,7 +136,6 @@ export function stepper(opts: {
   if (!opts.noHead) {
     const head = el('div', 'sc-stepper-head');
     head.append(el('span', 'sc-stepper-label', opts.label));
-    if (opts.rec) head.append(el('span', 'sc-stepper-rec', opts.rec));
     group.append(head);
   }
 
@@ -309,7 +308,6 @@ export async function renderSessionSettingsCard(
   // body: two two-up rows — [session length | nudges], then the cooldown
   // increment split into [minutes | seconds] steppers.
   const body = el('div', 'sc-settings-body');
-  const recNudges = `(rec ${Math.round(PHI * Math.sqrt(cur.sessionLimit / 15))})`;
 
   // Cooldown is stored as one fractional-minutes number; the two steppers each
   // own a part and recombine on change. Read once so they share a baseline.
@@ -325,7 +323,7 @@ export async function renderSessionSettingsCard(
       onChange: v => { cur.sessionLimit = v; persist(); },
     }).el,
     stepper({
-      label: 'Nudges', rec: recNudges, value: cur.nudgeCount, unit: '',
+      label: 'Nudges', value: cur.nudgeCount, unit: '',
       min: 0, max: 20, step: 1,
       onChange: v => { cur.nudgeCount = v; persist(); },
     }).el
@@ -356,7 +354,7 @@ export async function renderSessionSettingsCard(
   // One labelled group: "Cooldown" heading over the [m][s] box pair.
   const coolGroup = el('div', 'sc-stepper-group sc-cooldown-group');
   const coolHead = el('div', 'sc-stepper-head');
-  coolHead.append(el('span', 'sc-stepper-label', 'Cooldown'));
+  coolHead.append(el('span', 'sc-stepper-label', 'Base cooldown'));
   const coolBoxes = el('div', 'sc-cooldown-boxes');
   coolBoxes.append(minStepper.el, secStepper.el);
   coolGroup.append(coolHead, coolBoxes);

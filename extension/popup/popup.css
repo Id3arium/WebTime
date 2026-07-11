@@ -531,7 +531,6 @@ body {
 .sc-cooldown-boxes > .sc-stepper-group { flex: 1; margin-bottom: 0; }
 .sc-stepper-head { display: flex; align-items: baseline; gap: 6px; margin-bottom: 7px; }
 .sc-stepper-label { font: 600 11px 'IBM Plex Sans'; color: var(--text-dim); }
-.sc-stepper-rec { font: 400 10px 'IBM Plex Sans'; color: var(--text-dim); }
 .sc-stepper-box {
   display: flex; align-items: center; justify-content: space-between;
   background: var(--bg-input); border: 1px solid var(--line-strong); border-radius: 9px;
