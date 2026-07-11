@@ -225,8 +225,8 @@ function createBlurOverlay(): void {
     left: 0;
     width: 100%;
     height: 100%;
-    backdrop-filter: blur(9px);
-    -webkit-backdrop-filter: blur(9px);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     background: rgba(0, 0, 0, 0.3);
     z-index: 999999;
     pointer-events: none;
