@@ -240,7 +240,7 @@ function createBlurOverlay(): void {
     border: none;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    background: rgba(0, 0, 0, 0.3);
+    background: transparent;
     z-index: 999999;
     pointer-events: none;
     opacity: 0;
@@ -279,6 +279,30 @@ function exitFullscreenIfActive(): void {
   }
 }
 
+// A playing <video> is composited on its own GPU layer, which the overlay's
+// backdrop-filter never samples — so the page blurs but the video stays sharp.
+// Blur each video element DIRECTLY (in its own layer) so the whole page appears
+// blurred. We stash the element's prior inline filter to restore it exactly.
+const BLURRED_VIDEO_ATTR = 'data-web-time-prev-filter';
+
+function blurPageVideos(): void {
+  document.querySelectorAll('video').forEach(el => {
+    const v = el as HTMLVideoElement;
+    if (v.hasAttribute(BLURRED_VIDEO_ATTR)) return; // already blurred by us
+    v.setAttribute(BLURRED_VIDEO_ATTR, v.style.filter || '');
+    v.style.filter = `${v.style.filter ? v.style.filter + ' ' : ''}blur(12px)`;
+    v.style.transition = 'filter 0.3s ease';
+  });
+}
+
+function unblurPageVideos(): void {
+  document.querySelectorAll(`video[${BLURRED_VIDEO_ATTR}]`).forEach(el => {
+    const v = el as HTMLVideoElement;
+    v.style.filter = v.getAttribute(BLURRED_VIDEO_ATTR) || '';
+    v.removeAttribute(BLURRED_VIDEO_ATTR);
+  });
+}
+
 function showBlurOverlay(): HTMLDivElement {
   if (!blurOverlay) createBlurOverlay();
   clearPendingBlurHide();
@@ -287,6 +311,7 @@ function showBlurOverlay(): HTMLDivElement {
   // fallback still covers most content in that case.
   try { blurOverlay!.showPopover(); } catch { /* already open or unsupported */ }
   blurOverlay!.style.visibility = 'visible';
+  blurPageVideos();
   return blurOverlay!;
 }
 
@@ -298,6 +323,7 @@ function hideBlurOverlay(): void {
   // visibility now rather than waiting for a transitionend that won't come.
   const wasVisible = getComputedStyle(blurOverlay).opacity !== '0';
   blurOverlay.style.opacity = '0';
+  unblurPageVideos();
   if (!wasVisible) {
     blurOverlay.style.visibility = 'hidden';
     try { blurOverlay.hidePopover(); } catch { /* not open or unsupported */ }
