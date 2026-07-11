@@ -254,6 +254,18 @@ function clearPendingBlurHide(): void {
   blurHideEnd = null;
 }
 
+// A fullscreen element lives in the browser's TOP LAYER, which renders above
+// everything in the normal DOM regardless of z-index — so our fixed overlay
+// can't cover a fullscreen video. Dropping out of fullscreen returns that video
+// to the normal flow, where the overlay wins. Only the session-cooldown blocker
+// exits fullscreen; the softer overlays (nudge, average, end-session) just pause
+// playback and leave fullscreen alone.
+function exitFullscreenIfActive(): void {
+  if (document.fullscreenElement) {
+    document.exitFullscreen().catch(() => { /* denied or already exiting */ });
+  }
+}
+
 function showBlurOverlay(): HTMLDivElement {
   if (!blurOverlay) createBlurOverlay();
   clearPendingBlurHide();
@@ -497,6 +509,7 @@ function setProgressWidth(el: HTMLElement, pct: number): void {
 
 function showBlocker(remainingSeconds: number, totalCooldownSeconds: number, cooldownCount: number, cooldownIncrementSeconds: number): void {
   pauseAllMedia();
+  exitFullscreenIfActive();
 
   const blurBg = showBlurOverlay();
   blurBg.style.pointerEvents = 'all';
