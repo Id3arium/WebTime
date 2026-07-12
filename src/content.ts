@@ -253,7 +253,7 @@ function createBlurOverlay(): void {
     z-index: 999999;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.25s ease;
+    transition: opacity 0.3s ease;
     overflow: hidden;
     visibility: hidden;
   `;
@@ -300,7 +300,7 @@ function blurPageVideos(): void {
     if (v.hasAttribute(BLURRED_VIDEO_ATTR)) return; // already blurred by us
     v.setAttribute(BLURRED_VIDEO_ATTR, v.style.filter || '');
     v.style.filter = `${v.style.filter ? v.style.filter + ' ' : ''}blur(10px)`;
-    v.style.transition = 'filter 0.25s ease';
+    v.style.transition = 'filter 0.3s ease';
   });
 }
 
@@ -417,7 +417,7 @@ function createAveragePopupOverlay(minutesLeft: number, averageMinutes: number, 
     pointer-events: auto !important;
     width: 350px !important;
     opacity: 0 !important;
-    transition: opacity 0.25s ease !important;
+    transition: opacity 0.3s ease !important;
   `;
 
   const avg = formatTimeCompact(averageMinutes * 60);
@@ -622,7 +622,7 @@ function showBlocker(remainingSeconds: number, totalCooldownSeconds: number, coo
     width: 350px !important;
     text-align: center !important;
     opacity: 0 !important;
-    transition: opacity 0.25s ease !important;
+    transition: opacity 0.3s ease !important;
     overflow: hidden !important;
   `;
 
@@ -837,7 +837,7 @@ function showEndSessionConfirm(): void {
     width: 350px !important;
     text-align: center !important;
     opacity: 0 !important;
-    transition: opacity 0.25s ease !important;
+    transition: opacity 0.3s ease !important;
   `;
   const carryover = formatTimeAdaptive(Math.floor(remaining * 1.1));
   const prompt = makeEl('div', {
