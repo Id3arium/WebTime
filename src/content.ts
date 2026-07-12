@@ -5,6 +5,7 @@ import type { ExtensionMessage, SessionStartStats } from './types.js';
 declare const browser: typeof chrome;
 
 let timerText: HTMLDivElement | null = null;
+let timerElement: HTMLDivElement | null = null;
 let lastActivityTime = Date.now();
 // The session timer is the resting/home state on any site with an active
 // session limit. Clicking the timer "peeks" at the daily total for a few
@@ -139,7 +140,15 @@ function createTimerElement(): void {
   timer.addEventListener('click', peekDaily);
   timer.style.cursor = 'pointer';
 
+  // The blur overlay lives in the browser top layer, which paints above all
+  // normal DOM — so a body-child timer would sit UNDER the blur and get blurred
+  // too. Make the timer a top-layer popover as well; showBlurOverlay re-asserts
+  // it afterward so it always paints above the blur (top-layer order is by
+  // show-time, not z-index).
+  timer.setAttribute('popover', 'manual');
   document.body.appendChild(timer);
+  try { timer.showPopover(); } catch { /* unsupported: stays a normal fixed element */ }
+  timerElement = timer;
 
   log("Timer element created and added to page.");
 }
@@ -238,8 +247,8 @@ function createBlurOverlay(): void {
     margin: 0;
     padding: 0;
     border: none;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     background: transparent;
     z-index: 999999;
     pointer-events: none;
@@ -290,7 +299,7 @@ function blurPageVideos(): void {
     const v = el as HTMLVideoElement;
     if (v.hasAttribute(BLURRED_VIDEO_ATTR)) return; // already blurred by us
     v.setAttribute(BLURRED_VIDEO_ATTR, v.style.filter || '');
-    v.style.filter = `${v.style.filter ? v.style.filter + ' ' : ''}blur(12px)`;
+    v.style.filter = `${v.style.filter ? v.style.filter + ' ' : ''}blur(10px)`;
     v.style.transition = 'filter 0.3s ease';
   });
 }
@@ -312,6 +321,9 @@ function showBlurOverlay(): HTMLDivElement {
   try { blurOverlay!.showPopover(); } catch { /* already open or unsupported */ }
   blurOverlay!.style.visibility = 'visible';
   blurPageVideos();
+  // Re-assert the timer's top-layer spot so it paints ABOVE the blur we just
+  // showed (top-layer order is by most-recent showPopover).
+  if (timerElement) { try { timerElement.hidePopover(); timerElement.showPopover(); } catch { /* unsupported */ } }
   return blurOverlay!;
 }
 
