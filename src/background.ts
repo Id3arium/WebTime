@@ -33,6 +33,11 @@ let timerInterval: ReturnType<typeof setInterval> | null = null;
 const SAVE_INTERVAL_SECONDS = Constants.SAVE_INTERVAL_SECONDS;
 const tabLastActivity: Record<number, number> = {};
 let trackedTabDomain: Domain | null = null;
+// Whether the browser is the foreground OS app. When you alt-tab to another
+// application (editor, Slack, …) all browser windows lose focus and we stop
+// counting — even audible tabs — since you're not actually using the page.
+// Defaults true so a fresh service-worker wake counts until told otherwise.
+let browserIsFocused = true;
 let inactivityThresholdMs = Constants.INACTIVITY_THRESHOLD_MS;
 const ACTIVITY_CHECK_INTERVAL_MS = Constants.ACTIVITY_CHECK_INTERVAL_MS;
 
@@ -331,6 +336,10 @@ function incrementTimer(): void {
     return;
   }
 
+  // Foreground gate: if the browser isn't the current OS app, don't count —
+  // the user is in another application, not spending time on the page.
+  if (!browserIsFocused) return;
+
   // Cooldown gate: if the current domain is in an active cooldown, freeze the
   // timer entirely. No daily increment, no interventions, nothing. The
   // cooldown ticker (startCooldownTicker) handles the blocker UI countdown.
@@ -469,6 +478,17 @@ function handleTimerState(activeTab: chrome.tabs.Tab, tabId: number): void {
   } else {
     stopTimer();
   }
+}
+
+// Fires when browser-window OS focus changes. windowId === WINDOW_ID_NONE means
+// every browser window lost focus (user switched to another app). We flip the
+// foreground flag; incrementTimer's gate stops/resumes counting on the next
+// tick. We also re-run the active tab's timer-state so startTimer/stopTimer
+// stays consistent for the non-audible path.
+function handleWindowFocusChanged(windowId: number): void {
+  browserIsFocused = windowId !== browser.windows.WINDOW_ID_NONE;
+  log(`Browser focus changed: ${browserIsFocused ? 'foreground' : 'background'}`);
+  if (activeTabId !== null) updateTimingState(activeTabId);
 }
 
 function handleTabActivated(activeInfo: chrome.tabs.TabActiveInfo): void {
@@ -1072,6 +1092,7 @@ async function init(): Promise<void> {
   browser.tabs.onActivated.addListener(handleTabActivated);
   browser.tabs.onUpdated.addListener(handleTabUpdated);
   browser.tabs.onRemoved.addListener(handleTabRemoved);
+  browser.windows.onFocusChanged.addListener(handleWindowFocusChanged);
   browser.runtime.onMessage.addListener(handleMessageReceived);
 
 
@@ -1084,6 +1105,16 @@ async function init(): Promise<void> {
   log(`Inactivity threshold: ${inactivityThresholdMs}ms`);
 
   currentDateStr = getLocalDateStrWithReset();
+
+  // Sync foreground state on wake: a service worker can start while the browser
+  // is in the background, so don't assume it's focused. getLastFocused throws if
+  // no window is focused — treat that as background.
+  try {
+    const win = await browser.windows.getLastFocused();
+    browserIsFocused = win.focused === true;
+  } catch {
+    browserIsFocused = false;
+  }
 
   await loadTimeData();
   await loadAveragePopupShown();
